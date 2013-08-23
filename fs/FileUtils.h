@@ -25,6 +25,7 @@
 #include "cipher/CipherKey.h"
 #include "fs/encfs.h"
 #include "fs/FSConfig.h"
+#include "fs/FileIOFactory.h"
 
 namespace encfs {
 
@@ -86,6 +87,8 @@ struct EncFS_Opts
 
   ConfigMode configMode;
 
+  FileIOFactory *fileIOFactory;
+
   EncFS_Opts()
   {
     createIfNotFound = true;
@@ -98,6 +101,7 @@ struct EncFS_Opts
     ownerCreate = false;
     reverseEncryption = false;
     configMode = Config_Prompt;
+    fileIOFactory = NULL;
   }
 };
 

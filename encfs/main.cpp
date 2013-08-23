@@ -45,6 +45,8 @@
 #include "fs/FileUtils.h"
 #include "fs/DirNode.h"
 #include "fs/Context.h"
+#include "fs/FileIOFactory.h"
+#include "fs/RawFileIO.h"
 
 #include <locale.h>
 
@@ -583,6 +585,11 @@ int main(int argc, char *argv[])
 #endif
 
   CipherV1::init( encfsArgs->isThreaded );
+
+  // set the raw file io factory here
+  // TODO: is this better down earlier in this method
+  // or in EncFS_Args
+  encfsArgs->opts->fileIOFactory = new TemplateFileIOFactory<RawFileIO>();
 
   // context is not a smart pointer because it will live for the life of
   // the filesystem.

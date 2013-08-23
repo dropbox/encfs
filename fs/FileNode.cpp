@@ -44,7 +44,6 @@
 #include "fs/FileNode.h"
 #include "fs/FileUtils.h"
 #include "fs/MACFileIO.h"
-#include "fs/RawFileIO.h"
 #include "fs/fsconfig.pb.h"
 
 #include <glog/logging.h>
@@ -74,7 +73,7 @@ FileNode::FileNode(DirNode *parent_, const FSConfigPtr &cfg,
   this->fsConfig = cfg;
 
   // chain RawFileIO & CipherFileIO
-  shared_ptr<FileIO> rawIO( new RawFileIO( _cname ) );
+  shared_ptr<FileIO> rawIO( cfg->opts->fileIOFactory->createFileIO( _cname ) );
   io = shared_ptr<FileIO>( new CipherFileIO( rawIO, fsConfig ));
 
   if(cfg->config->block_mac_bytes() || cfg->config->block_mac_rand_bytes())
