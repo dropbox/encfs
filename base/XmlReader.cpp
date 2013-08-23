@@ -181,7 +181,7 @@ public:
   {
     if (name[0] == '@') 
     {
-      const char *value = element->Attribute(name+1);
+      const char *value = element->Attribute(name+1)->c_str();
       if (value)
         return XmlValuePtr(new XmlValue(value));
       else 
