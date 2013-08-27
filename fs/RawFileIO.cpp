@@ -301,7 +301,7 @@ int RawFileIO::truncate( off_t size )
   if(fd >= 0 && canWrite)
   {
     res = ::ftruncate( fd, size );
-#ifndef __FreeBSD__
+#ifdef linux
     ::fdatasync( fd );
 #endif
   } else

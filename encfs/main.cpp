@@ -47,6 +47,8 @@
 #include "fs/Context.h"
 #include "fs/FileIOFactory.h"
 #include "fs/RawFileIO.h"
+#include "fs/FsIO.h"
+#include "fs/PosixFsIO.h"
 
 #include <locale.h>
 
@@ -589,7 +591,8 @@ int main(int argc, char *argv[])
   // set the raw file io factory here
   // TODO: is this better down earlier in this method
   // or in EncFS_Args
-  encfsArgs->opts->fileIOFactory = new TemplateFileIOFactory<RawFileIO>();
+  encfsArgs->opts->fileIOFactory = shared_ptr<FileIOFactory>(new TemplateFileIOFactory<RawFileIO>());
+  encfsArgs->opts->fsIOFactory = shared_ptr<FsIOFactory>(new TemplateFsIOFactory<PosixFsIO>());
 
   // context is not a smart pointer because it will live for the life of
   // the filesystem.

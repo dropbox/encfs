@@ -20,15 +20,9 @@
 
 #include "fs/encfs.h"
 
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <cerrno>
 #include <cstdio>
+#include <cstddef>
 #include <cstdlib>
-#include <unistd.h>
-#ifdef linux
-#include <sys/fsuid.h>
-#endif
 
 #include <cstring>
 
@@ -47,23 +41,59 @@
 using std::list;
 using std::string;
 
+/* TODO: change this to std::nullptr_t on systems that support it */
+typedef void *my_nullptr_t;
+
 namespace encfs {
 
-class DirDeleter
-{
+/* this little class allows us to get C++ RAII with C based data structures */
+template <class U, class V, void (*func)(U, V)>
+class CFreer {
+private:
+  const U & to_free;
+  const V & user_data;
 public:
-  void operator () ( DIR *d )
-  {
-    ::closedir( d );
+  CFreer(const U & to_free, const V & user_data)
+    : to_free(to_free)
+    , user_data(user_data)
+  {}
+  ~CFreer() {
+    func(to_free, user_data);
   }
 };
 
+static void c_closedir(encfs_dir_handle_t handle, shared_ptr<FsIO> fs_io)
+{
+  if (!handle) {
+    return;
+  }
+  const int ret = fs_io->closedir(handle);
+  if (ret) {
+    /* this is really bad */
+    abort();
+  }
+}
 
-DirTraverse::DirTraverse(const shared_ptr<DIR> &_dirPtr, 
+static void c_free_string(char *str, my_nullptr_t ptr)
+{
+  assert( !ptr );
+  free( str );
+}
+
+class CStringFreer : public CFreer<char *, my_nullptr_t, c_free_string>
+{
+public:
+  CStringFreer(char *const & to_free)
+    : CFreer<char *, my_nullptr_t, c_free_string>(to_free, nullptr)
+  {}
+};
+
+DirTraverse::DirTraverse(const shared_ptr<FsIO> _fs_io, encfs_dir_handle_t _dir,
     uint64_t _iv, const shared_ptr<NameIO> &_naming)
-    : dir( _dirPtr )
+    : dir( _dir )
     , iv( _iv )
     , naming( _naming )
+    , fs_io( _fs_io )
 {
 }
 
@@ -71,6 +101,7 @@ DirTraverse::DirTraverse(const DirTraverse &src)
     : dir( src.dir )
     , iv( src.iv )
     , naming( src.naming )
+    , fs_io( src.fs_io )
 {
 }
 
@@ -79,60 +110,42 @@ DirTraverse &DirTraverse::operator = (const DirTraverse &src)
   dir = src.dir;
   iv = src.iv;
   naming = src.naming;
+  fs_io = src.fs_io;
 
   return *this;
 }
 
 DirTraverse::~DirTraverse()
 {
-  dir.reset();
+  if (dir) {
+    const int ret = fs_io->closedir( dir );
+    if (ret) {
+      /* closing directories can't fail */
+      abort();
+    }
+    dir = (encfs_dir_handle_t) 0;
+  }
+
   iv = 0;
   naming.reset();
+  fs_io.reset();
 }
 
-static
-bool _nextName(struct dirent *&de, const shared_ptr<DIR> &dir, 
-    int *fileType, ino_t *inode)
+std::string DirTraverse::nextPlaintextName(encfs_file_type_t *fileType, encfs_ino_t *inode)
 {
-  de = ::readdir( dir.get() );
-
-  if(de)
+  char *name;
+  while(!fs_io->readdir( dir, &name, fileType, inode ) && name)
   {
-    if(fileType)
-    {
-#if defined(_DIRENT_HAVE_D_TYPE) || defined(__FreeBSD__)
-      *fileType = de->d_type;
-#else
-#warning "struct dirent.d_type not supported"
-      *fileType = 0;
-#endif
-    }
-    if(inode)
-      *inode = de->d_ino;
-    return true;
-  } else
-  {
-    if(fileType)
-      *fileType = 0;
-    return false;
-  }
-}
-
-
-std::string DirTraverse::nextPlaintextName(int *fileType, ino_t *inode)
-{
-  struct dirent *de=0;
-  while(_nextName(de, dir, fileType, inode))
-  {
+    CStringFreer free_name(name);
     try
     {
       uint64_t localIv = iv;
-      return naming->decodePath( de->d_name, &localIv );
+      return naming->decodePath( name, &localIv );
     } catch ( Error &ex )
     {
       // .. .problem decoding, ignore it and continue on to next name..
-      VLOG(1) << "error decoding filename " << de->d_name 
-        << " : " << ex.what();
+      VLOG(1) << "error decoding filename " << name 
+              << " : " << ex.what();
     }
   }
 
@@ -141,18 +154,20 @@ std::string DirTraverse::nextPlaintextName(int *fileType, ino_t *inode)
 
 std::string DirTraverse::nextInvalid()
 {
-  struct dirent *de=0;
-  // find the first name which produces a decoding error...
-  while(_nextName(de, dir, (int*)0, (ino_t*)0))
+  char *name;
+  encfs_file_type_t fileType;
+  encfs_ino_t inode;
+  while(!fs_io->readdir( dir, &name, &fileType, &inode ) && name)
   {
+    CStringFreer free_name( name );
     try
     {
       uint64_t localIv = iv;
-      naming->decodePath( de->d_name, &localIv );
+      naming->decodePath( name, &localIv );
       continue;
     } catch( Error &ex )
     {
-      return string( de->d_name );
+      return string( name );
     }
   }
 
@@ -197,7 +212,7 @@ public:
 
   operator bool () const
   {
-    return renameList;
+    return (bool) renameList;
   }
 
   bool apply();
@@ -228,19 +243,20 @@ bool RenameOp::apply()
       // backing store rename.
       VLOG(2) << "renaming " << last->oldCName << "-> " << last->newCName;
 
-      struct stat st;
-      bool preserve_mtime = ::stat(last->oldCName.c_str(), &st) == 0;
+      encfs_time_t old_mtime;
+      bool preserve_mtime = dn->fs_io->get_mtime( last->oldCName.c_str(), &old_mtime ) == 0;
 
       // internal node rename..
-      dn->renameNode( last->oldPName.c_str(), 
-          last->newPName.c_str() );
+      dn->renameNode( last->oldPName.c_str(), last->newPName.c_str() );
 
       // rename on disk..
-      if(::rename( last->oldCName.c_str(), 
-            last->newCName.c_str() ) == -1)
+      const int res_rename =
+        dn->fs_io->rename( last->oldCName.c_str(),
+                           last->newCName.c_str() );
+      if( res_rename )
       {
         LOG(WARNING) << "Error renaming " << last->oldCName << ": " <<
-          strerror(errno);
+          dn->fs_io->strerror(res_rename);
         dn->renameNode( last->newPName.c_str(), 
             last->oldPName.c_str(), false );
         return false;
@@ -248,10 +264,7 @@ bool RenameOp::apply()
 
       if(preserve_mtime)
       {
-        struct utimbuf ut;
-        ut.actime = st.st_atime;
-        ut.modtime = st.st_mtime;
-        ::utime(last->newCName.c_str(), &ut);
+        dn->fs_io->set_mtime( last->newCName.c_str(), old_mtime );
       }
 
       ++last;
@@ -287,7 +300,7 @@ void RenameOp::undo()
 
     VLOG(1) << "undo: renaming " << it->newCName << " -> " << it->oldCName;
 
-    ::rename( it->newCName.c_str(), it->oldCName.c_str() );
+    dn->fs_io->rename( it->newCName.c_str(), it->oldCName.c_str() );
     try
     {
       dn->renameNode( it->newPName.c_str(), 
@@ -320,6 +333,8 @@ DirNode::DirNode(EncFS_Context *_ctx,
     rootDir.append( 1, '/');
 
   naming = fsConfig->nameCoding;
+
+  fs_io = shared_ptr<FsIO>((*fsConfig->opts->fsIOFactory)());
 }
 
 DirNode::~DirNode()
@@ -402,15 +417,14 @@ DirTraverse DirNode::openDir(const char *plaintextPath)
   string cyName = rootDir + naming->encodePath( plaintextPath );
   //rDebug("openDir on %s", cyName.c_str() );
 
-  DIR *dir = ::opendir( cyName.c_str() );
-  if(dir == NULL)
+  encfs_dir_handle_t dp;
+  const int res_opendir = fs_io->opendir( cyName.c_str(), &dp );
+  if(res_opendir)
   {
-    VLOG(1) << "opendir error " << strerror(errno);
-    return DirTraverse( shared_ptr<DIR>(), 0, shared_ptr<NameIO>() );
+    VLOG(1) << "opendir error " << fs_io->strerror(res_opendir);
+    return DirTraverse( fs_io, 0, 0, shared_ptr<NameIO>() );
   } else
   {
-    shared_ptr<DIR> dp( dir, DirDeleter() );
-
     uint64_t iv = 0;
     // if we're using chained IV mode, then compute the IV at this
     // directory level..
@@ -422,7 +436,7 @@ DirTraverse DirNode::openDir(const char *plaintextPath)
     {
       LOG(ERROR) << "encode err: " << err.what();
     }
-    return DirTraverse( dp, iv, naming );
+    return DirTraverse( fs_io, dp, iv, naming );
   }
 }
 
@@ -444,29 +458,26 @@ bool DirNode::genRenameList( list<RenameEl> &renameList,
 
   // generate the real destination path, where we expect to find the files..
   VLOG(1) << "opendir " << sourcePath;
-  shared_ptr<DIR> dir = shared_ptr<DIR>(
-      opendir( sourcePath.c_str() ), DirDeleter() );
-  if(!dir)
+  encfs_dir_handle_t dir;
+  const int res_opendir = fs_io->opendir( sourcePath.c_str(), &dir );
+  CFreer<encfs_dir_handle_t, shared_ptr<FsIO>, c_closedir> free_dir( dir, fs_io );
+
+  if(res_opendir)
     return false;
 
-  struct dirent *de = NULL;
-  while((de = ::readdir( dir.get() )) != NULL)
+  char *name;
+  encfs_file_type_t file_type;
+  encfs_ino_t inode;
+  while(!fs_io->readdir( dir, &name, &file_type, &inode ) && name)
   {
+    CStringFreer free_name( name );
     // decode the name using the oldIV
     uint64_t localIV = fromIV;
     string plainName;
 
-    if((de->d_name[0] == '.') &&
-        ((de->d_name[1] == '\0') 
-         || ((de->d_name[1] == '.') && (de->d_name[2] == '\0'))))
-    {
-      // skip "." and ".."
-      continue;
-    }
-
     try
     {
-      plainName = naming->decodePath( de->d_name, &localIV );
+      plainName = naming->decodePath( name, &localIV );
     } catch( Error &ex )
     {
       // if filename can't be decoded, then ignore it..
@@ -481,7 +492,7 @@ bool DirNode::genRenameList( list<RenameEl> &renameList,
       string newName = naming->encodePath( plainName.c_str(), &localIV );
 
       // store rename information..
-      string oldFull = sourcePath + '/' + de->d_name;
+      string oldFull = sourcePath + '/' + name;
       string newFull = sourcePath + '/' + newName;
 
       RenameEl ren;
@@ -490,16 +501,9 @@ bool DirNode::genRenameList( list<RenameEl> &renameList,
       ren.oldPName = string(fromP) + '/' + plainName;
       ren.newPName = string(toP) + '/' + plainName;
 
-      bool isDir;
-#if defined(_DIRENT_HAVE_D_TYPE)
-      if(de->d_type != DT_UNKNOWN)
-      {
-        isDir = (de->d_type == DT_DIR);
-      } else
-#endif
-      {
-        isDir = isDirectory( oldFull.c_str() );
-      }
+      bool isDir = file_type == ENCFS_FILE_TYPE_UNKNOWN
+        ? isDirectory( oldFull.c_str() )
+        : file_type == ENCFS_FILE_TYPE_DIRECTORY;
 
       ren.isDirectory = isDir;
 
@@ -523,7 +527,7 @@ bool DirNode::genRenameList( list<RenameEl> &renameList,
       // We can't convert this name, because we don't have a valid IV for
       // it (or perhaps a valid key).. It will be inaccessible..
       LOG(WARNING) << "Aborting rename: error on file " << 
-          fromCPart.append(1, '/').append(de->d_name) << ":" << err.what();
+          fromCPart.append(1, '/').append(name) << ":" << err.what();
 
       // abort.. Err on the side of safety and disallow rename, rather
       // then loosing files..
@@ -558,37 +562,21 @@ DirNode::newRenameOp( const char *fromP, const char *toP )
 }
 
 
-int DirNode::mkdir(const char *plaintextPath, mode_t mode, 
-    uid_t uid, gid_t gid)
+int DirNode::mkdir(const char *plaintextPath, encfs_mode_t mode, 
+    encfs_uid_t uid, encfs_gid_t gid)
 {
   string cyName = rootDir + naming->encodePath( plaintextPath );
   rAssert( !cyName.empty() );
 
   VLOG(1) << "mkdir on " << cyName;
 
-  // if uid or gid are set, then that should be the directory owner
-  int olduid = -1;
-  int oldgid = -1;
-  if(uid != 0)
-    olduid = setfsuid( uid );
-  if(gid != 0)
-    oldgid = setfsgid( gid );
+  int res = fs_io->mkdir( cyName.c_str(), mode, uid, gid );
 
-  int res = ::mkdir( cyName.c_str(), mode );
-
-  if(olduid >= 0)
-    setfsuid( olduid );
-  if(oldgid >= 0)
-    setfsgid( oldgid );
-
-  if(res == -1)
+  if(res)
   {
-    int eno = errno;
     LOG(WARNING) << "mkdir error on " << cyName
-      << " mode " << mode << ": " << strerror(eno);
-    res = -eno;
-  } else
-    res = 0;
+      << " mode " << mode << ": " << fs_io->strerror(res);
+  }
 
   return res;
 }
@@ -619,7 +607,8 @@ DirNode::rename( const char *fromPlaintext, const char *toPlaintext )
         renameOp->undo();
 
       LOG(WARNING) << "rename aborted";
-      return -EACCES;
+      /* -EACCESS */
+      return -1;
     }
     VLOG(1) << "recursive rename end";
   }
@@ -627,38 +616,34 @@ DirNode::rename( const char *fromPlaintext, const char *toPlaintext )
   int res = 0;
   try
   {
-    struct stat st;
-    bool preserve_mtime = ::stat(fromCName.c_str(), &st) == 0;
+    encfs_time_t old_mtime;
+    bool preserve_mtime = fs_io->get_mtime(fromCName.c_str(), &old_mtime) == 0;
 
     renameNode( fromPlaintext, toPlaintext );
-    res = ::rename( fromCName.c_str(), toCName.c_str() );
+    res = fs_io->rename( fromCName.c_str(), toCName.c_str() );
 
-    if(res == -1)
+    if(res)
     {
       // undo
-      res = -errno;
       renameNode( toPlaintext, fromPlaintext, false );
 
       if(renameOp)
         renameOp->undo();
     } else if(preserve_mtime)
     {
-      struct utimbuf ut;
-      ut.actime = st.st_atime;
-      ut.modtime = st.st_mtime;
-      ::utime(toCName.c_str(), &ut);
+      fs_io->set_mtime( toCName.c_str(), old_mtime );
     }
   } catch( Error &err )
   {
     // exception from renameNode, just show the error and continue..
     LOG(ERROR) << "rename err: " << err.what();
-    res = -EIO;
+    /* -EIO */
+    res = -1;
   }
 
-  if(res != 0)
+  if(res)
   {
-    VLOG(1) << "rename failed: " << strerror( errno );
-    res = -errno;
+    VLOG(1) << "rename failed: " << fs_io->strerror( res );
   }
 
   return res;
@@ -676,17 +661,14 @@ int DirNode::link( const char *from, const char *to )
 
   VLOG(1) << "link " << fromCName << " -> " << toCName;
 
-  int res = -EPERM;
+  /* -EPERM */
+  int res = -1;
   if( fsConfig->config->external_iv() )
   {
     VLOG(1) << "hard links not supported with external IV chaining!";
   } else
   {
-    res = ::link( fromCName.c_str(), toCName.c_str() );
-    if(res == -1)
-      res = -errno;
-    else
-      res = 0;
+    res = fs_io->link( fromCName.c_str(), toCName.c_str() );
   }
 
   return res;
@@ -799,15 +781,15 @@ int DirNode::unlink( const char *plaintextName )
     // file..
     LOG(WARNING) << "Refusing to unlink open file: "
       << cyName << ", hard_remove option is probably in effect";
-    res = -EBUSY;
+    /* -EBUSY */
+    res = -1;
   } else
   {
     string fullName = rootDir + cyName;
-    res = ::unlink( fullName.c_str() );
-    if(res == -1)
+    res = fs_io->unlink( fullName.c_str() );
+    if(res)
     {
-      res = -errno;
-      VLOG(1) << "unlink error: " << strerror(errno);
+      VLOG(1) << "unlink error: " << fs_io->strerror(res);
     } 
   }
 

@@ -26,6 +26,7 @@
 #include "fs/encfs.h"
 #include "fs/FSConfig.h"
 #include "fs/FileIOFactory.h"
+#include "fs/FsIO.h"
 
 namespace encfs {
 
@@ -87,7 +88,8 @@ struct EncFS_Opts
 
   ConfigMode configMode;
 
-  FileIOFactory *fileIOFactory;
+  shared_ptr<FileIOFactory> fileIOFactory;
+  shared_ptr<FsIOFactory> fsIOFactory;
 
   EncFS_Opts()
   {
@@ -101,7 +103,8 @@ struct EncFS_Opts
     ownerCreate = false;
     reverseEncryption = false;
     configMode = Config_Prompt;
-    fileIOFactory = NULL;
+    fileIOFactory = shared_ptr<FileIOFactory>();
+    fsIOFactory = shared_ptr<FsIOFactory>();
   }
 };
 

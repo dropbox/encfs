@@ -150,7 +150,7 @@ static int withFileNode( const char *opName,
     else
       fnode = FSRoot->lookupNode( path, opName );
 
-    rAssert(fnode != NULL);
+    rAssert((bool) fnode);
     VLOG(1) << opName << " " << fnode->cipherName();
     res = op( fnode.get(), data );
 
@@ -222,13 +222,13 @@ int encfs_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
 
     if(dt.valid())
     {
-      int fileType = 0;
-      ino_t inode = 0;
+      encfs_file_type_t fileType = (encfs_file_type_t) 0;
+      encfs_ino_t inode = 0;
 
       std::string name = dt.nextPlaintextName( &fileType, &inode );
       while( !name.empty() )
       {
-        res = filler( h, name.c_str(), fileType, inode );
+        res = filler( h, name.c_str(), (int) fileType, (ino_t) inode );
 
         if(res != ESUCCESS)
           break;

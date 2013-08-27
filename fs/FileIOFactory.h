@@ -27,20 +27,26 @@
 
 namespace encfs {
 
+/* RH:
+ * Please don't judge me because this is called "Factory." I am not even
+ * a Java programmer. This seemed to be the best way to allow FileNode to
+ * use different "raw" FileIO implementations without refactoring it
+ * significantly, e.g. by using templates.
+ */
 class FileIOFactory
 {
 public:
-  virtual FileIO *createFileIO( const std::string &fileName ) = 0;
+    virtual FileIO *operator() ( const std::string &fileName ) =0;
 };
 
 template <typename T>
 class TemplateFileIOFactory : public FileIOFactory
 {
- public:
-  FileIO *createFileIO( const std::string &fileName ) override
-  {
-    return new T( fileName );
-  }
+public:
+    FileIO *operator() ( const std::string &fileName ) override
+    {
+        return new T( fileName );
+    }
 };
 
 }  // namespace encfs

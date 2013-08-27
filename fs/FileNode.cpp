@@ -73,7 +73,7 @@ FileNode::FileNode(DirNode *parent_, const FSConfigPtr &cfg,
   this->fsConfig = cfg;
 
   // chain RawFileIO & CipherFileIO
-  shared_ptr<FileIO> rawIO( cfg->opts->fileIOFactory->createFileIO( _cname ) );
+  shared_ptr<FileIO> rawIO( (*cfg->opts->fileIOFactory)( _cname ) );
   io = shared_ptr<FileIO>( new CipherFileIO( rawIO, fsConfig ));
 
   if(cfg->config->block_mac_bytes() || cfg->config->block_mac_rand_bytes())
