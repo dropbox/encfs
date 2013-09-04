@@ -32,6 +32,7 @@
 #include "fs/Context.h"
 #include "fs/FileNode.h"
 #include "fs/DirNode.h"
+#include "fs/PosixFsIO.h"
 
 #include <glog/logging.h>
 
@@ -39,6 +40,7 @@
 #include <string>
 #include <cstdio>
 #include <list>
+#include <memory>
 
 #include <getopt.h>
 #include <sys/types.h>
@@ -53,6 +55,8 @@ using std::cout;
 using std::endl;
 using std::string;
 using std::vector;
+
+static shared_ptr<FsIO> g_fs_io;
 
 static int showInfo( int argc, char **argv );
 static int showVersion( int argc, char **argv );
@@ -146,7 +150,7 @@ void usage(const char *name)
 
 static bool checkDir( string &rootDir )
 {
-  if( !isDirectory( rootDir.c_str() ))
+  if( !isDirectory( g_fs_io, rootDir.c_str() ))
   {
     cout << autosprintf(_("directory %s does not exist.\n"),
         rootDir.c_str());
@@ -226,7 +230,7 @@ static int showInfo( int argc, char **argv )
     return EXIT_FAILURE;
 
   EncfsConfig config;
-  ConfigType type = readConfig( rootDir, config );
+  ConfigType type = readConfig( g_fs_io, rootDir, config );
 
   // show information stored in config..
   switch(type)
@@ -663,7 +667,7 @@ static int cmd_export( int argc, char **argv )
 
   string destDir = argv[2];
   // if the dir doesn't exist, then create it (with user permission)
-  if(!checkDir(destDir) && !userAllowMkdir(destDir.c_str(), 0700))
+  if(!checkDir(destDir) && !userAllowMkdir(g_fs_io, destDir.c_str(), 0700))
     return EXIT_FAILURE;
 
   return traverseDirs(rootInfo, "/", destDir);
@@ -709,7 +713,7 @@ int showcruft( const shared_ptr<EncFS_Root> &rootInfo, const char *dirName )
 
         string cpath = rootInfo->root->cipherPath( plainPath.c_str() );
 
-        if(isDirectory( cpath.c_str() ))
+        if(isDirectory( g_fs_io, cpath.c_str() ))
           found += showcruft( rootInfo, plainPath.c_str() );
       }
     }
@@ -746,7 +750,7 @@ static int do_chpasswd( bool useStdin, bool annotate, int argc, char **argv )
     return EXIT_FAILURE;
 
   EncfsConfig config;
-  ConfigType cfgType = readConfig( rootDir, config );
+  ConfigType cfgType = readConfig( g_fs_io, rootDir, config );
 
   if(cfgType == Config_None)
   {
@@ -815,7 +819,7 @@ static int do_chpasswd( bool useStdin, bool annotate, int argc, char **argv )
     key->set_ciphertext( keyBuf, encodedKeySize );
     delete[] keyBuf;
 
-    if(saveConfig( rootDir, config ))
+    if(saveConfig( g_fs_io, rootDir, config ))
     {
       // password modified -- changes volume key of filesystem..
       cout << _("Volume Key successfully updated.\n");
@@ -847,6 +851,9 @@ static int chpasswdAutomaticly( int argc, char **argv )
 
 int main(int argc, char **argv)
 {
+  /* TODO: make this X-Platform */
+  g_fs_io = shared_ptr<FsIO>(new PosixFsIO());
+
   FLAGS_logtostderr = 1;
   FLAGS_minloglevel = 1;
 

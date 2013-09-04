@@ -30,21 +30,23 @@
 
 namespace encfs {
 
-// true if the path points to an existing node (of any type)
-bool fileExists( const char *fileName );
 // true if path is a directory
-bool isDirectory( const char *fileName );
-// true if starts with '/'
-bool isAbsolutePath( const char *fileName );
-// pointer to just after the last '/'
-const char *lastPathElement( const char *name );
+bool isDirectory( std::shared_ptr<FsIO> fs_io, const char *fileName );
 
-std::string parentDirectory( const std::string &path );
+// true if the path points to an existing node (of any type)
+bool fileExists( std::shared_ptr<FsIO> fs_io, const char *fileName );
+
+// true if starts with '/'
+bool isAbsolutePath( std::shared_ptr<FsIO> fs_io, const char *fileName );
+// pointer to just after the last '/'
+const char *lastPathElement( std::shared_ptr<FsIO> fs_io, const char *name );
+
+std::string parentDirectory( std::shared_ptr<FsIO> fs_io, const std::string &path );
 
 // ask the user for permission to create the directory.  If they say ok, then
 // do it and return true.
-bool userAllowMkdir(const char *dirPath, mode_t mode );
-bool userAllowMkdir(int promptno, const char *dirPath, mode_t mode );
+bool userAllowMkdir(std::shared_ptr<FsIO> fs_io, const char *dirPath, mode_t mode );
+bool userAllowMkdir(std::shared_ptr<FsIO> fs_io, int promptno, const char *dirPath, mode_t mode );
 
 class CipherV1;
 class DirNode;
@@ -89,7 +91,7 @@ struct EncFS_Opts
   ConfigMode configMode;
 
   shared_ptr<FileIOFactory> fileIOFactory;
-  shared_ptr<FsIOFactory> fsIOFactory;
+  shared_ptr<FsIO> fs_io;
 
   EncFS_Opts()
   {
@@ -104,20 +106,20 @@ struct EncFS_Opts
     reverseEncryption = false;
     configMode = Config_Prompt;
     fileIOFactory = shared_ptr<FileIOFactory>();
-    fsIOFactory = shared_ptr<FsIOFactory>();
+    fs_io = shared_ptr<FsIO>();
   }
 };
 
 /*
     Read existing config file.  Looks for any supported configuration version.
  */
-ConfigType readConfig( const std::string &rootDir, EncfsConfig &config ); 
+ConfigType readConfig( shared_ptr<FsIO> fs_io, const std::string &rootDir, EncfsConfig &config ); 
 
 /*
     Save the configuration.  Saves back as the same configuration type as was
     read from.
  */
-bool saveConfig( const std::string &rootdir, const EncfsConfig &config );
+bool saveConfig( shared_ptr<FsIO> fs_io, const std::string &rootdir, const EncfsConfig &config );
 
 class EncFS_Context;
 
@@ -140,6 +142,6 @@ bool readV6Config( const char *configFile, EncfsConfig &config,
 bool readProtoConfig( const char *configFile, EncfsConfig &config,
     struct ConfigInfo *);
 
-
 }  // namespace encfs
+
 #endif

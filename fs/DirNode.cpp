@@ -33,7 +33,6 @@
 #include "fs/FileUtils.h"
 #include "fs/fsconfig.pb.h"
 
-
 #include <glog/logging.h>
 
 #include <iostream>
@@ -45,6 +44,16 @@ using std::string;
 typedef decltype(nullptr) my_nullptr_t;
 
 namespace encfs {
+
+static bool endswith(const std::string & haystack,
+                     const std::string & needle) {
+  if (needle.length() > haystack.length()) {
+    return false;
+  }
+
+  return !haystack.compare(haystack.length() - needle.length(),
+                           needle.length(), needle);
+}
 
 /* this little class allows us to get C++ RAII with C based data structures */
 template <class U, class V, void (*func)(U, V)>
@@ -330,16 +339,16 @@ DirNode::DirNode(EncFS_Context *_ctx,
   rootDir = sourceDir;
   fsConfig = _config;
 
-  // make sure rootDir ends in '/', so that we can form a path by appending
-  // the rest..
-  if(rootDir[ rootDir.length()-1 ] != '/')
-    rootDir.append( 1, '/');
-
   naming = fsConfig->nameCoding;
 
-  fs_io = shared_ptr<FsIO>((*fsConfig->opts->fsIOFactory)());
-}
+  fs_io = fsConfig->opts->fs_io;
 
+  // make sure rootDir ends in a path separator
+  // so that we can form a path by appending the rest..
+  if(!endswith(rootDir, fs_io->path_sep())) {
+    rootDir.append(fs_io->path_sep());
+  }
+}
 DirNode::~DirNode()
 {
 }
@@ -353,8 +362,8 @@ string DirNode::rootDirectory()
 {
   // don't update last access here, otherwise 'du' would cause lastAccess to
   // be reset.
-  // chop off '/' terminator from root dir.
-  return string( rootDir, 0, rootDir.length()-1 );
+  // chop off trailing path separator from root dir.
+  return rootDir.substr( 0, rootDir.length() - strlen( fs_io->path_sep() ) );
 }
 
 string DirNode::cipherPath(const char *plaintextPath)
@@ -369,8 +378,15 @@ string DirNode::cipherPathWithoutRoot(const char *plaintextPath)
 
 string DirNode::plainPath(const char *cipherPath_)
 {
+  /* this method only works on posix file systems */
+  if (strcmp(fs_io->path_sep(), "/")) {
+    throw std::runtime_error("Non Posix File system");
+  }
+
   try
   {
+    /* this method only works on posix file systems */
+    assert(!strcmp(fs_io->path_sep(), "/"));
     if(!strncmp( cipherPath_, rootDir.c_str(),
                  rootDir.length() ))
     {
@@ -397,9 +413,14 @@ string DirNode::plainPath(const char *cipherPath_)
 
 string DirNode::relativeCipherPath(const char *plaintextPath)
 {
+  /* this method only works on posix file systems */
+  if (strcmp(fs_io->path_sep(), "/")) {
+    throw std::runtime_error("Non Posix File system");
+  }
+
   try
   {
-    if(plaintextPath[0] == '/')
+    if(plaintextPath[0] != '/')
     {
       // mark with '+' to indicate special decoding..
       return string("+") + naming->encodeName(plaintextPath+1, 
@@ -495,22 +516,20 @@ bool DirNode::genRenameList(list<RenameEl> &renameList,
       string newName = naming->encodePath( plainName.c_str(), &localIV );
 
       // store rename information..
-      string oldFull = sourcePath + '/' + name;
-      string newFull = sourcePath + '/' + newName;
+      string oldFull = sourcePath + fs_io->path_sep() + name;
+      string newFull = sourcePath + fs_io->path_sep() + newName;
 
       RenameEl ren;
       ren.oldCName = oldFull;
       ren.newCName = newFull;
-      ren.oldPName = string(fromP) + '/' + plainName;
-      ren.newPName = string(toP) + '/' + plainName;
+      ren.oldPName = string(fromP) + fs_io->path_sep() + plainName;
+      ren.newPName = string(toP) + fs_io->path_sep() + plainName;
 
-      bool isDir = file_type == FsFileType::UNKNOWN
-        ? isDirectory( oldFull.c_str() )
+      ren.isDirectory = file_type == FsFileType::UNKNOWN
+        ? isDirectory( fs_io, oldFull.c_str() )
         : file_type == FsFileType::DIRECTORY;
 
-      ren.isDirectory = isDir;
-
-      if(isDir)
+      if(ren.isDirectory)
       {
         // recurse..  We want to add subdirectory elements before the
         // parent, as that is the logical rename order..
@@ -530,7 +549,7 @@ bool DirNode::genRenameList(list<RenameEl> &renameList,
       // We can't convert this name, because we don't have a valid IV for
       // it (or perhaps a valid key).. It will be inaccessible..
       LOG(WARNING) << "Aborting rename: error on file " << 
-          fromCPart.append(1, '/').append(name) << ":" << err.what();
+          fromCPart.append(fs_io->path_sep()).append(name) << ":" << err.what();
 
       // abort.. Err on the side of safety and disallow rename, rather
       // then loosing files..
@@ -599,7 +618,7 @@ DirNode::rename(const char *fromPlaintext, const char *toPlaintext)
   shared_ptr<FileNode> toNode = findOrCreate( toPlaintext );
 
   shared_ptr<RenameOp> renameOp;
-  if(hasDirectoryNameDependency() && isDirectory( fromCName.c_str() ))
+  if(hasDirectoryNameDependency() && isDirectory( fs_io, fromCName.c_str() ))
   {
     VLOG(1) << "recursive rename begin";
     renameOp = newRenameOp( fromPlaintext, toPlaintext );

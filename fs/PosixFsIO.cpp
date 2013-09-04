@@ -217,6 +217,26 @@ FsError PosixFsIO::unlink(const char *path)
   return res < 0 ? currentFsError() : FsError::NONE;
 }
 
+FsError PosixFsIO::get_type(const char *path, FsFileType *type)
+{
+  struct stat st;
+  const int res_stat = ::stat( path, &st );
+  if (res_stat < 0)
+    return currentFsError();
+
+  if (S_ISDIR(st.st_mode)) {
+    *type = FsFileType::DIRECTORY;
+  }
+  else if (S_ISREG(st.st_mode)) {
+    *type = FsFileType::REGULAR;
+  }
+  else {
+    *type = FsFileType::UNKNOWN;
+  }
+
+  return FsError::NONE;
+}
+
 FsError PosixFsIO::get_mtime(const char *path, fs_time_t *mtime)
 {
   struct stat st;
@@ -247,5 +267,18 @@ FsError PosixFsIO::set_mtime(const char *path, fs_time_t mtime)
 
   return FsError::NONE;
 }
+
+const char *PosixFsIO::path_sep()
+{
+  return "/";
+}
+
+bool PosixFsIO::is_valid_path(const char *path)
+{
+  /* this needs to be extended */
+  return path[0] == '/';
+}
+
+
 
 }  // namespace encfs

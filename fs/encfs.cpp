@@ -330,7 +330,7 @@ int encfs_mkdir(const char *path, mode_t mode)
     if(ctx->publicFilesystem && -res == EACCES)
     {
       // try again using the parent dir's group
-      string parent = parentDirectory( path );
+      string parent = parentDirectory( ctx->opts->fs_io, path );
       shared_ptr<FileNode> dnode = 
         FSRoot->lookupNode( parent.c_str(), "mkdir" );
 

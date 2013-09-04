@@ -101,7 +101,7 @@ const char *FileNode::plaintextName() const
 
 string FileNode::plaintextParent() const
 {
-  return parentDirectory( _pname );
+  return parentDirectory( this->fsConfig->opts->fs_io, _pname );
 }
 
 static bool setIV(const shared_ptr<FileIO> &io, uint64_t iv)

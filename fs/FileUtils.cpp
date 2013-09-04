@@ -45,6 +45,7 @@
 #include "fs/FSConfig.h"
 #include "fs/NullNameIO.h"
 #include "fs/StreamNameIO.h"
+#include "fs/FsIO.h"
 
 #include <glog/logging.h>
 
@@ -61,6 +62,7 @@
 #include <cstring>
 
 #include <iostream>
+#include <memory>
 #include <sstream>
 
 #include <google/protobuf/text_format.h>
@@ -72,6 +74,7 @@ using std::cerr;
 using std::endl;
 using std::map;
 using std::string;
+using std::shared_ptr;
 
 namespace encfs {
 
@@ -122,60 +125,48 @@ EncFS_Root::~EncFS_Root()
 }
 
 
-bool fileExists( const char * fileName )
+bool fileExists( shared_ptr<FsIO> fs_io, const char * fileName )
 {
-  struct stat buf;
-  if(!lstat( fileName, &buf ))
-  {
-    return true;
-  } else
-  {
-    // XXX show perror?
+  fs_time_t mtime;
+  return !isError( fs_io->get_mtime( fileName, &mtime ) );
+}
+
+bool isDirectory( shared_ptr<FsIO> fs_io, const char *fileName )
+{
+  FsFileType filetype;
+  FsError err = fs_io->get_type(fileName, &filetype);
+  if (isError( err )) {
     return false;
   }
+
+  return filetype == FsFileType::DIRECTORY;
 }
 
-bool isDirectory( const char *fileName )
+const char *lastPathElement( shared_ptr<FsIO> fs_io, const char *name )
 {
-  struct stat buf;
-  if( !lstat( fileName, &buf ))
-  {
-    return S_ISDIR( buf.st_mode );
-  } else
-  {
-    return false;
+  std::string s_name( name );
+  auto pos = s_name.rfind( fs_io->path_sep() );
+  if (pos == std::string::npos) {
+    return name;
   }
+  return name + pos + strlen( fs_io->path_sep() );
 }
 
-bool isAbsolutePath( const char *fileName )
+std::string parentDirectory( shared_ptr<FsIO> fs_io, const std::string &path )
 {
-  if(fileName && fileName[0] != '\0' && fileName[0] == '/')
-    return true;
-  else
-    return false;
-}
-
-const char *lastPathElement( const char *name )
-{
-  const char *loc = strrchr( name, '/' );
-  return loc ? loc + 1 : name;
-}
-
-std::string parentDirectory( const std::string &path )
-{
-  size_t last = path.find_last_of( '/' );
+  auto last = path.rfind( fs_io->path_sep() );
   if(last == string::npos)
     return string("");
   else
     return path.substr(0, last);
 }
 
-bool userAllowMkdir(const char *path, mode_t mode )
+bool userAllowMkdir( shared_ptr<FsIO> fs_io, const char *path, mode_t mode )
 {
-    return userAllowMkdir(0, path, mode);
+  return userAllowMkdir(fs_io, 0, path, mode);
 }
 
-bool userAllowMkdir(int promptno, const char *path, mode_t mode )
+bool userAllowMkdir( shared_ptr<FsIO> fs_io, int promptno, const char *path, mode_t mode )
 {
   // TODO: can we internationalize the y/n names?  Seems strange to prompt in
   // their own language but then have to respond 'y' or 'n'.
@@ -200,10 +191,10 @@ bool userAllowMkdir(int promptno, const char *path, mode_t mode )
 
   if(res != 0 && toupper(answer[0]) == 'Y')
   {
-    int result = mkdir( path, mode );
-    if(result < 0)
+    FsError result = fs_io->mkdir( path, mode );
+    if(isError( result ))
     {
-      perror( _("Unable to create directory: ") );
+      cerr <<  _("Unable to create directory: ") << fsErrorString( result ) << "\n";
       return false;
     } else
       return true;
@@ -238,7 +229,7 @@ ConfigType readConfig_load( ConfigInfo *nm, const char *path,
   }
 }
 
-ConfigType readConfig( const string &rootDir, EncfsConfig &config )
+ConfigType readConfig( shared_ptr<FsIO> fs_io, const string &rootDir, EncfsConfig &config )
 {
   ConfigInfo *nm = ConfigFileMapping;
   while(nm->fileName)
@@ -252,7 +243,7 @@ ConfigType readConfig( const string &rootDir, EncfsConfig &config )
     }
     // the standard place to look is in the root directory
     string path = rootDir + nm->fileName;
-    if( fileExists( path.c_str() ) )
+    if( fileExists( fs_io, path.c_str() ) )
       return readConfig_load( nm, path.c_str(), config);
 
     ++nm;
@@ -471,8 +462,10 @@ bool readV4Config( const char *configFile,
   return ok;
 }
 
-bool writeTextConfig( const char *fileName, const EncfsConfig &cfg )
+bool writeTextConfig( shared_ptr<FsIO> fs_io, const char *fileName, const EncfsConfig &cfg )
 {
+  /* TODO: make this use low level fs_io */
+  abort();
   int fd = ::open( fileName, O_RDWR | O_CREAT, 0640 );
   if (fd < 0)
   {
@@ -487,7 +480,7 @@ bool writeTextConfig( const char *fileName, const EncfsConfig &cfg )
   return true;
 }
 
-bool saveConfig( const string &rootDir, const EncfsConfig &config )
+bool saveConfig( shared_ptr<FsIO> fs_io, const string &rootDir, const EncfsConfig &config )
 {
   bool ok = false;
 
@@ -506,7 +499,7 @@ bool saveConfig( const string &rootDir, const EncfsConfig &config )
   try
   {
     const_cast<EncfsConfig &>(config).set_writer("EncFS " VERSION );
-    ok = writeTextConfig( path.c_str(), config );
+    ok = writeTextConfig( fs_io, path.c_str(), config );
   } catch( Error &err )
   {
     LOG(WARNING) << "saveConfig failed: " << err.what();
@@ -519,6 +512,8 @@ bool saveConfig( const string &rootDir, const EncfsConfig &config )
 bool readProtoConfig( const char *fileName, EncfsConfig &config,
     struct ConfigInfo *)
 {
+  /* not implemented yet */
+  abort();
   int fd = ::open( fileName, O_RDONLY, 0640 );
   if (fd < 0)
   {
@@ -1133,7 +1128,7 @@ RootPtr createConfig( EncFS_Context *ctx,
   }
 
   cipher->setKey( volumeKey );
-  if(!saveConfig( rootDir, config ))
+  if(!saveConfig( opts->fs_io, rootDir, config ))
     return rootInfo;
 
   // fill in config struct
@@ -1583,7 +1578,7 @@ RootPtr initFS( EncFS_Context *ctx, const shared_ptr<EncFS_Opts> &opts )
   RootPtr rootInfo;
   EncfsConfig config;
 
-  if(readConfig( opts->rootDir, config ) != Config_None)
+  if(readConfig( opts->fs_io, opts->rootDir, config ) != Config_None)
   {
     if(opts->reverseEncryption)
     {

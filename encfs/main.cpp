@@ -186,7 +186,8 @@ string slashTerminate( const string &src )
 }
 
 static 
-bool processArgs(int argc, char *argv[], const shared_ptr<EncFS_Args> &out)
+bool processArgs(int argc, char *argv[],
+                 const shared_ptr<EncFS_Args> &out)
 {
   // set defaults
   out->isDaemon = true;
@@ -205,7 +206,7 @@ bool processArgs(int argc, char *argv[], const shared_ptr<EncFS_Args> &out)
   bool useDefaultFlags = true;
 
   // pass executable name through
-  out->fuseArgv[0] = lastPathElement(argv[0]);
+  out->fuseArgv[0] = lastPathElement(out->opts->fs_io, argv[0]);
   ++out->fuseArgc;
 
   // leave a space for mount point, as FUSE expects the mount point before
@@ -380,8 +381,8 @@ bool processArgs(int argc, char *argv[], const shared_ptr<EncFS_Args> &out)
 
   // sanity check
   if(out->isDaemon && 
-      (!isAbsolutePath( out->mountPoint.c_str() ) ||
-       !isAbsolutePath( out->opts->rootDir.c_str() ) ) 
+      (!out->opts->fs_io->is_valid_path( out->mountPoint.c_str() ) ||
+       !out->opts->fs_io->is_valid_path( out->opts->rootDir.c_str() ) ) 
     )
   {
     cerr << 
@@ -418,15 +419,15 @@ bool processArgs(int argc, char *argv[], const shared_ptr<EncFS_Args> &out)
   }
 
   // check that the directories exist, or that we can create them..
-  if(!isDirectory( out->opts->rootDir.c_str() ) && 
-      !userAllowMkdir( out->opts->annotate? 1:0,
+  if(!isDirectory( out->opts->fs_io, out->opts->rootDir.c_str() ) && 
+     !userAllowMkdir( out->opts->fs_io, out->opts->annotate? 1:0,
         out->opts->rootDir.c_str() ,0700))
   {
     LOG(WARNING) << "Unable to locate root directory, aborting.";
     return false;
   }
-  if(!isDirectory( out->mountPoint.c_str() ) && 
-      !userAllowMkdir( out->opts->annotate? 2:0,
+  if(!isDirectory( out->opts->fs_io, out->mountPoint.c_str() ) && 
+     !userAllowMkdir( out->opts->fs_io, out->opts->annotate? 2:0,
         out->mountPoint.c_str(),0700))
   {
     LOG(WARNING) << "Unable to locate mount point, aborting.";
@@ -515,6 +516,12 @@ int main(int argc, char *argv[])
   for(int i=0; i<MaxFuseArgs; ++i)
     encfsArgs->fuseArgv[i] = NULL; // libfuse expects null args..
 
+  // set the raw file io factory here
+  // TODO: is this better down earlier in this method
+  // or in EncFS_Args
+  encfsArgs->opts->fileIOFactory = shared_ptr<FileIOFactory>(new TemplateFileIOFactory<RawFileIO>());
+  encfsArgs->opts->fs_io = shared_ptr<FsIO>(new PosixFsIO());
+
   if(argc == 1 || !processArgs(argc, argv, encfsArgs))
   {
     usage(argv[0]);
@@ -587,12 +594,6 @@ int main(int argc, char *argv[])
 #endif
 
   CipherV1::init( encfsArgs->isThreaded );
-
-  // set the raw file io factory here
-  // TODO: is this better down earlier in this method
-  // or in EncFS_Args
-  encfsArgs->opts->fileIOFactory = shared_ptr<FileIOFactory>(new TemplateFileIOFactory<RawFileIO>());
-  encfsArgs->opts->fsIOFactory = shared_ptr<FsIOFactory>(new TemplateFsIOFactory<PosixFsIO>());
 
   // context is not a smart pointer because it will live for the life of
   // the filesystem.
