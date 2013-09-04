@@ -16,6 +16,7 @@ add_library (encfs-fs
     DirNode.cpp
     FileNode.cpp
     FileUtils.cpp
+    FsIO.cpp
     PosixFsIO.cpp
     ${PROTO_SRCS}
     ${PROTO_HDRS}

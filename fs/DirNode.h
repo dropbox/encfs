@@ -46,7 +46,7 @@ class EncFS_Context;
 class DirTraverse
 {
 public:
-    DirTraverse(const shared_ptr<FsIO> fs_io, encfs_dir_handle_t dirPtr,
+    DirTraverse(const shared_ptr<FsIO> fs_io, fs_dir_handle_t dirPtr,
                 uint64_t iv,
 	        const shared_ptr<NameIO> &naming);
     DirTraverse(const DirTraverse &src);
@@ -61,7 +61,7 @@ public:
     // return next plaintext filename
     // If fileType is not 0, then it is used to return the filetype (or 0 if
     // unknown)
-    std::string nextPlaintextName(encfs_file_type_t *fileType=0, encfs_ino_t *inode=0);
+    std::string nextPlaintextName(FsFileType *fileType=0, fs_posix_ino_t *inode=0);
 
     /* Return cipher name of next undecodable filename..
        The opposite of nextPlaintextName(), as that skips undecodable names..
@@ -69,7 +69,7 @@ public:
     std::string nextInvalid();
 private:
     shared_ptr<FsIO> fs_io;
-    encfs_dir_handle_t dir;
+    fs_dir_handle_t dir;
     // initialization vector to use.  Not very general purpose, but makes it
     // more efficient to support filename IV chaining..
     uint64_t iv; 
@@ -117,21 +117,21 @@ public:
     bool hasDirectoryNameDependency() const;
 
     // unlink the specified file
-    int unlink( const char *plaintextName );
+    FsError unlink( const char *plaintextName );
 
     // traverse directory
     DirTraverse openDir( const char *plainDirName );
 
     // uid and gid are used as the directory owner, only if not zero
-    int mkdir( const char *plaintextPath, encfs_mode_t mode,
-	    encfs_uid_t uid = 0, encfs_gid_t gid = 0);
+    FsError mkdir( const char *plaintextPath, fs_posix_mode_t mode,
+                   fs_posix_uid_t uid = 0, fs_posix_gid_t gid = 0);
 
-    int rename( const char *fromPlaintext, const char *toPlaintext );
+    FsError rename( const char *fromPlaintext, const char *toPlaintext );
 
-    int link( const char *from, const char *to );
+    FsError link( const char *from, const char *to );
     
     // returns idle time of filesystem in seconds
-    int idleSeconds();
+    FsError idleSeconds();
 
 protected:
 

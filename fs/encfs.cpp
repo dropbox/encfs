@@ -61,6 +61,7 @@ using std::tuple;
 #include "fs/DirNode.h"
 #include "fs/FileUtils.h"
 #include "fs/Context.h"
+#include "fs/PosixFsIO.h"
 
 #include <glog/logging.h>
 
@@ -204,6 +205,17 @@ int encfs_fgetattr(const char *path, struct stat *stbuf,
   return withFileNode( "fgetattr", path, fi, _do_getattr, stbuf );
 }
 
+static int encfs_file_type_to_fuse(FsFileType ft) {
+  static std::map<FsFileType, int> theMapper = {
+    {FsFileType::DIRECTORY, DT_DIR},
+    {FsFileType::REGULAR, DT_REG},
+  };
+  /* DT_UNKNOWN should be zero since that is what is returned if
+     the type constant does not exist in the map */
+  static_assert(!DT_UNKNOWN, "DT_UNKNOWN must be 0");
+  return theMapper[ft];
+}
+
 int encfs_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
 {
   EncFS_Context *ctx = context();
@@ -222,13 +234,13 @@ int encfs_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
 
     if(dt.valid())
     {
-      encfs_file_type_t fileType = (encfs_file_type_t) 0;
-      encfs_ino_t inode = 0;
+      FsFileType fileType = FsFileType::UNKNOWN;
+      fs_posix_ino_t inode = 0;
 
       std::string name = dt.nextPlaintextName( &fileType, &inode );
       while( !name.empty() )
       {
-        res = filler( h, name.c_str(), (int) fileType, (ino_t) inode );
+        res = filler( h, name.c_str(), encfs_file_type_to_fuse(fileType), (ino_t) inode );
 
         if(res != ESUCCESS)
           break;
@@ -313,7 +325,7 @@ int encfs_mkdir(const char *path, mode_t mode)
       uid = fctx->uid;
       gid = fctx->gid;
     }
-    res = FSRoot->mkdir( path, mode, uid, gid );
+    res = fsErrorToPosixErrno( FSRoot->mkdir( path, mode, uid, gid ) );
     // Is this error due to access problems?
     if(ctx->publicFilesystem && -res == EACCES)
     {
@@ -324,7 +336,7 @@ int encfs_mkdir(const char *path, mode_t mode)
 
       struct stat st;
       if(dnode->getAttr( &st ) == 0)
-        res = FSRoot->mkdir( path, mode, uid, st.st_gid );
+        res = fsErrorToPosixErrno( FSRoot->mkdir( path, mode, uid, st.st_gid ) );
     }
   } catch( Error &err )
   {
@@ -346,7 +358,7 @@ int encfs_unlink(const char *path)
   {
     // let DirNode handle it atomically so that it can handle race
     // conditions
-    res = FSRoot->unlink( path );
+    res = fsErrorToPosixErrno( FSRoot->unlink( path ) );
   } catch( Error &err )
   {
     LOG(ERROR) << "error caught in unlink: " << err.what();
@@ -462,7 +474,7 @@ int encfs_link(const char *from, const char *to)
 
   try
   {
-    res = FSRoot->link( from, to );
+    res = fsErrorToPosixErrno( FSRoot->link( from, to ) );
   } catch( Error &err )
   {
     LOG(ERROR) << "error caught in link: " << err.what();
@@ -481,7 +493,7 @@ int encfs_rename(const char *from, const char *to)
 
   try
   {
-    res = FSRoot->rename( from, to );
+    res = fsErrorToPosixErrno( FSRoot->rename( from, to ) );
   } catch( Error &err )
   {
     LOG(ERROR) << "error caught in rename: " << err.what();

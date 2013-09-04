@@ -30,31 +30,27 @@ namespace encfs {
 class PosixFsIO : public FsIO
 {
 public:
-    PosixFsIO();
-    virtual ~PosixFsIO();
+    virtual FsError opendir( const char *path, fs_dir_handle_t *handle  ) override;
+    virtual FsError readdir( fs_dir_handle_t handle, char **name,
+                             FsFileType *type, fs_posix_ino_t *ino ) override;
+    virtual FsError closedir( fs_dir_handle_t handle ) override;
 
-    virtual int opendir( const char *path, encfs_dir_handle_t *handle  ) override;
-    virtual int readdir( encfs_dir_handle_t handle, char **name,
-                         encfs_file_type_t *type, encfs_ino_t *ino ) override;
-    virtual int closedir( encfs_dir_handle_t handle ) override;
+    virtual FsError mkdir( const char *path, fs_posix_mode_t mode,
+                           fs_posix_uid_t uid = 0, fs_posix_gid_t gid = 0) override;
 
-    virtual int mkdir( const char *path, encfs_mode_t mode,
-                       encfs_uid_t uid = 0, encfs_gid_t gid = 0) override;
+    virtual FsError rename( const char *from_path, const char *to_path ) override;
 
-    virtual int rename( const char *from_path, const char *to_path ) override;
+    virtual FsError link( const char *from_path, const char *to_path ) override;
 
-    virtual int link( const char *from_path, const char *to_path ) override;
+    virtual FsError unlink( const char *plaintextName ) override;
 
-    virtual int unlink( const char *plaintextName ) override;
-
-    virtual int get_mtime( const char *path, encfs_time_t *mtime ) override;
-    virtual int set_mtime( const char *path, encfs_time_t mtime ) override;
-
-    virtual const char *strerror( int err ) override;
-
+    virtual FsError get_mtime( const char *path, fs_time_t *mtime ) override;
+    virtual FsError set_mtime( const char *path, fs_time_t mtime ) override;
 };
 
-}  // namespace encfs
+FsError posixErrnoToFsError(int err);
+int fsErrorToPosixErrno(FsError err);
 
+}  // namespace encfs
 #endif
 

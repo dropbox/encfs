@@ -33,6 +33,10 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <map>
+#include <stdexcept>
+#include <vector>
+
 #include "fs/PosixFsIO.h"
 
 namespace encfs {
@@ -47,68 +51,129 @@ static char *strdup_x(const char *s)
   return (char *) memcpy(toret, s, len + 1);
 }
 
-PosixFsIO::PosixFsIO( )
+class ErrMap
 {
+private:
+  std::map<FsError, int> fsErrorToPosixErrnoMap;
+  std::map<int, FsError> posixErrnoToFsErrorMap;
+
+public:
+  ErrMap(const std::vector< std::pair< FsError, std::vector<int> > > &masterErrorMap)
+  {
+    for(const auto & p : masterErrorMap)
+    {
+      for(const auto & errno_ : p.second)
+      {
+        assert( !this->fsErrorToPosixErrnoMap.count( p.first ) );
+        assert( !this->posixErrnoToFsErrorMap.count( errno_ ) );
+        this->fsErrorToPosixErrnoMap[p.first] = errno_;
+        this->posixErrnoToFsErrorMap[errno_] = p.first;
+      }
+    }
+  }
+
+  FsError posixErrnoToFsError(int err) const
+  {
+    try
+    {
+      return this->posixErrnoToFsErrorMap.at( err );
+    } catch ( const std::out_of_range &oor )
+    {
+      return FsError::GENERIC;
+    }
+  }
+
+  int fsErrorToPosixErrno(FsError err) const
+  {
+    if(err == FsError::GENERIC)
+    {
+      return -EIO;
+    }
+    /* this should never throw an exception, if it does
+       then it's programmer error
+     */
+    return this->fsErrorToPosixErrnoMap.at( err );
+  }
+};
+
+static const ErrMap _privateErrMap(std::vector<std::pair<FsError, std::vector<int> > >({
+  {FsError::NONE, {0}},
+  {FsError::ACCESS, {EACCES}},
+  {FsError::IO, {EIO}},
+  {FsError::BUSY, {EBUSY}},
+}));
+
+FsError posixErrnoToFsError(int err)
+{
+  return _privateErrMap.posixErrnoToFsError(err);
 }
 
-PosixFsIO::~PosixFsIO( )
+int fsErrorToPosixErrno(FsError err)
 {
+  return _privateErrMap.fsErrorToPosixErrno(err);
 }
 
-int PosixFsIO::opendir( const char *dirname, encfs_dir_handle_t *handle )
+static FsError currentFsError() {
+  return posixErrnoToFsError(errno);
+}
+
+FsError PosixFsIO::opendir(const char *dirname, fs_dir_handle_t *handle)
 {
   DIR *const res = ::opendir( dirname );
-  if (!res) {
-    return -errno;
-  }
-  *handle = (encfs_dir_handle_t) res;
-  return 0;
+  if(!res)
+    return currentFsError();
+
+  *handle = (fs_dir_handle_t) res;
+  return FsError::NONE;
 }
 
-int PosixFsIO::readdir( encfs_dir_handle_t handle, char **name,
-                        encfs_file_type_t *type, encfs_ino_t *ino )
-{
-    DIR *const dir = (DIR *) handle;
-
-    while (true) {
-      errno = 0;
-      struct dirent *const de = ::readdir( dir );
-      if(!de) {
-        if(errno) {
-          return -errno;
-        } else
-        {
-          *name = NULL;
-          break;
-        }
-      }
-
-      if((de->d_name[0] == '.') &&
-         ((de->d_name[1] == '\0')
-          || ((de->d_name[1] == '.') && (de->d_name[2] == '\0'))))
-        {
-          // skip "." and ".."
-          continue;
-        }
-
-      *name = strdup_x( de->d_name );
-      /* TODO: base on de->d_type */
-      *type = ENCFS_FILE_TYPE_UNKNOWN;
-      break;
-    }
-
-    return 0;
-}
-
-int PosixFsIO::closedir( encfs_dir_handle_t handle )
+FsError PosixFsIO::readdir(fs_dir_handle_t handle, char **name,
+                           FsFileType *type, fs_posix_ino_t *ino)
 {
   DIR *const dir = (DIR *) handle;
-  const int res_closdir = ::closedir(dir);
-  return res_closdir < 0 ? -errno : 0;
+
+  while(true)
+  {
+    errno = 0;
+    struct dirent *const de = ::readdir( dir );
+    if(!de)
+    {
+      if(errno)
+      {
+        return currentFsError();
+       } else
+       {
+         *name = NULL;
+         break;
+       }
+    }
+
+    if((de->d_name[0] == '.') &&
+       ((de->d_name[1] == '\0')
+        || ((de->d_name[1] == '.') && (de->d_name[2] == '\0'))))
+    {
+      // skip "." and ".."
+      continue;
+    }
+
+    *name = strdup_x( de->d_name );
+    /* TODO: base on de->d_type */
+    *type = FsFileType::UNKNOWN;
+    break;
+  }
+
+  return FsError::NONE;
 }
 
-int PosixFsIO::mkdir( const char *path, encfs_mode_t mode,
-                      encfs_uid_t uid, encfs_gid_t gid)
+FsError PosixFsIO::closedir( fs_dir_handle_t handle )
+{
+  DIR *const dir = (DIR *) handle;
+  const int res_closedir = ::closedir(dir);
+  return res_closedir < 0 ? currentFsError() : FsError::NONE;
+}
+
+FsError PosixFsIO::mkdir(const char *path, fs_posix_mode_t mode,
+                         fs_posix_uid_t uid, fs_posix_gid_t gid)
 {
 #ifdef linux
   // if uid or gid are set, then that should be the directory owner
@@ -122,6 +187,7 @@ int PosixFsIO::mkdir( const char *path, encfs_mode_t mode,
 #endif
 
   const int res = ::mkdir( path, mode );
+  const int save_errno = errno;
 
 #ifdef linux
   if(olduid >= 0)
@@ -130,64 +196,56 @@ int PosixFsIO::mkdir( const char *path, encfs_mode_t mode,
     setfsgid( oldgid );
 #endif
 
-  return res < 0 ? -errno : res;
+  return res < 0 ? posixErrnoToFsError(save_errno) : FsError::NONE;
 }
 
-int PosixFsIO::rename( const char *from_path, const char *to_path )
+FsError PosixFsIO::rename(const char *from_path, const char *to_path)
 {
   const int res = ::rename( from_path, to_path );
-  return res < 0 ? -errno : res;
+  return res < 0 ? currentFsError() : FsError::NONE;
 }
 
-int PosixFsIO::link( const char *from_path, const char *to_path )
+FsError PosixFsIO::link(const char *from_path, const char *to_path)
 {
   const int res = ::link( from_path, to_path );
-  return res < 0 ? -errno : res;
+  return res < 0 ? currentFsError() : FsError::NONE;
 }
 
-int PosixFsIO::unlink( const char *path )
+FsError PosixFsIO::unlink(const char *path)
 {
   const int res = ::unlink( path );
-  return res < 0 ? -errno : res;
+  return res < 0 ? currentFsError() : FsError::NONE;
 }
 
-int PosixFsIO::get_mtime( const char *path, encfs_time_t *mtime )
+FsError PosixFsIO::get_mtime(const char *path, fs_time_t *mtime)
 {
   struct stat st;
   const int res_stat = ::stat( path, &st );
-  if (res_stat < 0) {
-    return -errno;
-  }
+  if (res_stat < 0)
+    return currentFsError();
 
-  assert( st.st_mtime >= ENCFS_TIME_MIN );
-  assert( st.st_mtime <= ENCFS_TIME_MAX );
-  *mtime = (encfs_time_t) st.st_mtime;
-  return 0;
+  assert( st.st_mtime >= FS_TIME_MIN );
+  assert( st.st_mtime <= FS_TIME_MAX );
+  *mtime = (fs_time_t) st.st_mtime;
+  return FsError::NONE;
 }
 
-int PosixFsIO::set_mtime( const char *path, encfs_time_t mtime )
+FsError PosixFsIO::set_mtime(const char *path, fs_time_t mtime)
 {
   struct timeval new_times[2] = {
     {0, 0},
     {mtime, 0},
   };
 
-  const int res_gettimeofday = ::gettimeofday(&new_times[0], NULL);
-  if (res_gettimeofday < 0) {
-    return -errno;
-  }
+  const int res_gettimeofday = ::gettimeofday( &new_times[0], NULL );
+  if(res_gettimeofday < 0)
+    return currentFsError();
 
   const int res_utimes = ::utimes( path, new_times );
-  if (res_utimes < 0) {
-    return -errno;
-  }
+  if(res_utimes < 0)
+    return currentFsError();
 
-  return 0;
-}
-
-const char *PosixFsIO::strerror( int err )
-{
-  return ::strerror( err );
+  return FsError::NONE;
 }
 
 }  // namespace encfs

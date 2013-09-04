@@ -18,54 +18,76 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/* Low-level IO class */
+
+/* TODO:
+ * Move low-level File IO into this class,
+ * Make FileNode/DirNode C++-like interfaces into this backend
+ */
+
 #ifndef _FsIO_incl_
 #define _FsIO_incl_
-
-#include <cassert>
 
 /* libstdc++ on mac doesn't have cstdint */
 #include <stdint.h>
 
+#include <cassert>
+#include <map>
+
 namespace encfs {
 
-typedef uintmax_t encfs_mode_t;
-typedef uintmax_t encfs_uid_t;
-typedef uintmax_t encfs_gid_t;
-typedef uintmax_t encfs_ino_t;
-typedef uintptr_t encfs_dir_handle_t;
-typedef intmax_t encfs_time_t;
+typedef uintptr_t fs_dir_handle_t;
+typedef intmax_t fs_time_t;
+typedef uintmax_t fs_posix_mode_t;
+typedef uintmax_t fs_posix_uid_t;
+typedef uintmax_t fs_posix_gid_t;
+typedef uintmax_t fs_posix_ino_t;
 
 enum {
-  ENCFS_TIME_MIN=INTMAX_MIN,
-  ENCFS_TIME_MAX=INTMAX_MAX,
+  FS_TIME_MIN=INTMAX_MIN,
+  FS_TIME_MAX=INTMAX_MAX,
 };
 
-typedef enum {
-  ENCFS_FILE_TYPE_UNKNOWN,
-  ENCFS_FILE_TYPE_DIRECTORY,
-} encfs_file_type_t;
+typedef enum class {
+  UNKNOWN,
+  DIRECTORY,
+  REGULAR,
+} FsFileType;
+
+typedef enum class {
+  NONE,
+  ACCESS,
+  IO,
+  BUSY,
+  GENERIC,
+} FsError;
+
+const char *fsErrorString( FsError err );
+
+static constexpr bool isError( FsError err )
+{
+  return err != FsError::NONE;
+}
 
 class FsIO
 {
 public:
-    virtual int opendir( const char *plaintDirName, encfs_dir_handle_t *handle  ) =0;
-    virtual int readdir( encfs_dir_handle_t handle, char **name,
-                         encfs_file_type_t *type, encfs_ino_t *ino ) =0;
-    virtual int closedir( encfs_dir_handle_t handle ) =0;
+    virtual FsError opendir( const char *plaintDirName, fs_dir_handle_t *handle  ) =0;
+    virtual FsError readdir( fs_dir_handle_t handle, char **name,
+                             FsFileType *type, fs_posix_ino_t *ino ) =0;
+    virtual FsError closedir( fs_dir_handle_t handle ) =0;
 
-    virtual int mkdir( const char *plaintextPath, encfs_mode_t mode,
-                       encfs_uid_t uid = 0, encfs_gid_t gid = 0) =0;
+    virtual FsError mkdir( const char *plaintextPath, fs_posix_mode_t mode,
+                           fs_posix_uid_t uid = 0, fs_posix_gid_t gid = 0) =0;
 
-    virtual int rename( const char *fromPlaintext, const char *toPlaintext ) =0;
+    virtual FsError rename( const char *fromPlaintext, const char *toPlaintext ) =0;
 
-    virtual int link( const char *from, const char *to ) =0;
+    virtual FsError link( const char *from, const char *to ) =0;
 
-    virtual int unlink( const char *plaintextName ) =0;
+    virtual FsError unlink( const char *plaintextName ) =0;
 
-    virtual int get_mtime( const char *path, encfs_time_t *mtime ) =0;
-    virtual int set_mtime( const char *path, encfs_time_t mtime ) =0;
-
-    virtual const char *strerror( int err ) =0;
+    virtual FsError get_mtime( const char *path, fs_time_t *mtime ) =0;
+    virtual FsError set_mtime( const char *path, fs_time_t mtime ) =0;
 };
 
 /* RH:

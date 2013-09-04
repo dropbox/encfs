@@ -42,7 +42,7 @@ using std::list;
 using std::string;
 
 /* TODO: change this to std::nullptr_t on systems that support it */
-typedef void *my_nullptr_t;
+typedef decltype(nullptr) my_nullptr_t;
 
 namespace encfs {
 
@@ -54,21 +54,23 @@ private:
   const V & user_data;
 public:
   CFreer(const U & to_free, const V & user_data)
-    : to_free(to_free)
-    , user_data(user_data)
+    : to_free( to_free )
+    , user_data( user_data )
   {}
   ~CFreer() {
-    func(to_free, user_data);
+    func( to_free, user_data );
   }
 };
 
-static void c_closedir(encfs_dir_handle_t handle, shared_ptr<FsIO> fs_io)
+static void c_closedir(fs_dir_handle_t handle, shared_ptr<FsIO> fs_io)
 {
-  if (!handle) {
+  if(!handle)
+  {
     return;
   }
-  const int ret = fs_io->closedir(handle);
-  if (ret) {
+  const FsError ret = fs_io->closedir( handle );
+  if(isError( ret ))
+  {
     /* this is really bad */
     abort();
   }
@@ -84,12 +86,12 @@ class CStringFreer : public CFreer<char *, my_nullptr_t, c_free_string>
 {
 public:
   CStringFreer(char *const & to_free)
-    : CFreer<char *, my_nullptr_t, c_free_string>(to_free, nullptr)
+    : CFreer( to_free, nullptr )
   {}
 };
 
-DirTraverse::DirTraverse(const shared_ptr<FsIO> _fs_io, encfs_dir_handle_t _dir,
-    uint64_t _iv, const shared_ptr<NameIO> &_naming)
+DirTraverse::DirTraverse(const shared_ptr<FsIO> _fs_io, fs_dir_handle_t _dir,
+                         uint64_t _iv, const shared_ptr<NameIO> &_naming)
     : dir( _dir )
     , iv( _iv )
     , naming( _naming )
@@ -117,13 +119,14 @@ DirTraverse &DirTraverse::operator = (const DirTraverse &src)
 
 DirTraverse::~DirTraverse()
 {
-  if (dir) {
-    const int ret = fs_io->closedir( dir );
-    if (ret) {
+  if(dir)
+  {
+    const FsError ret = fs_io->closedir( dir );
+    if(isError( ret )) {
       /* closing directories can't fail */
       abort();
     }
-    dir = (encfs_dir_handle_t) 0;
+    dir = (fs_dir_handle_t) 0;
   }
 
   iv = 0;
@@ -131,10 +134,10 @@ DirTraverse::~DirTraverse()
   fs_io.reset();
 }
 
-std::string DirTraverse::nextPlaintextName(encfs_file_type_t *fileType, encfs_ino_t *inode)
+std::string DirTraverse::nextPlaintextName(FsFileType *fileType, fs_posix_ino_t *inode)
 {
   char *name;
-  while(!fs_io->readdir( dir, &name, fileType, inode ) && name)
+  while(!isError( fs_io->readdir( dir, &name, fileType, inode ) ) && name)
   {
     CStringFreer free_name(name);
     try
@@ -155,9 +158,9 @@ std::string DirTraverse::nextPlaintextName(encfs_file_type_t *fileType, encfs_in
 std::string DirTraverse::nextInvalid()
 {
   char *name;
-  encfs_file_type_t fileType;
-  encfs_ino_t inode;
-  while(!fs_io->readdir( dir, &name, &fileType, &inode ) && name)
+  FsFileType fileType;
+  fs_posix_ino_t inode;
+  while( !isError( fs_io->readdir( dir, &name, &fileType, &inode ) ) && name )
   {
     CStringFreer free_name( name );
     try
@@ -243,20 +246,20 @@ bool RenameOp::apply()
       // backing store rename.
       VLOG(2) << "renaming " << last->oldCName << "-> " << last->newCName;
 
-      encfs_time_t old_mtime;
-      bool preserve_mtime = dn->fs_io->get_mtime( last->oldCName.c_str(), &old_mtime ) == 0;
+      fs_time_t old_mtime;
+      bool preserve_mtime = !isError( dn->fs_io->get_mtime( last->oldCName.c_str(), &old_mtime ) );
 
       // internal node rename..
       dn->renameNode( last->oldPName.c_str(), last->newPName.c_str() );
 
       // rename on disk..
-      const int res_rename =
+      const FsError res_rename =
         dn->fs_io->rename( last->oldCName.c_str(),
                            last->newCName.c_str() );
-      if( res_rename )
+      if(isError( res_rename ))
       {
         LOG(WARNING) << "Error renaming " << last->oldCName << ": " <<
-          dn->fs_io->strerror(res_rename);
+          fsErrorString(res_rename);
         dn->renameNode( last->newPName.c_str(), 
             last->oldPName.c_str(), false );
         return false;
@@ -294,7 +297,7 @@ void RenameOp::undo()
   int errorCount = 0;
   list<RenameEl>::const_iterator it = last;
 
-  while( it != renameList->begin() )
+  while(it != renameList->begin())
   {
     --it;
 
@@ -304,10 +307,10 @@ void RenameOp::undo()
     try
     {
       dn->renameNode( it->newPName.c_str(), 
-          it->oldPName.c_str(), false );
+                      it->oldPName.c_str(), false );
     } catch( Error &err )
     {
-      if (++errorCount == 1)
+      if(++errorCount == 1)
         LOG(WARNING) << "error in rename und: " << err.what();
       // continue on anyway...
     }
@@ -329,7 +332,7 @@ DirNode::DirNode(EncFS_Context *_ctx,
 
   // make sure rootDir ends in '/', so that we can form a path by appending
   // the rest..
-  if( rootDir[ rootDir.length()-1 ] != '/' )
+  if(rootDir[ rootDir.length()-1 ] != '/')
     rootDir.append( 1, '/');
 
   naming = fsConfig->nameCoding;
@@ -354,30 +357,30 @@ string DirNode::rootDirectory()
   return string( rootDir, 0, rootDir.length()-1 );
 }
 
-string DirNode::cipherPath( const char *plaintextPath )
+string DirNode::cipherPath(const char *plaintextPath)
 {
   return rootDir + naming->encodePath( plaintextPath );
 }
 
-string DirNode::cipherPathWithoutRoot( const char *plaintextPath )
+string DirNode::cipherPathWithoutRoot(const char *plaintextPath)
 {
   return naming->encodePath( plaintextPath );
 }
 
-string DirNode::plainPath( const char *cipherPath_ )
+string DirNode::plainPath(const char *cipherPath_)
 {
   try
   {
-    if( !strncmp( cipherPath_, rootDir.c_str(), 
-          rootDir.length() ) )
+    if(!strncmp( cipherPath_, rootDir.c_str(),
+                 rootDir.length() ))
     {
       return naming->decodePath( cipherPath_ + rootDir.length() );
     } else
     {
-      if ( cipherPath_[0] == '+' )
+      if(cipherPath_[0] == '+')
       {
         // decode as fully qualified path
-        return string("/") + naming->decodeName( cipherPath_+1, 
+        return string("/") + naming->decodeName( cipherPath_+1,
             strlen(cipherPath_+1) );
       } else
       {
@@ -392,7 +395,7 @@ string DirNode::plainPath( const char *cipherPath_ )
   }
 }
 
-string DirNode::relativeCipherPath( const char *plaintextPath )
+string DirNode::relativeCipherPath(const char *plaintextPath)
 {
   try
   {
@@ -417,11 +420,11 @@ DirTraverse DirNode::openDir(const char *plaintextPath)
   string cyName = rootDir + naming->encodePath( plaintextPath );
   //rDebug("openDir on %s", cyName.c_str() );
 
-  encfs_dir_handle_t dp;
-  const int res_opendir = fs_io->opendir( cyName.c_str(), &dp );
-  if(res_opendir)
+  fs_dir_handle_t dp;
+  const FsError res_opendir = fs_io->opendir( cyName.c_str(), &dp );
+  if(isError( res_opendir ))
   {
-    VLOG(1) << "opendir error " << fs_io->strerror(res_opendir);
+    VLOG(1) << "opendir error " << fsErrorString(res_opendir);
     return DirTraverse( fs_io, 0, 0, shared_ptr<NameIO>() );
   } else
   {
@@ -440,8 +443,8 @@ DirTraverse DirNode::openDir(const char *plaintextPath)
   }
 }
 
-bool DirNode::genRenameList( list<RenameEl> &renameList, 
-    const char *fromP, const char *toP )
+bool DirNode::genRenameList(list<RenameEl> &renameList, 
+    const char *fromP, const char *toP)
 {
   uint64_t fromIV = 0, toIV = 0;
 
@@ -458,17 +461,17 @@ bool DirNode::genRenameList( list<RenameEl> &renameList,
 
   // generate the real destination path, where we expect to find the files..
   VLOG(1) << "opendir " << sourcePath;
-  encfs_dir_handle_t dir;
-  const int res_opendir = fs_io->opendir( sourcePath.c_str(), &dir );
-  CFreer<encfs_dir_handle_t, shared_ptr<FsIO>, c_closedir> free_dir( dir, fs_io );
+  fs_dir_handle_t dir = 0;
+  const FsError res_opendir = fs_io->opendir( sourcePath.c_str(), &dir );
+  CFreer<fs_dir_handle_t, shared_ptr<FsIO>, c_closedir > free_dir( dir, fs_io );
 
-  if(res_opendir)
+  if(isError( res_opendir ))
     return false;
 
   char *name;
-  encfs_file_type_t file_type;
-  encfs_ino_t inode;
-  while(!fs_io->readdir( dir, &name, &file_type, &inode ) && name)
+  FsFileType file_type;
+  fs_posix_ino_t inode;
+  while(!isError( fs_io->readdir( dir, &name, &file_type, &inode ) ) && name)
   {
     CStringFreer free_name( name );
     // decode the name using the oldIV
@@ -501,9 +504,9 @@ bool DirNode::genRenameList( list<RenameEl> &renameList,
       ren.oldPName = string(fromP) + '/' + plainName;
       ren.newPName = string(toP) + '/' + plainName;
 
-      bool isDir = file_type == ENCFS_FILE_TYPE_UNKNOWN
+      bool isDir = file_type == FsFileType::UNKNOWN
         ? isDirectory( oldFull.c_str() )
-        : file_type == ENCFS_FILE_TYPE_DIRECTORY;
+        : file_type == FsFileType::DIRECTORY;
 
       ren.isDirectory = isDir;
 
@@ -511,9 +514,9 @@ bool DirNode::genRenameList( list<RenameEl> &renameList,
       {
         // recurse..  We want to add subdirectory elements before the
         // parent, as that is the logical rename order..
-        if(!genRenameList( renameList, 
-              ren.oldPName.c_str(), 
-              ren.newPName.c_str()))
+        if(!genRenameList( renameList,
+            ren.oldPName.c_str(),
+            ren.newPName.c_str() ))
         {
           return false;
         }
@@ -548,7 +551,7 @@ bool DirNode::genRenameList( list<RenameEl> &renameList,
     Returns a list of renamed items on success, a null list on failure.
 */
 shared_ptr<RenameOp>
-DirNode::newRenameOp( const char *fromP, const char *toP )
+DirNode::newRenameOp(const char *fromP, const char *toP)
 {
   // Do the rename in two stages to avoid chasing our tail
   // Undo everything if we encounter an error!
@@ -562,27 +565,27 @@ DirNode::newRenameOp( const char *fromP, const char *toP )
 }
 
 
-int DirNode::mkdir(const char *plaintextPath, encfs_mode_t mode, 
-    encfs_uid_t uid, encfs_gid_t gid)
+FsError DirNode::mkdir(const char *plaintextPath, fs_posix_mode_t mode,
+                       fs_posix_uid_t uid, fs_posix_gid_t gid)
 {
   string cyName = rootDir + naming->encodePath( plaintextPath );
   rAssert( !cyName.empty() );
 
   VLOG(1) << "mkdir on " << cyName;
 
-  int res = fs_io->mkdir( cyName.c_str(), mode, uid, gid );
+  const FsError res = fs_io->mkdir( cyName.c_str(), mode, uid, gid );
 
-  if(res)
+  if(isError( res ))
   {
     LOG(WARNING) << "mkdir error on " << cyName
-      << " mode " << mode << ": " << fs_io->strerror(res);
+      << " mode " << mode << ": " << fsErrorString(res);
   }
 
   return res;
 }
 
-int 
-DirNode::rename( const char *fromPlaintext, const char *toPlaintext )
+FsError
+DirNode::rename(const char *fromPlaintext, const char *toPlaintext)
 {
   Lock _lock( mutex );
 
@@ -596,7 +599,7 @@ DirNode::rename( const char *fromPlaintext, const char *toPlaintext )
   shared_ptr<FileNode> toNode = findOrCreate( toPlaintext );
 
   shared_ptr<RenameOp> renameOp;
-  if( hasDirectoryNameDependency() && isDirectory( fromCName.c_str() ))
+  if(hasDirectoryNameDependency() && isDirectory( fromCName.c_str() ))
   {
     VLOG(1) << "recursive rename begin";
     renameOp = newRenameOp( fromPlaintext, toPlaintext );
@@ -607,22 +610,21 @@ DirNode::rename( const char *fromPlaintext, const char *toPlaintext )
         renameOp->undo();
 
       LOG(WARNING) << "rename aborted";
-      /* -EACCESS */
-      return -1;
+      return FsError::ACCESS;
     }
     VLOG(1) << "recursive rename end";
   }
 
-  int res = 0;
+  FsError res = FsError::NONE;
   try
   {
-    encfs_time_t old_mtime;
-    bool preserve_mtime = fs_io->get_mtime(fromCName.c_str(), &old_mtime) == 0;
+    fs_time_t old_mtime;
+    bool preserve_mtime = !isError( fs_io->get_mtime(fromCName.c_str(), &old_mtime) );
 
     renameNode( fromPlaintext, toPlaintext );
     res = fs_io->rename( fromCName.c_str(), toCName.c_str() );
 
-    if(res)
+    if(isError( res ))
     {
       // undo
       renameNode( toPlaintext, fromPlaintext, false );
@@ -637,19 +639,18 @@ DirNode::rename( const char *fromPlaintext, const char *toPlaintext )
   {
     // exception from renameNode, just show the error and continue..
     LOG(ERROR) << "rename err: " << err.what();
-    /* -EIO */
-    res = -1;
+    res = FsError::IO;
   }
 
-  if(res)
+  if(isError( res ))
   {
-    VLOG(1) << "rename failed: " << fs_io->strerror( res );
+    VLOG(1) << "rename failed: " << fsErrorString( res );
   }
 
   return res;
 }
 
-int DirNode::link( const char *from, const char *to )
+FsError DirNode::link(const char *from, const char *to)
 {
   Lock _lock( mutex );
 
@@ -661,9 +662,8 @@ int DirNode::link( const char *from, const char *to )
 
   VLOG(1) << "link " << fromCName << " -> " << toCName;
 
-  /* -EPERM */
-  int res = -1;
-  if( fsConfig->config->external_iv() )
+  FsError res = FsError::ACCESS;
+  if(fsConfig->config->external_iv())
   {
     VLOG(1) << "hard links not supported with external IV chaining!";
   } else
@@ -678,13 +678,13 @@ int DirNode::link( const char *from, const char *to )
     The node is keyed by filename, so a rename means the internal node names
     must be changed.
 */
-shared_ptr<FileNode> DirNode::renameNode( const char *from, const char *to )
+shared_ptr<FileNode> DirNode::renameNode(const char *from, const char *to)
 {
   return renameNode( from, to, true );
 }
 
-shared_ptr<FileNode> DirNode::renameNode( const char *from, const char *to, 
-    bool forwardMode )
+shared_ptr<FileNode> DirNode::renameNode(const char *from, const char *to, 
+    bool forwardMode)
 {
   shared_ptr<FileNode> node = findOrCreate( from );
 
@@ -711,7 +711,7 @@ shared_ptr<FileNode> DirNode::renameNode( const char *from, const char *to,
   return node;
 }
 
-shared_ptr<FileNode> DirNode::findOrCreate( const char *plainName)
+shared_ptr<FileNode> DirNode::findOrCreate(const char *plainName)
 {
   shared_ptr<FileNode> node;
   if(ctx)
@@ -723,7 +723,7 @@ shared_ptr<FileNode> DirNode::findOrCreate( const char *plainName)
     string cipherName = naming->encodePath( plainName, &iv );
     node.reset( new FileNode( this, fsConfig,
           plainName, 
-          (rootDir + cipherName).c_str()));
+          (rootDir + cipherName).c_str()) );
 
     if(fsConfig->config->external_iv())
       node->setName(0, 0, iv);
@@ -752,7 +752,7 @@ DirNode::lookupNode( const char *plainName, const char * requestor )
 */
 shared_ptr<FileNode>
 DirNode::openNode( const char *plainName, const char * requestor, int flags,
-    int *result )
+                   int *result )
 {
   (void)requestor;
   rAssert( result != NULL );
@@ -760,20 +760,20 @@ DirNode::openNode( const char *plainName, const char * requestor, int flags,
 
   shared_ptr<FileNode> node = findOrCreate( plainName );
 
-  if( node && (*result = node->open( flags )) >= 0 )
+  if(node && (*result = node->open( flags )) >= 0)
     return node;
   else
     return shared_ptr<FileNode>();
 }
 
-int DirNode::unlink( const char *plaintextName )
+FsError DirNode::unlink( const char *plaintextName )
 {
   string cyName = naming->encodePath( plaintextName );
   VLOG(1) << "unlink " << cyName;
 
   Lock _lock( mutex );
 
-  int res = 0;
+  FsError res = FsError::NONE;
   if(ctx && ctx->lookupNode( plaintextName ))
   {
     // If FUSE is running with "hard_remove" option where it doesn't
@@ -781,16 +781,15 @@ int DirNode::unlink( const char *plaintextName )
     // file..
     LOG(WARNING) << "Refusing to unlink open file: "
       << cyName << ", hard_remove option is probably in effect";
-    /* -EBUSY */
-    res = -1;
+    res = FsError::BUSY;
   } else
   {
     string fullName = rootDir + cyName;
     res = fs_io->unlink( fullName.c_str() );
-    if(res)
+    if(isError( res ))
     {
-      VLOG(1) << "unlink error: " << fs_io->strerror(res);
-    } 
+      VLOG(1) << "unlink error: " << fsErrorString(res);
+    }
   }
 
   return res;

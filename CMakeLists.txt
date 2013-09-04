@@ -50,10 +50,12 @@ endif (HAVE_GNU11_FLAG)
 # Flume specific flags.
 find_package (FUSE REQUIRED)
 include_directories (${FUSE_INCLUDE_DIR})
+
+add_definitions (-D__STDC_LIMIT_MACROS)
 add_definitions (-DFUSE_USE_VERSION=26)
-if (linux)
-    add_definitions (-D_FILE_OFFSET_BITS=64 -D__FreeBSD__=10)
-endif (linux)
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_definitions (-D_FILE_OFFSET_BITS=64)
+endif ()
 
 # Packaging config.
 set (CPACK_PACKAGE_NAME "Encfs")
