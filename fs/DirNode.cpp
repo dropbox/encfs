@@ -66,7 +66,9 @@ public:
     : to_free( to_free )
     , user_data( user_data )
   {}
-  ~CFreer() {
+  CFreer(const CFreer &) = delete;
+  ~CFreer()
+  {
     func( to_free, user_data );
   }
 };
