@@ -24,11 +24,13 @@
 #include <inttypes.h>
 
 #include <map>
+#include <memory>
 #include <list>
 #include <vector>
 #include <string>
 
 #include "base/Mutex.h"
+#include "base/optional.h"
 #include "base/shared_ptr.h"
 #include "cipher/CipherKey.h"
 #include "fs/FileNode.h"
@@ -46,36 +48,36 @@ class EncFS_Context;
 class DirTraverse
 {
 public:
-    DirTraverse(const shared_ptr<FsIO> fs_io, fs_dir_handle_t dirPtr,
+    DirTraverse();
+    DirTraverse(Directory && dir_io,
                 uint64_t iv,
 	        const shared_ptr<NameIO> &naming);
-    DirTraverse(const DirTraverse &src);
-    ~DirTraverse();
+    DirTraverse(DirTraverse && src);
+    DirTraverse& operator=(DirTraverse && other);
 
-    DirTraverse &operator = (const DirTraverse &src);
+    DirTraverse(const DirTraverse &src) = delete;
+    DirTraverse &operator = (const DirTraverse &src) = delete;
 
     // returns FALSE to indicate an invalid DirTraverse (such as when
     // an invalid directory is requested for traversal)
     bool valid() const;
 
     // return next plaintext filename
-    // If fileType is not 0, then it is used to return the filetype (or 0 if
-    // unknown)
+    // If fileType is not 0, then it is used to return the filetype
+    // (or 0 if unknown)
     std::string nextPlaintextName(FsFileType *fileType=0, fs_posix_ino_t *inode=0);
 
-    /* Return cipher name of next undecodable filename..
-       The opposite of nextPlaintextName(), as that skips undecodable names..
-    */
+    // Return cipher name of next undecodable filename..
+    // The opposite of nextPlaintextName(), as that skips undecodable names..
     std::string nextInvalid();
 private:
-    shared_ptr<FsIO> fs_io;
-    fs_dir_handle_t dir;
+    optional<Directory> dir_io;
     // initialization vector to use.  Not very general purpose, but makes it
     // more efficient to support filename IV chaining..
-    uint64_t iv; 
+    uint64_t iv;
     shared_ptr<NameIO> naming;
 };
-inline bool DirTraverse::valid() const { return dir; }
+inline bool DirTraverse::valid() const { return (bool) dir_io; }
 
 class DirNode
 {
@@ -117,21 +119,23 @@ public:
     bool hasDirectoryNameDependency() const;
 
     // unlink the specified file
-    FsError unlink( const char *plaintextName );
+    int unlink( const char *plaintextName );
 
     // traverse directory
     DirTraverse openDir( const char *plainDirName );
 
     // uid and gid are used as the directory owner, only if not zero
-    FsError mkdir( const char *plaintextPath, fs_posix_mode_t mode,
-                   fs_posix_uid_t uid = 0, fs_posix_gid_t gid = 0);
+    int mkdir( const char *plaintextPath,
+               fs_posix_mode_t mode = 0,
+               fs_posix_uid_t uid = 0,
+               fs_posix_gid_t gid = 0);
 
-    FsError rename( const char *fromPlaintext, const char *toPlaintext );
+    int rename( const char *fromPlaintext, const char *toPlaintext );
 
-    FsError link( const char *from, const char *to );
-    
+    int link( const char *from, const char *to );
+
     // returns idle time of filesystem in seconds
-    FsError idleSeconds();
+    int idleSeconds();
 
 protected:
 
@@ -156,18 +160,21 @@ protected:
 private:
 
     friend class RenameOp;
+    friend class DirTraverse;
 
     bool genRenameList( std::list<RenameEl> &list, const char *fromP,
-	    const char *toP );
+                        const char *toP );
     
     shared_ptr<FileNode> findOrCreate( const char *plainName);
+
+    Path appendToRoot(const std::string &path);
 
     Mutex mutex;
 
     EncFS_Context *ctx;
 
     // passed in as configuration
-    std::string rootDir;
+    Path rootDir;
     FSConfigPtr fsConfig;
 
     shared_ptr<NameIO> naming;

@@ -22,39 +22,42 @@
 #define _PosixFsIO_incl_
 
 #include <inttypes.h>
+#include <memory>
 
 #include "fs/FsIO.h"
 
 namespace encfs {
 
+/* forward declaration */
+class PosixFsIO;
+
 class PosixFsIO : public FsIO
 {
 public:
-    virtual FsError opendir(const char *path, fs_dir_handle_t *handle) override;
-    virtual FsError readdir(fs_dir_handle_t handle, char **name,
-                            FsFileType *type, fs_posix_ino_t *ino) override;
-    virtual FsError closedir(fs_dir_handle_t handle) override;
+    virtual Path pathFromString(const std::string &path) override;
 
-    virtual FsError mkdir(const char *path, fs_posix_mode_t mode,
-                          fs_posix_uid_t uid = 0, fs_posix_gid_t gid = 0) override;
+    virtual Directory opendir(const Path &path) override;
+    virtual File openfile(const Path &path,
+                          bool open_for_write = false,
+                          bool create = false) override;
 
-    virtual FsError rename(const char *from_path, const char *to_path) override;
+    virtual void mkdir(const Path &path,
+                       fs_posix_mode_t mode = 0,
+                       fs_posix_uid_t uid = 0,
+                       fs_posix_gid_t gid = 0) override;
 
-    virtual FsError link(const char *from_path, const char *to_path) override;
+    virtual void rename(const Path &pathSrc, const Path &pathDst) override;
 
-    virtual FsError unlink(const char *plaintextName ) override;
+    virtual void link(const Path &pathSrc, const Path &pathDst) override;
 
-    virtual FsError get_mtime(const char *path, fs_time_t *mtime) override;
-    virtual FsError set_mtime(const char *path, fs_time_t mtime) override;
+    virtual void unlink(const Path &path) override;
+    virtual void rmdir(const Path &path) override;
 
-    virtual FsError get_type(const char *path, FsFileType *filetype) override;
+    virtual fs_time_t get_mtime(const Path &path) override;
+    virtual void set_mtime(const Path &path, fs_time_t mtime) override;
 
-    virtual const char *path_sep() override;
-    virtual bool is_valid_path(const char *) override;
+    virtual FsFileType get_type(const Path &path) override;
 };
-
-FsError posixErrnoToFsError(int err);
-int fsErrorToPosixErrno(FsError err);
 
 }  // namespace encfs
 #endif

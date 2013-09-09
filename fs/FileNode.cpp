@@ -73,8 +73,9 @@ FileNode::FileNode(DirNode *parent_, const FSConfigPtr &cfg,
   this->fsConfig = cfg;
 
   // chain RawFileIO & CipherFileIO
-  shared_ptr<FileIO> rawIO( (*cfg->opts->fileIOFactory)( _cname ) );
-  io = shared_ptr<FileIO>( new CipherFileIO( rawIO, fsConfig ));
+  std::unique_ptr<FileIO> rawfile =
+    cfg->opts->fs_io->openfile( cfg->opts->fs_io->pathFromString( _cname ) );
+  io = shared_ptr<FileIO>( new CipherFileIO( std::move( rawfile ), fsConfig ));
 
   if(cfg->config->block_mac_bytes() || cfg->config->block_mac_rand_bytes())
     io = shared_ptr<FileIO>(new MACFileIO(io, fsConfig));

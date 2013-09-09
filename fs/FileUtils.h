@@ -25,7 +25,6 @@
 #include "cipher/CipherKey.h"
 #include "fs/encfs.h"
 #include "fs/FSConfig.h"
-#include "fs/FileIOFactory.h"
 #include "fs/FsIO.h"
 
 namespace encfs {
@@ -90,7 +89,6 @@ struct EncFS_Opts
 
   ConfigMode configMode;
 
-  shared_ptr<FileIOFactory> fileIOFactory;
   shared_ptr<FsIO> fs_io;
 
   EncFS_Opts()
@@ -105,7 +103,6 @@ struct EncFS_Opts
     ownerCreate = false;
     reverseEncryption = false;
     configMode = Config_Prompt;
-    fileIOFactory = shared_ptr<FileIOFactory>();
     fs_io = shared_ptr<FsIO>();
   }
 };

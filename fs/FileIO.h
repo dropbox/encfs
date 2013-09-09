@@ -49,8 +49,7 @@ inline IORequest::IORequest()
 class FileIO
 {
 public:
-    FileIO();
-    virtual ~FileIO();
+    virtual ~FileIO() =0;
 
     virtual Interface interface() const =0;
 
@@ -78,10 +77,6 @@ public:
     virtual int truncate( off_t size ) =0;
 
     virtual bool isWritable() const =0;
-private:
-    // not implemented..
-    FileIO( const FileIO & );
-    FileIO &operator = ( const FileIO & );
 };
 
 }  // namespace encfs

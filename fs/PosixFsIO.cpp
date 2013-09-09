@@ -33,13 +33,42 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <algorithm>
 #include <map>
+#include <memory>
 #include <stdexcept>
+#include <system_error>
 #include <vector>
 
+
 #include "fs/PosixFsIO.h"
+#include "fs/RawFileIO.h"
 
 namespace encfs {
+
+// create a custom posix category that returns the right
+// error condition in default_error_condition
+// (using generic_category to match with errc, not every implementation of
+//  system_category does: (required by the C++11 standard, 19.5.1.5p4)
+//  system_category().default_error_condition(errno).category == generic_category() )
+class posix_error_category : public std::error_category
+{
+public:
+  posix_error_category() {}
+
+  std::error_condition
+  default_error_condition(int __i) const noexcept
+  { return std::make_error_condition( static_cast<std::errc>( __i ) ); }
+
+  virtual const char *name() const noexcept { return "posix_error"; }
+  virtual std::string message( int cond ) const { return strerror( cond ); }
+};
+
+const std::error_category &posix_category() noexcept
+{
+  static const posix_error_category posix_category_instance;
+  return posix_category_instance;
+}
 
 static char *strdup_x(const char *s)
 {
@@ -51,100 +80,99 @@ static char *strdup_x(const char *s)
   return (char *) memcpy(toret, s, len + 1);
 }
 
-class ErrMap
+class PosixPath : public PathPoly
 {
 private:
-  std::map<FsError, int> fsErrorToPosixErrnoMap;
-  std::map<int, FsError> posixErrnoToFsErrorMap;
+    std::string _path;
 
 public:
-  ErrMap(const std::vector< std::pair< FsError, std::vector<int> > > &masterErrorMap)
-  {
-    for(const auto & p : masterErrorMap)
-    {
-      for(const auto & errno_ : p.second)
-      {
-        assert( !this->fsErrorToPosixErrnoMap.count( p.first ) );
-        assert( !this->posixErrnoToFsErrorMap.count( errno_ ) );
-        this->fsErrorToPosixErrnoMap[p.first] = errno_;
-        this->posixErrnoToFsErrorMap[errno_] = p.first;
-      }
-    }
-  }
+    PosixPath(const char *p);
+    PosixPath(const std::string & str);
+    PosixPath(std::string && path);
 
-  FsError posixErrnoToFsError(int err) const
-  {
-    try
+    virtual operator const std::string &() const override
     {
-      return this->posixErrnoToFsErrorMap.at( err );
-    } catch ( const std::out_of_range &oor )
-    {
-      return FsError::GENERIC;
+      return _path;
     }
-  }
 
-  int fsErrorToPosixErrno(FsError err) const
-  {
-    if(err == FsError::GENERIC)
+    virtual const char *c_str() const override
     {
-      return -EIO;
+      return _path.c_str();
     }
-    /* this should never throw an exception, if it does
-       then it's programmer error
-     */
-    return this->fsErrorToPosixErrnoMap.at( err );
-  }
+
+    virtual Path join(const std::string &name) const override
+    {
+      return Path( std::make_shared<PosixPath>( _path + '/' + name ) );
+    }
+
+    virtual std::string basename() const override
+    {
+      return "";
+    }
+
+    virtual Path dirname() const override
+    {
+      return Path( std::make_shared<PosixPath>( "" ) );
+    }
+
+    virtual bool operator==(const shared_ptr<PathPoly> &p) const override
+    {
+      return true;
+    }
+
+    friend class PosixFsIO;
 };
 
-static const ErrMap _privateErrMap(std::vector<std::pair<FsError, std::vector<int> > >({
-  {FsError::NONE, {0}},
-  {FsError::ACCESS, {EACCES}},
-  {FsError::IO, {EIO}},
-  {FsError::BUSY, {EBUSY}},
-}));
+PosixPath::PosixPath(const char *p) : _path( p )
+{}
 
-FsError posixErrnoToFsError(int err)
-{
-  return _privateErrMap.posixErrnoToFsError(err);
+PosixPath::PosixPath(const std::string & str) : _path( str )
+{}
+
+PosixPath::PosixPath(std::string && str) : _path( std::move( str ) )
+{}
+
+static void current_fs_error(int thiserror = -1) {
+  if (thiserror < 0) thiserror = errno;
+  throw std::system_error( thiserror, posix_category() );
 }
 
-int fsErrorToPosixErrno(FsError err)
+class PosixDirectoryIO final : public DirectoryIO
 {
-  return _privateErrMap.fsErrorToPosixErrno(err);
+private:
+    DIR *_dirp;
+    // Only FsIO can instantiate this class
+    PosixDirectoryIO(DIR *dirp) noexcept : _dirp(dirp)  {}
+
+public:
+    ~PosixDirectoryIO() override;
+    optional<FsDirEnt> readdir() override;
+
+    friend class PosixFsIO;
+};
+
+PosixDirectoryIO::~PosixDirectoryIO()
+{
+  const int ret = ::closedir(_dirp);
+  if(ret < 0)
+  {
+    /* this can't fail */
+    abort();
+  }
 }
 
-static FsError currentFsError() {
-  return posixErrnoToFsError(errno);
-}
-
-FsError PosixFsIO::opendir(const char *dirname, fs_dir_handle_t *handle)
+optional<FsDirEnt> PosixDirectoryIO::readdir()
 {
-  DIR *const res = ::opendir( dirname );
-  if(!res)
-    return currentFsError();
-
-  *handle = (fs_dir_handle_t) res;
-  return FsError::NONE;
-}
-
-FsError PosixFsIO::readdir(fs_dir_handle_t handle, char **name,
-                           FsFileType *type, fs_posix_ino_t *ino)
-{
-  DIR *const dir = (DIR *) handle;
-
   while(true)
   {
     errno = 0;
-    struct dirent *const de = ::readdir( dir );
+    struct dirent *const de = ::readdir( _dirp );
     if(!de)
     {
-      if(errno)
+      if(errno) current_fs_error();
+      else
       {
-        return currentFsError();
-       } else
-       {
-         *name = NULL;
-         break;
+        break;
        }
     }
 
@@ -156,24 +184,61 @@ FsError PosixFsIO::readdir(fs_dir_handle_t handle, char **name,
       continue;
     }
 
-    *name = strdup_x( de->d_name );
-    /* TODO: base on de->d_type */
-    *type = FsFileType::UNKNOWN;
-    break;
+    return FsDirEnt( de->d_name, nullopt );
   }
 
-  return FsError::NONE;
+  return nullopt;
 }
 
-FsError PosixFsIO::closedir( fs_dir_handle_t handle )
+static bool endswith(const std::string & haystack,
+                     const std::string & needle) {
+  if (needle.length() > haystack.length()) {
+    return false;
+  }
+
+  return !haystack.compare(haystack.length() - needle.length(),
+                           needle.length(), needle);
+}
+
+Path PosixFsIO::pathFromString(const std::string &path)
 {
-  DIR *const dir = (DIR *) handle;
-  const int res_closedir = ::closedir(dir);
-  return res_closedir < 0 ? currentFsError() : FsError::NONE;
+  /* TODO: throw exception if path is not a UTF-8 posix path */
+  if (path[0] != '/') {
+    throw std::runtime_error("Bad path");
+  }
+
+  std::string newpath = path;
+  while (endswith(newpath, "/")) {
+    newpath = path.substr(0, path.length() - 1);
+  }
+
+  return std::make_shared<PosixPath>(newpath);
 }
 
-FsError PosixFsIO::mkdir(const char *path, fs_posix_mode_t mode,
-                         fs_posix_uid_t uid, fs_posix_gid_t gid)
+Directory PosixFsIO::opendir(const Path &path)
+{
+  DIR *const res = ::opendir( path.c_str() );
+  if(!res) current_fs_error();
+
+  return std::unique_ptr<PosixDirectoryIO>( new PosixDirectoryIO( res ) );
+}
+
+File PosixFsIO::openfile(const Path &path,
+                         bool open_for_write,
+                         bool create)
+{
+  auto file_ = std::unique_ptr<RawFileIO>( new RawFileIO( path ) );
+  int flags = O_RDONLY
+    | (open_for_write ? O_WRONLY : 0)
+    | (create ? O_CREAT : 0);
+  const int ret_open = file_->open( flags );
+  if (ret_open < 0) current_fs_error( -ret_open );
+  return std::move( file_ );
+}
+
+void PosixFsIO::mkdir(const Path &path,
+                      fs_posix_mode_t mode,
+                      fs_posix_uid_t uid, fs_posix_gid_t gid)
 {
 #ifdef linux
   // if uid or gid are set, then that should be the directory owner
@@ -186,7 +251,7 @@ FsError PosixFsIO::mkdir(const char *path, fs_posix_mode_t mode,
     oldgid = setfsgid( gid );
 #endif
 
-  const int res = ::mkdir( path, mode );
+  const int res = ::mkdir( path.c_str(), mode );
   const int save_errno = errno;
 
 #ifdef linux
@@ -196,61 +261,62 @@ FsError PosixFsIO::mkdir(const char *path, fs_posix_mode_t mode,
     setfsgid( oldgid );
 #endif
 
-  return res < 0 ? posixErrnoToFsError(save_errno) : FsError::NONE;
+  if(res < 0) current_fs_error( save_errno );
 }
 
-FsError PosixFsIO::rename(const char *from_path, const char *to_path)
+void PosixFsIO::rename(const Path &path_src, const Path &path_dst)
 {
-  const int res = ::rename( from_path, to_path );
-  return res < 0 ? currentFsError() : FsError::NONE;
+  const int res = ::rename( path_src.c_str(), path_dst.c_str() );
+  if(res < 0) current_fs_error();
 }
 
-FsError PosixFsIO::link(const char *from_path, const char *to_path)
+void PosixFsIO::link(const Path &path_src, const Path &path_dst)
 {
-  const int res = ::link( from_path, to_path );
-  return res < 0 ? currentFsError() : FsError::NONE;
+  const int res = ::link( path_src.c_str(), path_dst.c_str() );
+  if(res < 0) current_fs_error();
 }
 
-FsError PosixFsIO::unlink(const char *path)
+void PosixFsIO::unlink(const Path &path)
 {
-  const int res = ::unlink( path );
-  return res < 0 ? currentFsError() : FsError::NONE;
+  const int res = ::unlink( path.c_str() );
+  if(res < 0) current_fs_error();
 }
 
-FsError PosixFsIO::get_type(const char *path, FsFileType *type)
+void PosixFsIO::rmdir(const Path &path)
+{
+  const int res = ::rmdir( path.c_str() );
+  if(res < 0) current_fs_error();
+}
+
+FsFileType PosixFsIO::get_type(const Path &path)
 {
   struct stat st;
-  const int res_stat = ::stat( path, &st );
-  if (res_stat < 0)
-    return currentFsError();
+  const int res_stat = ::stat( path.c_str(), &st );
+  if (res_stat < 0) current_fs_error();
 
   if (S_ISDIR(st.st_mode)) {
-    *type = FsFileType::DIRECTORY;
+    return FsFileType::DIRECTORY;
   }
   else if (S_ISREG(st.st_mode)) {
-    *type = FsFileType::REGULAR;
+    return FsFileType::REGULAR;
   }
   else {
-    *type = FsFileType::UNKNOWN;
+    return FsFileType::UNKNOWN;
   }
-
-  return FsError::NONE;
 }
 
-FsError PosixFsIO::get_mtime(const char *path, fs_time_t *mtime)
+fs_time_t PosixFsIO::get_mtime(const Path &path)
 {
   struct stat st;
-  const int res_stat = ::stat( path, &st );
-  if (res_stat < 0)
-    return currentFsError();
+  const int res_stat = ::stat( path.c_str(), &st );
+  if (res_stat < 0) current_fs_error();
 
   assert( st.st_mtime >= FS_TIME_MIN );
   assert( st.st_mtime <= FS_TIME_MAX );
-  *mtime = (fs_time_t) st.st_mtime;
-  return FsError::NONE;
+  return (fs_time_t) st.st_mtime;
 }
 
-FsError PosixFsIO::set_mtime(const char *path, fs_time_t mtime)
+void PosixFsIO::set_mtime(const Path &path, fs_time_t mtime)
 {
   struct timeval new_times[2] = {
     {0, 0},
@@ -258,27 +324,10 @@ FsError PosixFsIO::set_mtime(const char *path, fs_time_t mtime)
   };
 
   const int res_gettimeofday = ::gettimeofday( &new_times[0], NULL );
-  if(res_gettimeofday < 0)
-    return currentFsError();
+  if (res_gettimeofday < 0) current_fs_error();
 
-  const int res_utimes = ::utimes( path, new_times );
-  if(res_utimes < 0)
-    return currentFsError();
-
-  return FsError::NONE;
+  const int res_utimes = ::utimes( path.c_str(), new_times );
+  if (res_utimes < 0) current_fs_error();
 }
-
-const char *PosixFsIO::path_sep()
-{
-  return "/";
-}
-
-bool PosixFsIO::is_valid_path(const char *path)
-{
-  /* this needs to be extended */
-  return path[0] == '/';
-}
-
-
 
 }  // namespace encfs

@@ -325,7 +325,7 @@ int encfs_mkdir(const char *path, mode_t mode)
       uid = fctx->uid;
       gid = fctx->gid;
     }
-    res = fsErrorToPosixErrno( FSRoot->mkdir( path, mode, uid, gid ) );
+    res = FSRoot->mkdir( path, mode, uid, gid );
     // Is this error due to access problems?
     if(ctx->publicFilesystem && -res == EACCES)
     {
@@ -336,7 +336,7 @@ int encfs_mkdir(const char *path, mode_t mode)
 
       struct stat st;
       if(dnode->getAttr( &st ) == 0)
-        res = fsErrorToPosixErrno( FSRoot->mkdir( path, mode, uid, st.st_gid ) );
+        res = FSRoot->mkdir( path, mode, uid, st.st_gid );
     }
   } catch( Error &err )
   {
@@ -358,7 +358,7 @@ int encfs_unlink(const char *path)
   {
     // let DirNode handle it atomically so that it can handle race
     // conditions
-    res = fsErrorToPosixErrno( FSRoot->unlink( path ) );
+    res = FSRoot->unlink( path );
   } catch( Error &err )
   {
     LOG(ERROR) << "error caught in unlink: " << err.what();
@@ -474,7 +474,7 @@ int encfs_link(const char *from, const char *to)
 
   try
   {
-    res = fsErrorToPosixErrno( FSRoot->link( from, to ) );
+    res = FSRoot->link( from, to );
   } catch( Error &err )
   {
     LOG(ERROR) << "error caught in link: " << err.what();
@@ -493,7 +493,7 @@ int encfs_rename(const char *from, const char *to)
 
   try
   {
-    res = fsErrorToPosixErrno( FSRoot->rename( from, to ) );
+    res = FSRoot->rename( from, to );
   } catch( Error &err )
   {
     LOG(ERROR) << "error caught in rename: " << err.what();

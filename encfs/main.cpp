@@ -45,8 +45,6 @@
 #include "fs/FileUtils.h"
 #include "fs/DirNode.h"
 #include "fs/Context.h"
-#include "fs/FileIOFactory.h"
-#include "fs/RawFileIO.h"
 #include "fs/FsIO.h"
 #include "fs/PosixFsIO.h"
 
@@ -380,17 +378,22 @@ bool processArgs(int argc, char *argv[],
   }
 
   // sanity check
-  if(out->isDaemon && 
-      (!out->opts->fs_io->is_valid_path( out->mountPoint.c_str() ) ||
-       !out->opts->fs_io->is_valid_path( out->opts->rootDir.c_str() ) ) 
-    )
+  if(out->isDaemon)
   {
-    cerr << 
-      // xgroup(usage)
-      _("When specifying daemon mode, you must use absolute paths "
+    try
+    {
+      // NB: check if the paths are well formed */
+      out->opts->fs_io->pathFromString( out->mountPoint );
+      out->opts->fs_io->pathFromString( out->opts->rootDir );
+    } catch ( const Error &err )
+    {
+      cerr << 
+        // xgroup(usage)
+        _("When specifying daemon mode, you must use absolute paths "
           "(beginning with '/')")
-      << endl;
-    return false;
+           << endl;
+      return false;
+    }
   }
 
   // the raw directory may not be a subdirectory of the mount point.
@@ -519,8 +522,7 @@ int main(int argc, char *argv[])
   // set the raw file io factory here
   // TODO: is this better down earlier in this method
   // or in EncFS_Args
-  encfsArgs->opts->fileIOFactory = shared_ptr<FileIOFactory>(new TemplateFileIOFactory<RawFileIO>());
-  encfsArgs->opts->fs_io = shared_ptr<FsIO>(new PosixFsIO());
+  encfsArgs->opts->fs_io = std::make_shared<PosixFsIO>();
 
   if(argc == 1 || !processArgs(argc, argv, encfsArgs))
   {

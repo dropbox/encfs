@@ -127,34 +127,42 @@ EncFS_Root::~EncFS_Root()
 
 bool fileExists( shared_ptr<FsIO> fs_io, const char * fileName )
 {
-  fs_time_t mtime;
-  return !isError( fs_io->get_mtime( fileName, &mtime ) );
+  try
+  {
+    fs_io->get_mtime( fs_io->pathFromString( fileName ) );
+    return true;
+  } catch ( const Error &err )
+  {
+    return false;
+  }
 }
 
 bool isDirectory( shared_ptr<FsIO> fs_io, const char *fileName )
 {
-  FsFileType filetype;
-  FsError err = fs_io->get_type(fileName, &filetype);
-  if (isError( err )) {
+  try
+  {
+    return fs_io->get_type( fs_io->pathFromString( fileName ) ) == FsFileType::DIRECTORY;
+  } catch ( const Error &err )
+  {
     return false;
   }
-
-  return filetype == FsFileType::DIRECTORY;
 }
+
+static const char *PATH_SEP = "/";
 
 const char *lastPathElement( shared_ptr<FsIO> fs_io, const char *name )
 {
   std::string s_name( name );
-  auto pos = s_name.rfind( fs_io->path_sep() );
-  if (pos == std::string::npos) {
+  auto pos = s_name.rfind( PATH_SEP );
+  if(pos == std::string::npos) {
     return name;
   }
-  return name + pos + strlen( fs_io->path_sep() );
+  return name + pos + strlen( PATH_SEP );
 }
 
 std::string parentDirectory( shared_ptr<FsIO> fs_io, const std::string &path )
 {
-  auto last = path.rfind( fs_io->path_sep() );
+  auto last = path.rfind( PATH_SEP );
   if(last == string::npos)
     return string("");
   else
@@ -191,13 +199,16 @@ bool userAllowMkdir( shared_ptr<FsIO> fs_io, int promptno, const char *path, mod
 
   if(res != 0 && toupper(answer[0]) == 'Y')
   {
-    FsError result = fs_io->mkdir( path, mode );
-    if(isError( result ))
+    try
     {
-      cerr <<  _("Unable to create directory: ") << fsErrorString( result ) << "\n";
+      fs_io->mkdir( fs_io->pathFromString( path ), mode );
+    } catch ( const Error & err )
+    {
+      cerr <<  _("Unable to create directory: ") << err.what() << "\n";
       return false;
-    } else
-      return true;
+    }
+
+    return true;
   } else
   {
     // Directory not created, by user request

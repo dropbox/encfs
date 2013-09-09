@@ -26,17 +26,14 @@ using std::map;
 
 namespace encfs {
 
-const char *fsErrorString( FsError err )
+std::ostream& operator << (std::ostream& os, const Path& s)
 {
-  static map<FsError, const char *> errMap = {
-    {FsError::NONE, "No error"},
-    {FsError::ACCESS, "Access denied"},
-    {FsError::IO, "IO Error"},
-    {FsError::BUSY, "Filesystem busy"},
-    {FsError::GENERIC, "Generic Error"},
-  };
-
-  return errMap[err];
+  os << "PathPtr(" << (const std::string &)s << ")";
+  return os;
 }
+
+PathPoly::~PathPoly() {}
+DirectoryIO::~DirectoryIO() {}
+FsIO::~FsIO() {}
 
 }  // namespace encfs

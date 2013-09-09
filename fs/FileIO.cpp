@@ -22,13 +22,8 @@
 
 namespace encfs {
 
-FileIO::FileIO()
-{
-}
-
 FileIO::~FileIO()
-{
-}
+{}
 
 int FileIO::blockSize() const
 {
