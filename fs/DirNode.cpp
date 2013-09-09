@@ -41,9 +41,6 @@
 using std::list;
 using std::string;
 
-/* TODO: change this to std::nullptr_t on systems that support it */
-typedef decltype(nullptr) my_nullptr_t;
-
 namespace encfs {
 
 DirTraverse::DirTraverse()
@@ -73,7 +70,7 @@ DirTraverse& DirTraverse::operator=(DirTraverse && other)
 
 std::string DirTraverse::nextPlaintextName(FsFileType */*fileType*/, fs_posix_ino_t */*inode*/)
 {
-  optional<FsDirEnt> dirent;
+  opt::optional<FsDirEnt> dirent;
   while(!(dirent = dir_io->readdir()))
   {
     try
@@ -93,7 +90,7 @@ std::string DirTraverse::nextPlaintextName(FsFileType */*fileType*/, fs_posix_in
 
 std::string DirTraverse::nextInvalid()
 {
-  optional<FsDirEnt> dirent;
+  opt::optional<FsDirEnt> dirent;
   while( !(dirent = dir_io->readdir()) )
   {
     try
@@ -408,7 +405,7 @@ bool DirNode::genRenameList(list<RenameEl> &renameList,
   // generate the real destination path, where we expect to find the files..
   VLOG(1) << "opendir " << sourcePath;
 
-  optional<Directory> dir_io;
+  opt::optional<Directory> dir_io;
   try
   {
     dir_io = fs_io->opendir( sourcePath );
@@ -420,7 +417,7 @@ bool DirNode::genRenameList(list<RenameEl> &renameList,
 
   while(true)
   {
-    optional<FsDirEnt> dir_ent;
+    opt::optional<FsDirEnt> dir_ent;
     try
     {
       dir_ent = dir_io->readdir();
@@ -464,7 +461,7 @@ bool DirNode::genRenameList(list<RenameEl> &renameList,
       ren.oldPName = fs_io->pathFromString( (string) fromP ).join( plainName );
       ren.newPName = fs_io->pathFromString( (string) toP ).join( plainName );
 
-      ren.isDirectory = dir_ent->type == nullopt
+      ren.isDirectory = dir_ent->type == opt::nullopt
         ? isDirectory( fs_io, oldFull.c_str() )
         : *dir_ent->type == FsFileType::DIRECTORY;
 

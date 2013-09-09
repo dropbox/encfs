@@ -83,16 +83,16 @@ class FsDirEnt
 {
 public:
     std::string name;
-    optional<FsFileType> type;
+    opt::optional<FsFileType> type;
 
     FsDirEnt(std::string && name_,
-              optional<FsFileType> && type_)
+              opt::optional<FsFileType> && type_)
     : name( std::move( name_ ) )
     , type( std::move( type_ ) )
     {}
 
     FsDirEnt(std::string && name_)
-    : FsDirEnt( std::move( name_ ), nullopt )
+    : FsDirEnt( std::move( name_ ), opt::nullopt )
     {}
 };
 
@@ -100,7 +100,7 @@ class DirectoryIO
 {
 public:
     virtual ~DirectoryIO() =0;
-    virtual optional<FsDirEnt> readdir() =0;
+    virtual opt::optional<FsDirEnt> readdir() =0;
 };
 
 /* wraps a polymorphic PathPoly pointer */
@@ -168,7 +168,7 @@ public:
     Directory(Directory && d) = default;
     Directory &operator=(Directory && d) = default;
 
-    virtual optional<FsDirEnt> readdir() override
+    virtual opt::optional<FsDirEnt> readdir() override
     {
       return _impl->readdir();
     }

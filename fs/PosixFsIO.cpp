@@ -40,7 +40,7 @@
 #include <system_error>
 #include <vector>
 
-
+#include "base/optional.h"
 #include "fs/PosixFsIO.h"
 #include "fs/RawFileIO.h"
 
@@ -155,7 +155,7 @@ private:
 
 public:
     virtual ~PosixDirectoryIO() override;
-    virtual optional<FsDirEnt> readdir() override;
+    virtual opt::optional<FsDirEnt> readdir() override;
 
     friend class PosixFsIO;
 };
@@ -170,7 +170,7 @@ PosixDirectoryIO::~PosixDirectoryIO()
   }
 }
 
-optional<FsDirEnt> PosixDirectoryIO::readdir()
+opt::optional<FsDirEnt> PosixDirectoryIO::readdir()
 {
   while(true)
   {
@@ -193,10 +193,10 @@ optional<FsDirEnt> PosixDirectoryIO::readdir()
       continue;
     }
 
-    return FsDirEnt( de->d_name, nullopt );
+    return FsDirEnt( de->d_name );
   }
 
-  return nullopt;
+  return opt::nullopt;
 }
 
 static bool endswith(const std::string & haystack,

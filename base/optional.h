@@ -27,7 +27,10 @@
 
 #include "base/config.h"
 
-namespace _my_optional
+#ifdef HAVE_OPTIONAL
+namespace opt = std;
+#else
+namespace opt
 {
 
 class nullopt_t
@@ -185,14 +188,6 @@ bool operator==(optional<T> a, optional<T> b)
 }
 
 }
-
-#ifdef HAVE_OPTIONAL
-  using std::optional;
-  using std::nullopt_t;
-  using std::nullopt;
-  using std::bad_optional_access;
-#else
-  using namespace _my_optional;
 #endif
 
 #endif

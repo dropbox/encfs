@@ -71,7 +71,7 @@ public:
     // The opposite of nextPlaintextName(), as that skips undecodable names..
     std::string nextInvalid();
 private:
-    optional<Directory> dir_io;
+    opt::optional<Directory> dir_io;
     // initialization vector to use.  Not very general purpose, but makes it
     // more efficient to support filename IV chaining..
     uint64_t iv;
