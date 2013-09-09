@@ -34,18 +34,18 @@ class NullCipher : public BlockCipher {
     return 8;
   }
 
-  virtual bool setKey(const CipherKey &key) {
+  virtual bool setKey(const CipherKey &) {
     return true;
   }
 
-  virtual bool encrypt(const byte *iv, const byte *in,
+  virtual bool encrypt(const byte *, const byte *in,
                        byte *out, int numBytes) {
     if (in != out)
       memcpy(out, in, numBytes);
     return true;
   }
   
-  virtual bool decrypt(const byte *iv, const byte *in,
+  virtual bool decrypt(const byte *, const byte *in,
                        byte *out, int numBytes) {
     if (in != out)
       memcpy(out, in, numBytes);

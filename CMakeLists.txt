@@ -8,8 +8,12 @@ set (ENCFS_VERSION "${ENCFS_MAJOR}.${ENCFS_MINOR}")
 option (BUILD_SHARED_LIBS "Build dynamic link libraries" OFF)
 
 option (WITH_OPENSSL "WithOpenSSL" OFF)
-option (WITH_COMMON_CRYPTO "WithCommonCrypto" OFF)
 option (WITH_BOTAN "WithBotan" ON)
+option (WITH_COMMON_CRYPTO "WithCommonCrypto" OFF)
+
+if (APPLE)
+   set (WITH_COMMON_CRYPTO ON)
+endif (APPLE)
 
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
     "${CMAKE_SOURCE_DIR}/CMakeModules/")
@@ -35,7 +39,8 @@ elseif (WITH_OPENSSL)
 endif (WITH_COMMON_CRYPTO)
 
 # Tweak compiler flags.
-set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror")
+set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 
 include (CheckCXXCompilerFlag)
 check_cxx_compiler_flag (-std=c++11 HAVE_C11_FLAG)

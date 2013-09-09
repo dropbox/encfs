@@ -70,16 +70,6 @@ const std::error_category &posix_category() noexcept
   return posix_category_instance;
 }
 
-static char *strdup_x(const char *s)
-{
-  size_t len = strlen(s);
-  char *toret = (char *) malloc(len + 1);
-  if (!toret) {
-    return NULL;
-  }
-  return (char *) memcpy(toret, s, len + 1);
-}
-
 class PosixPath : public PathPoly
 {
 private:
@@ -117,7 +107,11 @@ public:
 
     virtual bool operator==(const shared_ptr<PathPoly> &p) const override
     {
-      return true;
+      shared_ptr<PosixPath> p2 = std::dynamic_pointer_cast<PosixPath>(p);
+      if (!p2) {
+        return false;
+      }
+      return (const std::string &) *p2 == (const std::string &) *this;
     }
 
     friend class PosixFsIO;
@@ -249,6 +243,10 @@ void PosixFsIO::mkdir(const Path &path,
     olduid = setfsuid( uid );
   if(gid != 0)
     oldgid = setfsgid( gid );
+#else
+  /* to avoid compiler warnings */
+  (void) uid;
+  (void) gid;
 #endif
 
   const int res = ::mkdir( path.c_str(), mode );

@@ -148,8 +148,6 @@ int RawFileIO::open(int flags)
 #if defined(O_LARGEFILE)
     if( flags & O_LARGEFILE )
       finalFlags |= O_LARGEFILE;
-#else
-#warning O_LARGEFILE not supported
 #endif
 
     int newFd = ::open( name.c_str(), finalFlags );

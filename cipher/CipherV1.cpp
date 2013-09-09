@@ -71,6 +71,8 @@ inline int MIN(int a, int b)
 #endif
 
 void CipherV1::init(bool threaded) {
+  /* TODO: register int functions */
+  (void) threaded;
 #ifdef WITH_OPENSSL
   OpenSSL::init(threaded);
 #endif
@@ -80,6 +82,8 @@ void CipherV1::init(bool threaded) {
 }
 
 void CipherV1::shutdown(bool threaded) {
+  /* TODO: register shutdown functions */
+  (void) threaded;
 #ifdef WITH_OPENSSL
   OpenSSL::shutdown(threaded);
 #endif

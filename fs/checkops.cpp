@@ -462,7 +462,7 @@ bool runTests(const shared_ptr<CipherV1> &cipher, bool verbose)
 
 }  // namespace encfs
 
-int main(int argc, char *argv[])
+int main(int /*argc*/, char *argv[])
 {
   FLAGS_logtostderr = 1;
   FLAGS_minloglevel = 1;

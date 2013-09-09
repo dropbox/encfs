@@ -71,7 +71,7 @@ DirTraverse& DirTraverse::operator=(DirTraverse && other)
   return *this;
 }
 
-std::string DirTraverse::nextPlaintextName(FsFileType *fileType, fs_posix_ino_t *inode)
+std::string DirTraverse::nextPlaintextName(FsFileType */*fileType*/, fs_posix_ino_t */*inode*/)
 {
   optional<FsDirEnt> dirent;
   while(!(dirent = dir_io->readdir()))

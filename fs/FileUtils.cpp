@@ -150,7 +150,7 @@ bool isDirectory( shared_ptr<FsIO> fs_io, const char *fileName )
 
 static const char *PATH_SEP = "/";
 
-const char *lastPathElement( shared_ptr<FsIO> fs_io, const char *name )
+const char *lastPathElement( shared_ptr<FsIO> /*fs_io*/, const char *name )
 {
   std::string s_name( name );
   auto pos = s_name.rfind( PATH_SEP );
@@ -160,7 +160,7 @@ const char *lastPathElement( shared_ptr<FsIO> fs_io, const char *name )
   return name + pos + strlen( PATH_SEP );
 }
 
-std::string parentDirectory( shared_ptr<FsIO> fs_io, const std::string &path )
+std::string parentDirectory( shared_ptr<FsIO> /*fs_io*/, const std::string &path )
 {
   auto last = path.rfind( PATH_SEP );
   if(last == string::npos)
@@ -473,7 +473,7 @@ bool readV4Config( const char *configFile,
   return ok;
 }
 
-bool writeTextConfig( shared_ptr<FsIO> fs_io, const char *fileName, const EncfsConfig &cfg )
+bool writeTextConfig( shared_ptr<FsIO> /*fs_io*/, const char *fileName, const EncfsConfig &cfg )
 {
   /* TODO: make this use low level fs_io */
   abort();
@@ -639,6 +639,7 @@ Interface selectNameCoding(const CipherV1::CipherAlgorithm &alg)
   {
     // figure out what cipher they want to use..
     // xgroup(setup)
+    (void) alg;
     cout << _("The following filename encoding algorithms are available:")
       << "\n";
     NameIO::AlgorithmList algorithms = NameIO::GetAlgorithmList();
