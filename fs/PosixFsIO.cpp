@@ -76,9 +76,17 @@ private:
     std::string _path;
 
 public:
-    PosixPath(const char *p);
-    PosixPath(const std::string & str);
-    PosixPath(std::string && path);
+    PosixPath(const char *p)
+    : _path( p )
+    {}
+
+    PosixPath(const std::string & str)
+    : _path( str )
+    {}
+
+    PosixPath(std::string && path)
+    : _path( std::move( path ) )
+    {}
 
     virtual operator const std::string &() const override
     {
@@ -92,17 +100,33 @@ public:
 
     virtual Path join(const std::string &name) const override
     {
-      return Path( std::make_shared<PosixPath>( _path + '/' + name ) );
+      return std::make_shared<PosixPath>( _path + '/' + name );
+    }
+
+    virtual bool is_root() const
+    {
+      return _path == "/";
     }
 
     virtual std::string basename() const override
     {
-      return "";
+      if (is_root()) {
+        throw std::logic_error("basename on root path is undefined");
+      }
+
+      auto slash_pos = _path.rfind('/');
+      return _path.substr( slash_pos );
     }
 
     virtual Path dirname() const override
     {
-      return Path( std::make_shared<PosixPath>( "" ) );
+      auto slash_pos = _path.rfind('/');
+
+      if (!slash_pos) {
+        return std::make_shared<PosixPath>( "/" );
+      }
+
+      return std::make_shared<PosixPath>( _path.substr( 0, slash_pos ) );
     }
 
     virtual bool operator==(const shared_ptr<PathPoly> &p) const override
@@ -117,15 +141,6 @@ public:
     friend class PosixFsIO;
 };
 
-PosixPath::PosixPath(const char *p) : _path( p )
-{}
-
-PosixPath::PosixPath(const std::string & str) : _path( str )
-{}
-
-PosixPath::PosixPath(std::string && str) : _path( std::move( str ) )
-{}
-
 static void current_fs_error(int thiserror = -1) {
   if (thiserror < 0) thiserror = errno;
   throw std::system_error( thiserror, posix_category() );
@@ -139,8 +154,8 @@ private:
     PosixDirectoryIO(DIR *dirp) noexcept : _dirp(dirp)  {}
 
 public:
-    ~PosixDirectoryIO() override;
-    optional<FsDirEnt> readdir() override;
+    virtual ~PosixDirectoryIO() override;
+    virtual optional<FsDirEnt> readdir() override;
 
     friend class PosixFsIO;
 };

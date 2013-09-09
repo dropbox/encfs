@@ -230,30 +230,30 @@ public:
     }
 
     // get filesystem attributes for a file
-    virtual int getAttr( struct stat *stbuf ) const
+    virtual int getAttr( struct stat *stbuf ) const override
     {
       return _impl->getAttr( stbuf );
     }
-    virtual off_t getSize( ) const
+    virtual off_t getSize( ) const override
     {
       return _impl->getSize();
     }
 
-    virtual ssize_t read( const IORequest &req ) const
+    virtual ssize_t read( const IORequest &req ) const override
     {
       return _impl->read( req );
     }
-    virtual bool write( const IORequest &req )
+    virtual bool write( const IORequest &req ) override
     {
       return _impl->write( req );
     }
 
-    virtual int truncate( off_t size )
+    virtual int truncate( off_t size ) override
     {
       return _impl->truncate( size );
     }
 
-    virtual bool isWritable() const
+    virtual bool isWritable() const override
     {
       return _impl->isWritable();
     }
