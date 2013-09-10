@@ -156,29 +156,21 @@ public:
 };
 
 template<class T>
-bool operator==(optional<T> f, nullopt_t)
+constexpr bool operator==(optional<T> f, nullopt_t)
 {
   return !f;
 }
 
 template<class T>
-bool operator==(nullopt_t, optional<T> f)
+constexpr bool operator==(nullopt_t, optional<T> f)
 {
   return !f;
 }
 
 template<class T>
-bool operator==(optional<T> a, optional<T> b)
+constexpr bool operator==(optional<T> a, optional<T> b)
 {
-  if (a && b) {
-    return *a == *b;
-  }
-  else if (!a && !b) {
-    return true;
-  }
-  else {
-    return false;
-  }
+  return a && b ? *a == *b : !a && !b;
 }
 
 }
