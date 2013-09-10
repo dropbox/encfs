@@ -144,12 +144,6 @@ int RawFileIO::open(int flags)
   } else
   {
     int finalFlags = requestWrite ? O_RDWR : O_RDONLY;
-
-#if defined(O_LARGEFILE)
-    if( flags & O_LARGEFILE )
-      finalFlags |= O_LARGEFILE;
-#endif
-
     int newFd = ::open( name.c_str(), finalFlags );
 
     VLOG(1) << "open file with flags " << finalFlags << ", result = " << newFd;
