@@ -28,6 +28,7 @@
 #include "base/config.h"
 
 #ifdef HAVE_OPTIONAL
+#include <optional>
 namespace opt = std;
 #else
 namespace opt
