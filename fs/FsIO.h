@@ -146,7 +146,7 @@ public:
       return (*_impl) == p;
     }
 
-    operator shared_ptr<PathPoly> ()
+    operator shared_ptr<PathPoly> () const
     {
       return _impl;
     }
