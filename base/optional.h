@@ -61,12 +61,6 @@ private:
   };
   bool _engaged;
 
-  constexpr int _check_engaged()
-  {
-
-    return 0;
-  }
-
 public:
   constexpr optional()
   : _null_state('\0')
@@ -74,8 +68,7 @@ public:
   {}
 
   constexpr optional(nullopt_t)
-  : _null_state('\0')
-  , _engaged( false )
+  : optional()
   {}
 
   constexpr optional(T && val)

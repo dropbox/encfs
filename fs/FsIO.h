@@ -104,7 +104,7 @@ public:
 };
 
 /* wraps a polymorphic PathPoly pointer */
-class Path : public PathPoly
+class Path
 {
 private:
     shared_ptr<PathPoly> _impl;
@@ -116,32 +116,32 @@ public:
       : _impl( from )
     {}
 
-    virtual operator const std::string & () const override
+    operator const std::string & () const
     {
       return (const std::string &) *_impl;
     }
 
-    virtual const char *c_str() const override
+    const char *c_str() const
     {
       return _impl->c_str();
     }
 
-    virtual Path join(const std::string & path) const override
+    Path join(const std::string & path) const
     {
       return _impl->join( path );
     }
 
-    virtual std::string basename() const override
+    std::string basename() const
     {
       return _impl->basename();
     }
 
-    virtual Path dirname() const override
+    Path dirname() const
     {
       return _impl->dirname();
     }
 
-    virtual bool operator==(const shared_ptr<PathPoly> &p) const override
+    bool operator==(const shared_ptr<PathPoly> &p) const
     {
       return (*_impl) == p;
     }
@@ -153,7 +153,7 @@ public:
 };
 
 /* wraps a polymorphic DirectoryIO pointer */
-class Directory : public DirectoryIO
+class Directory
 {
 private:
     std::unique_ptr<DirectoryIO> _impl;
@@ -168,7 +168,7 @@ public:
     Directory(Directory && d) = default;
     Directory &operator=(Directory && d) = default;
 
-    virtual opt::optional<FsDirEnt> readdir() override
+    opt::optional<FsDirEnt> readdir()
     {
       return _impl->readdir();
     }
@@ -180,7 +180,7 @@ public:
 };
 
 /* wraps a polymorphic FileIO pointer */
-class File : public FileIO
+class File
 {
 private:
     std::unique_ptr<FileIO> _impl;
@@ -195,65 +195,60 @@ public:
     File(File && d) = default;
     File &operator=(File && d) = default;
 
-    virtual Interface interface() const override
+    Interface interface() const
     {
-      return makeInterface("FileIO/File", 1, 0, 0);
+      return _impl->interface();
     }
 
-    // default implementation returns 1, meaning this is not block oriented.
-    virtual int blockSize() const override
+    int blockSize() const
     {
       return _impl->blockSize();
     }
 
-    virtual void setFileName(const char *fileName) override
+    void setFileName(const char *fileName)
     {
       return _impl->setFileName( fileName );
     }
-    virtual const char *getFileName() const override
+    const char *getFileName() const
     {
       return _impl->getFileName();
     }
 
-    // Not sure about this -- it is specific to CipherFileIO, but the
-    // alternative methods of exposing this interface aren't much nicer..
-    virtual bool setIV( uint64_t iv ) override
+    bool setIV( uint64_t iv )
     {
       return _impl->setIV( iv );
     }
 
-    // open file for specified mode.  There is no corresponding close, so a
-    // file is open until the FileIO interface is destroyed.
-    virtual int open( int flags ) override
+    int open( int flags )
     {
       return _impl->open( flags );
     }
 
     // get filesystem attributes for a file
-    virtual int getAttr( struct stat *stbuf ) const override
+    int getAttr( struct stat *stbuf ) const
     {
       return _impl->getAttr( stbuf );
     }
-    virtual off_t getSize( ) const override
+    off_t getSize( ) const
     {
       return _impl->getSize();
     }
 
-    virtual ssize_t read( const IORequest &req ) const override
+    ssize_t read( const IORequest &req ) const
     {
       return _impl->read( req );
     }
-    virtual bool write( const IORequest &req ) override
+    bool write( const IORequest &req )
     {
       return _impl->write( req );
     }
 
-    virtual int truncate( off_t size ) override
+    int truncate( off_t size )
     {
       return _impl->truncate( size );
     }
 
-    virtual bool isWritable() const override
+    bool isWritable() const
     {
       return _impl->isWritable();
     }
