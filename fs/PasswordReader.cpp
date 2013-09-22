@@ -18,27 +18,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <map>
-
-#include "fs/FsIO.h"
-
-using std::map;
+#include "fs/PasswordReader.h"
 
 namespace encfs {
 
-std::ostream& operator << (std::ostream& os, const Path& s)
-{
-  os << "Path(\"" << (const std::string &)s << "\")";
-  return os;
+PasswordReader::~PasswordReader()
+{}
+
 }
-
-PathPoly::~PathPoly()
-{}
-
-DirectoryIO::~DirectoryIO()
-{}
-
-FsIO::~FsIO()
-{}
-
-}  // namespace encfs

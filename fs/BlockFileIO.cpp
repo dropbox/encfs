@@ -18,6 +18,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stdexcept>
+
 #include "fs/BlockFileIO.h"
 
 #include "base/Error.h"
@@ -47,7 +49,7 @@ BlockFileIO::BlockFileIO( int blockSize, const FSConfigPtr &cfg )
     , _allowHoles( cfg->config->allow_holes() )
 {
   rAssert( _blockSize > 1 );
-  _cache.data = new unsigned char [ _blockSize ];
+  _cache.data = new byte [ blockSize ];
 }
 
 BlockFileIO::~BlockFileIO()
@@ -63,7 +65,7 @@ ssize_t BlockFileIO::cacheReadOneBlock( const IORequest &req ) const
   if((req.offset == _cache.offset) && (_cache.dataLen != 0))
   {
     // satisfy request from cache
-    int len = req.dataLen;
+    auto len = req.dataLen;
     if(_cache.dataLen < len)
       len = _cache.dataLen;
     memcpy( req.data, _cache.data, len );
@@ -84,7 +86,7 @@ ssize_t BlockFileIO::cacheReadOneBlock( const IORequest &req ) const
     {
       _cache.offset = req.offset;
       _cache.dataLen = result; // the amount we really have
-      if(result > req.dataLen)
+      if((size_t) result > req.dataLen)
         result = req.dataLen; // only as much as requested
       memcpy( req.data, _cache.data, result );
     }
@@ -113,14 +115,14 @@ ssize_t BlockFileIO::read( const IORequest &req ) const
   off_t blockNum = req.offset / _blockSize;
   ssize_t result = 0;
 
-  if(partialOffset == 0 && req.dataLen <= _blockSize)
+  if(partialOffset == 0 && req.dataLen <= (size_t) _blockSize)
   {
     // read completely within a single block -- can be handled as-is by
     // readOneBloc().
     return cacheReadOneBlock( req );
   } else
   {
-    size_t size = req.dataLen;
+    auto size = req.dataLen;
 
     // if the request is larger then a block, then request each block
     // individually
@@ -129,14 +131,14 @@ ssize_t BlockFileIO::read( const IORequest &req ) const
     blockReq.dataLen = _blockSize;
     blockReq.data = NULL;
 
-    unsigned char *out = req.data;
+    auto out = req.data;
     while( size )
     {
       blockReq.offset = blockNum * _blockSize;
 
       // if we're reading a full block, then read directly into the
       // result buffer instead of using a temporary
-      if(partialOffset == 0 && size >= (size_t)_blockSize)
+      if(partialOffset == 0 && size >= (decltype(size)) _blockSize)
         blockReq.data = out;
       else
       {
@@ -172,19 +174,24 @@ ssize_t BlockFileIO::read( const IORequest &req ) const
 
 bool BlockFileIO::write( const IORequest &req )
 {
+  if(req.offset < 0)
+  {
+    throw std::invalid_argument( "bad req argument" );
+  }
   rAssert( _blockSize != 0 );
 
-  off_t fileSize = getSize();
+  fs_off_t fileSize = getSize();
+  assert( fileSize >= 0 );
 
   // where write request begins
-  off_t blockNum = req.offset / _blockSize;
-  int partialOffset = req.offset % _blockSize;
+  fs_off_t blockNum = req.offset / _blockSize;
+  fs_off_t partialOffset = req.offset % _blockSize;
 
   // last block of file (for testing write overlaps with file boundary)
-  off_t lastFileBlock = fileSize / _blockSize;
-  ssize_t lastBlockSize = fileSize % _blockSize;
+  fs_off_t lastFileBlock = fileSize / _blockSize;
+  fs_off_t lastBlockSize = fileSize % _blockSize;
 
-  off_t lastNonEmptyBlock = lastFileBlock;
+  fs_off_t lastNonEmptyBlock = lastFileBlock;
   if(lastBlockSize == 0)
     --lastNonEmptyBlock;
 
@@ -197,15 +204,15 @@ bool BlockFileIO::write( const IORequest &req )
 
   // check against edge cases where we can just let the base class handle the
   // request as-is..
-  if(partialOffset == 0 && req.dataLen <= _blockSize)
+  if(partialOffset == 0 && req.dataLen <= (size_t) _blockSize)
   {
     // if writing a full block.. pretty safe..
-    if( req.dataLen == _blockSize )
+    if( req.dataLen == (size_t) _blockSize )
       return cacheWriteOneBlock( req );
 
     // if writing a partial block, but at least as much as what is
     // already there..
-    if(blockNum == lastFileBlock && req.dataLen >= lastBlockSize)
+    if(blockNum == lastFileBlock && req.dataLen >= (size_t) lastBlockSize)
       return cacheWriteOneBlock( req );
   } 
 
@@ -217,8 +224,8 @@ bool BlockFileIO::write( const IORequest &req )
   blockReq.dataLen = _blockSize;
 
   bool ok = true;
-  size_t size = req.dataLen;
-  unsigned char *inPtr = req.data;
+  auto size = req.dataLen;
+  auto inPtr = req.data;
   while( size )
   {
     blockReq.offset = blockNum * _blockSize;
@@ -252,11 +259,11 @@ bool BlockFileIO::write( const IORequest &req )
         blockReq.dataLen = cacheReadOneBlock( blockReq );
 
         // extend data if necessary..
-        if( partialOffset + toCopy > blockReq.dataLen )
+        if( partialOffset + toCopy > (fs_off_t) blockReq.dataLen )
           blockReq.dataLen = partialOffset + toCopy;
       }
       // merge in the data to be written..
-      memcpy( blockReq.data + partialOffset, inPtr, toCopy );
+      memcpy( (unsigned char *) blockReq.data + partialOffset, inPtr, toCopy );
     }
 
     // Finally, write the damn thing!

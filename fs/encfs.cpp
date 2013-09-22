@@ -166,8 +166,9 @@ static int withFileNode( const char *opName,
 
 int _do_getattr(FileNode *fnode, struct stat *stbuf)
 {
-  int res = fnode->getAttr(stbuf);
-  if(res == ESUCCESS && S_ISLNK(stbuf->st_mode))
+  FsFileAttrs attrs;
+  int res = fnode->getAttr(attrs);
+  if(res == ESUCCESS && attrs.type == FsFileType::POSIX_LINK)
   {
     EncFS_Context *ctx = context();
     shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
@@ -295,9 +296,9 @@ int encfs_mknod(const char *path, mode_t mode, dev_t rdev)
       shared_ptr<FileNode> dnode = 
         FSRoot->lookupNode( parent.c_str(), "mknod" );
 
-      struct stat st;
-      if(dnode->getAttr( &st ) == 0)
-        res = fnode->mknod( mode, rdev, uid, st.st_gid );
+      FsFileAttrs attrs;
+      if(dnode->getAttr( attrs ) == 0 && attrs.posix_gid)
+        res = fnode->mknod( mode, rdev, uid, *attrs.posix_gid );
     }
   } catch( Error &err )
   {
@@ -334,9 +335,9 @@ int encfs_mkdir(const char *path, mode_t mode)
       shared_ptr<FileNode> dnode = 
         FSRoot->lookupNode( parent.c_str(), "mkdir" );
 
-      struct stat st;
-      if(dnode->getAttr( &st ) == 0)
-        res = FSRoot->mkdir( path, mode, uid, st.st_gid );
+      FsFileAttrs attrs;
+      if(dnode->getAttr( attrs ) == 0 && attrs.posix_gid)
+        res = FSRoot->mkdir( path, mode, uid, *attrs.posix_gid );
     }
   } catch( Error &err )
   {

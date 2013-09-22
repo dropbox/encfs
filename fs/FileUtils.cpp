@@ -18,12 +18,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// defines needed for RedHat 7.3...
-#ifdef linux
-#define _XOPEN_SOURCE 500 // make sure pwrite() is pulled in
-#endif
-#define _BSD_SOURCE // pick up setenv on RH7.3
-
 #include "fs/encfs.h"
 #include "fs/fsconfig.pb.h"
 
@@ -36,7 +30,6 @@
 
 #include "cipher/CipherV1.h"
 #include "cipher/MemoryPool.h"
-#include "cipher/readpassphrase.h"
 
 #include "fs/BlockNameIO.h"
 #include "fs/Context.h"
@@ -49,16 +42,9 @@
 
 #include <glog/logging.h>
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
-#include <cerrno>
 #include <cstring>
 
 #include <iostream>
@@ -66,7 +52,7 @@
 #include <sstream>
 
 #include <google/protobuf/text_format.h>
-#include <google/protobuf/io/zero_copy_stream_impl.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 
 using gnu::autosprintf;
 using std::cout;
@@ -79,18 +65,13 @@ using std::shared_ptr;
 namespace encfs {
 
 static const int DefaultBlockSize = 2048;
+
 // The maximum length of text passwords.  If longer are needed,
 // use the extpass option, as extpass can return arbitrary length binary data.
 static const int MaxPassBuf = 2048;
 
 static const int NormalKDFDuration = 500; // 1/2 a second
 static const int ParanoiaKDFDuration = 3000; // 3 seconds
-
-// environment variable names for values encfs stores in the environment when
-// calling an external password program.
-static const char ENCFS_ENV_ROOTDIR[] = "encfs_root";
-static const char ENCFS_ENV_STDOUT[] = "encfs_stdout";
-static const char ENCFS_ENV_STDERR[] = "encfs_stderr";
 
 const int V5Latest = 20040813; // fix MACFileIO block size issues
 const int ProtoSubVersion = 20120902;
@@ -102,7 +83,7 @@ struct ConfigInfo
   ConfigType type;
   const char *fileName;
   const char *environmentOverride;
-  bool (*loadFunc)(const char *fileName, 
+  bool (*loadFunc)(const shared_ptr<FsIO> &fs_io, const char *fileName, 
       EncfsConfig &config, ConfigInfo *cfg);
 } ConfigFileMapping[] = {
   {Config_V7, ConfigFileName, "ENCFS_CONFIG", readProtoConfig },
@@ -125,11 +106,11 @@ EncFS_Root::~EncFS_Root()
 }
 
 
-bool fileExists( shared_ptr<FsIO> fs_io, const char * fileName )
+bool fileExists( const shared_ptr<FsIO> &fs_io, const char * fileName )
 {
   try
   {
-    fs_io->get_mtime( fs_io->pathFromString( fileName ) );
+    fs_io->get_attrs( fs_io->pathFromString( fileName ) );
     return true;
   } catch ( const Error &err )
   {
@@ -137,44 +118,33 @@ bool fileExists( shared_ptr<FsIO> fs_io, const char * fileName )
   }
 }
 
-bool isDirectory( shared_ptr<FsIO> fs_io, const char *fileName )
+bool isDirectory( const shared_ptr<FsIO> &fs_io, const char *fileName )
 {
   try
   {
-    return fs_io->get_type( fs_io->pathFromString( fileName ) ) == FsFileType::DIRECTORY;
+    return fs_io->get_attrs( fs_io->pathFromString( fileName ) ).type == FsFileType::DIRECTORY;
   } catch ( const Error &err )
   {
     return false;
   }
 }
 
-static const char *PATH_SEP = "/";
-
-const char *lastPathElement( shared_ptr<FsIO> /*fs_io*/, const char *name )
+const char *lastPathElement( const shared_ptr<FsIO> &fs_io, const char *name )
 {
-  std::string s_name( name );
-  auto pos = s_name.rfind( PATH_SEP );
-  if(pos == std::string::npos) {
-    return name;
-  }
-  return name + pos + strlen( PATH_SEP );
+  return fs_io->pathFromString( name ).basename().c_str();
 }
 
-std::string parentDirectory( shared_ptr<FsIO> /*fs_io*/, const std::string &path )
+std::string parentDirectory( const shared_ptr<FsIO> &fs_io, const std::string &path )
 {
-  auto last = path.rfind( PATH_SEP );
-  if(last == string::npos)
-    return string("");
-  else
-    return path.substr(0, last);
+  return fs_io->pathFromString( path ).dirname();
 }
 
-bool userAllowMkdir( shared_ptr<FsIO> fs_io, const char *path, mode_t mode )
+bool userAllowMkdir( const shared_ptr<FsIO> &fs_io, const char *path, mode_t mode )
 {
   return userAllowMkdir(fs_io, 0, path, mode);
 }
 
-bool userAllowMkdir( shared_ptr<FsIO> fs_io, int promptno, const char *path, mode_t mode )
+bool userAllowMkdir( const shared_ptr<FsIO> &fs_io, int promptno, const char *path, mode_t mode )
 {
   // TODO: can we internationalize the y/n names?  Seems strange to prompt in
   // their own language but then have to respond 'y' or 'n'.
@@ -217,14 +187,14 @@ bool userAllowMkdir( shared_ptr<FsIO> fs_io, int promptno, const char *path, mod
   }
 }
 
-ConfigType readConfig_load( ConfigInfo *nm, const char *path, 
+ConfigType readConfig_load( const shared_ptr<FsIO> &fs_io, ConfigInfo *nm, const char *path, 
     EncfsConfig &config )
 {
   if( nm->loadFunc )
   {
     try
     {
-      if( (*nm->loadFunc)( path, config, nm ))
+      if( (*nm->loadFunc)( fs_io, path, config, nm ))
         return nm->type;
     } catch( Error &err )
     {
@@ -240,7 +210,7 @@ ConfigType readConfig_load( ConfigInfo *nm, const char *path,
   }
 }
 
-ConfigType readConfig( shared_ptr<FsIO> fs_io, const string &rootDir, EncfsConfig &config )
+ConfigType readConfig( const shared_ptr<FsIO> &fs_io, const string &rootDir, EncfsConfig &config )
 {
   ConfigInfo *nm = ConfigFileMapping;
   while(nm->fileName)
@@ -250,12 +220,12 @@ ConfigType readConfig( shared_ptr<FsIO> fs_io, const string &rootDir, EncfsConfi
     {
       char *envFile = getenv( nm->environmentOverride );
       if( envFile != NULL )
-        return readConfig_load( nm, envFile, config );
+        return readConfig_load( fs_io, nm, envFile, config );
     }
     // the standard place to look is in the root directory
     string path = rootDir + nm->fileName;
     if( fileExists( fs_io, path.c_str() ) )
-      return readConfig_load( nm, path.c_str(), config);
+      return readConfig_load( fs_io, nm, path.c_str(), config);
 
     ++nm;
   }
@@ -264,7 +234,7 @@ ConfigType readConfig( shared_ptr<FsIO> fs_io, const string &rootDir, EncfsConfi
 }
 
 // Read a boost::serialization config file using an Xml reader..
-bool readV6Config( const char *configFile, 
+bool readV6Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile, 
     EncfsConfig &cfg, ConfigInfo *info)
 {
   (void)info;
@@ -378,7 +348,7 @@ bool readV6Config( const char *configFile,
 }
 
 // Read a v5 archive, which is a proprietary binary format.
-bool readV5Config( const char *configFile, 
+bool readV5Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile, 
     EncfsConfig &config, ConfigInfo *)
 {
   bool ok = false;
@@ -438,7 +408,7 @@ bool readV5Config( const char *configFile,
   return ok;
 }
 
-bool readV4Config( const char *configFile, 
+bool readV4Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile, 
     EncfsConfig &config, ConfigInfo *)
 {
   bool ok = false;
@@ -473,25 +443,33 @@ bool readV4Config( const char *configFile,
   return ok;
 }
 
-bool writeTextConfig( shared_ptr<FsIO> /*fs_io*/, const char *fileName, const EncfsConfig &cfg )
+static bool writeTextConfig( const shared_ptr<FsIO> &fs_io, const char *fileName, const EncfsConfig &cfg )
 {
-  /* TODO: make this use low level fs_io */
-  abort();
-  int fd = ::open( fileName, O_RDWR | O_CREAT, 0640 );
-  if (fd < 0)
+  /* TODO: maybe optimize and create a ZeroCopyOutputStream from
+     a encfs::File object. These text serializations aren't that
+     big so I probably wouldn't */
+
+  std::string output;
+  google::protobuf::io::StringOutputStream fos( &output );
+  google::protobuf::TextFormat::Print( cfg, &fos );
+
+  try
   {
-    LOG(ERROR) << "Unable to open or create file " << fileName;
+    bool open_for_write = true;
+    bool create = true;
+    auto f = fs_io->openfile( fs_io->pathFromString( fileName ),
+                              open_for_write, create );
+    f.write( IORequest( 0, (byte *) output.c_str(), output.size() ) );
+  } catch ( const Error &err )
+  {
+    LOG(ERROR) << "Unable to open or create file \"" << fileName << "\": " << err.what();
     return false;
   }
 
-  google::protobuf::io::FileOutputStream fos( fd );
-  google::protobuf::TextFormat::Print( cfg, &fos );
-
-  fos.Close();
   return true;
 }
 
-bool saveConfig( shared_ptr<FsIO> fs_io, const string &rootDir, const EncfsConfig &config )
+bool saveConfig( const shared_ptr<FsIO> &fs_io, const string &rootDir, const EncfsConfig &config )
 {
   bool ok = false;
 
@@ -520,19 +498,34 @@ bool saveConfig( shared_ptr<FsIO> fs_io, const string &rootDir, const EncfsConfi
   return ok;
 }
 
-bool readProtoConfig( const char *fileName, EncfsConfig &config,
+bool readProtoConfig( const shared_ptr<FsIO> &fs_io, const char *fileName, EncfsConfig &config,
     struct ConfigInfo *)
 {
-  /* not implemented yet */
-  abort();
-  int fd = ::open( fileName, O_RDONLY, 0640 );
-  if (fd < 0)
+  opt::optional<File> file;
+  try
   {
-    LOG(ERROR) << "Unable to open file " << fileName;
+    file = fs_io->openfile( fs_io->pathFromString( fileName ) );
+  } catch ( const Error &err )
+  {
+    LOG(ERROR) << "Unable to open config (" << fileName << "): " << err.what();
     return false;
   }
 
-  google::protobuf::io::FileInputStream fis( fd );
+  assert( file );
+
+  auto attrs = file->get_attrs();
+  auto buf = std::unique_ptr<byte[]>( new byte[attrs.size] );
+
+  decltype(attrs.size) offset = 0;
+  while(offset != attrs.size)
+  {
+    auto read = file->read( offset, buf.get() + offset, attrs.size - offset );
+    if(read <= 0)
+      break;
+    offset += read;
+  }
+
+  google::protobuf::io::ArrayInputStream fis( buf.get(), attrs.size );
   google::protobuf::TextFormat::Parse( &fis, &config );
 
   return true;
@@ -905,13 +898,11 @@ RootPtr createConfig( EncFS_Context *ctx,
     const shared_ptr<EncFS_Opts> &opts )
 {
   const std::string rootDir = opts->rootDir;
+  bool annotate = opts->annotate;
   bool enableIdleTracking = opts->idleTracking;
   bool forceDecode = opts->forceDecode;
-  const std::string passwordProgram = opts->passwordProgram;
-  bool useStdin = opts->useStdin;
   bool reverseEncryption = opts->reverseEncryption;
   ConfigMode configMode = opts->configMode;
-  bool annotate = opts->annotate;
 
   RootPtr rootInfo;
 
@@ -921,7 +912,7 @@ RootPtr createConfig( EncFS_Context *ctx,
   cout << _("Creating new encrypted volume.") << endl;
 
   char answer[10] = {0};
-  if(configMode == Config_Prompt)
+  if(configMode == ConfigMode::Prompt)
   {
     // xgroup(setup)
     cout << _("Please choose from one of the following options:\n"
@@ -959,7 +950,7 @@ RootPtr createConfig( EncFS_Context *ctx,
     blockMACRandBytes = 0;
   }
 
-  if(configMode == Config_Paranoia || answer[0] == 'p')
+  if(configMode == ConfigMode::Paranoia || answer[0] == 'p')
   {
     if (reverseEncryption)
     {
@@ -984,7 +975,7 @@ RootPtr createConfig( EncFS_Context *ctx,
     chainedIV = true;
     externalIV = true;
     desiredKDFDuration = ParanoiaKDFDuration;
-  } else if(configMode == Config_Standard || answer[0] != 'x')
+  } else if(configMode == ConfigMode::Standard || answer[0] != 'x')
   {
     // xgroup(setup)
     cout << _("Standard configuration selected.") << "\n";
@@ -1116,14 +1107,7 @@ RootPtr createConfig( EncFS_Context *ctx,
   CipherKey volumeKey = cipher->newRandomKey();
 
   // get user key and use it to encode volume key
-  CipherKey userKey;
-  VLOG(1) << "useStdin: " << useStdin;
-  if(useStdin)
-  {
-    if (annotate)
-      cerr << "$PROMPT$ new_passwd" << endl;
-  }
-  userKey = getNewUserKey( config, useStdin, passwordProgram, rootDir );
+  auto userKey = getNewUserKey( config, opts->passwordReader );
 
   cipher->setKey( userKey );
   cipher->writeKey( volumeKey, encodedKey );
@@ -1358,184 +1342,13 @@ CipherKey decryptKey(const EncfsConfig &config, const char *password, int passwd
   return userKey;
 }
 
-// Doesn't use SecureMem, since we don't know how much will be read.
-// Besides, password is being produced by another program.
-std::string readPassword( int FD )
+CipherKey getUserKey(const EncfsConfig &config, shared_ptr<PasswordReader> passwordReader)
 {
-  SecureMem *buf = new SecureMem(1024);
-  string result;
+  const bool newPass = false;
+  SecureMem *password = passwordReader->readPassword(MaxPassBuf, newPass);
 
-  while(1)
-  {
-    ssize_t rdSize = recv(FD, buf->data(), buf->size(), 0);
-
-    if(rdSize > 0)
-    {
-      result.append( (char*)buf->data(), rdSize );
-    } else
-      break;
-  }
-
-  // chop off trailing "\n" if present..
-  // This is done so that we can use standard programs like ssh-askpass
-  // without modification, as it returns trailing newline..
-  if(!result.empty() && result[ result.length()-1 ] == '\n' )
-    result.resize( result.length() -1 );
-
-  delete buf;
-  return result;
-}
-
-SecureMem *passwordFromProgram(const std::string &passProg,
-    const std::string &rootDir) 
-{
-  // have a child process run the command and get the result back to us.
-  int fds[2], pid;
-  int res;
-
-  res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
-  if(res == -1)
-  {
-    perror(_("Internal error: socketpair() failed"));
-    return NULL;
-  }
-  VLOG(1) << "getUserKey: fds = " << fds[0] << ", " << fds[1];
-
-  pid = fork();
-  if(pid == -1)
-  {
-    perror(_("Internal error: fork() failed"));
-    close(fds[0]);
-    close(fds[1]);
-    return NULL;
-  }
-
-  if(pid == 0)
-  {
-    const char *argv[4];
-    argv[0] = "/bin/sh";
-    argv[1] = "-c";
-    argv[2] = passProg.c_str();
-    argv[3] = 0;
-
-    // child process.. run the command and send output to fds[0]
-    close(fds[1]); // we don't use the other half..
-
-    // make a copy of stdout and stderr descriptors, and set an environment
-    // variable telling where to find them, in case a child wants it..
-    int stdOutCopy = dup( STDOUT_FILENO );
-    int stdErrCopy = dup( STDERR_FILENO );
-    // replace STDOUT with our socket, which we'll used to receive the
-    // password..
-    dup2( fds[0], STDOUT_FILENO );
-
-    // ensure that STDOUT_FILENO and stdout/stderr are not closed on exec..
-    fcntl(STDOUT_FILENO, F_SETFD, 0); // don't close on exec..
-    fcntl(stdOutCopy, F_SETFD, 0);
-    fcntl(stdErrCopy, F_SETFD, 0);
-
-    char tmpBuf[8];
-
-    setenv(ENCFS_ENV_ROOTDIR, rootDir.c_str(), 1);
-
-    snprintf(tmpBuf, sizeof(tmpBuf)-1, "%i", stdOutCopy);
-    setenv(ENCFS_ENV_STDOUT, tmpBuf, 1);
-
-    snprintf(tmpBuf, sizeof(tmpBuf)-1, "%i", stdErrCopy);
-    setenv(ENCFS_ENV_STDERR, tmpBuf, 1);
-
-    execvp( argv[0], (char * const *)argv ); // returns only on error..
-
-    perror(_("Internal error: failed to exec program"));
-    exit(1);
-  }
-
-  close(fds[0]);
-  string password = readPassword(fds[1]);
-  close(fds[1]);
-
-  waitpid(pid, NULL, 0);
-
-  SecureMem *result = new SecureMem(password.length()+1);
-  if (result)
-    strncpy((char *)result->data(), password.c_str(), result->size());
-  password.assign(password.length(), '\0');
-
-  return result;
-}
-
-SecureMem *passwordFromStdin()
-{
-  SecureMem *buf = new SecureMem(MaxPassBuf);
-
-  char *res = fgets( (char *)buf->data(), buf->size(), stdin );
-  if (res)
-  {
-    // Kill the trailing newline.
-    int last = strnlen((char *)buf->data(), buf->size());
-    if (last > 0 && buf->data()[last-1] == '\n')
-      buf->data()[ last-1 ] = '\0';
-  }
-  
-  return buf;
-}
-
-SecureMem *passwordFromPrompt()
-{
-  SecureMem *buf = new SecureMem(MaxPassBuf);
-
-  // xgroup(common)
-  char *res = readpassphrase( _("EncFS Password: "),
-      (char *)buf->data(), buf->size()-1, RPP_ECHO_OFF );
-  if (!res) 
-  {
-    delete buf;
-    buf = NULL;
-  }
-  
-  return buf;
-}
-
-SecureMem *passwordFromPrompts()
-{
-  SecureMem *buf = new SecureMem(MaxPassBuf);
-  SecureMem *buf2 = new SecureMem(MaxPassBuf);
-
-  do
-  {
-    // xgroup(common)
-    char *res1 = readpassphrase(_("New Encfs Password: "), 
-        (char *)buf->data(), buf->size()-1, RPP_ECHO_OFF);
-    // xgroup(common)
-    char *res2 = readpassphrase(_("Verify Encfs Password: "), 
-        (char *)buf2->data(), buf2->size()-1, RPP_ECHO_OFF);
-
-    if(res1 && res2
-       && !strncmp((char*)buf->data(), (char*)buf2->data(), MaxPassBuf))
-    {
-      break; 
-    } else
-    {
-      // xgroup(common) -- probably not common, but group with the others
-      cerr << _("Passwords did not match, please try again\n");
-    }
-  } while(1);
-
-  delete buf2;
-  return buf;
-}
-
-CipherKey getUserKey(const EncfsConfig &config, bool useStdin)
-{
   CipherKey userKey;
-  SecureMem *password;
-
-  if (useStdin)
-    password = passwordFromStdin();
-  else
-    password = passwordFromPrompt();
-
-  if (password)
+  if(password)
   {
     userKey = decryptKey(config, (char*)password->data(),
                          strlen((char*)password->data()));
@@ -1545,37 +1358,13 @@ CipherKey getUserKey(const EncfsConfig &config, bool useStdin)
   return userKey;
 }
 
-CipherKey getUserKey( const EncfsConfig &config, const std::string &passProg,
-    const std::string &rootDir )
+CipherKey getNewUserKey(EncfsConfig &config, shared_ptr<PasswordReader> passwordReader)
 {
+  const bool newPass = true;
+  SecureMem *password = passwordReader->readPassword(MaxPassBuf, newPass);
+
   CipherKey result;
-  SecureMem *password = passwordFromProgram(passProg, rootDir);
-
-  if (password)
-  {
-    result = decryptKey(config, (char*)password->data(),
-                        strlen((char*)password->data()));
-    delete password;
-  }
-
-  return result;
-}
-
-CipherKey getNewUserKey(EncfsConfig &config,
-    bool useStdin, const std::string &passProg,
-    const std::string &rootDir)
-{
-  CipherKey result;
-  SecureMem *password;
-
-  if (useStdin)
-    password = passwordFromStdin();
-  else if (!passProg.empty())
-    password = passwordFromProgram(passProg, rootDir);
-  else
-    password = passwordFromPrompts();
-
-  if (password)
+  if(password)
   {
     result = makeNewKey(config, (char*)password->data(),
                         strlen((char*)password->data()));
@@ -1617,16 +1406,7 @@ RootPtr initFS( EncFS_Context *ctx, const shared_ptr<EncFS_Opts> &opts )
     }
 
     // get user key
-    CipherKey userKey;
-
-    if(opts->passwordProgram.empty())
-    {
-      if (opts->annotate)
-        cerr << "$PROMPT$ passwd" << endl;
-      userKey = getUserKey( config, opts->useStdin );
-    } else
-      userKey = getUserKey( config, opts->passwordProgram, opts->rootDir );
-
+    CipherKey userKey = getUserKey( config, opts->passwordReader );
     if(!userKey.valid())
       return rootInfo;
 

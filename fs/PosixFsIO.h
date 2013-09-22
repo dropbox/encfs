@@ -53,10 +53,9 @@ public:
     virtual void unlink(const Path &path) override;
     virtual void rmdir(const Path &path) override;
 
-    virtual fs_time_t get_mtime(const Path &path) override;
     virtual void set_mtime(const Path &path, fs_time_t mtime) override;
 
-    virtual FsFileType get_type(const Path &path) override;
+    virtual FsFileAttrs get_attrs(const Path &path) override;
 };
 
 }  // namespace encfs

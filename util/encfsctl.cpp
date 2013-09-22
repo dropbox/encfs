@@ -33,6 +33,7 @@
 #include "fs/FileNode.h"
 #include "fs/DirNode.h"
 #include "fs/PosixFsIO.h"
+#include "fs/EncfsPasswordReader.h"
 
 #include <glog/logging.h>
 
@@ -283,6 +284,7 @@ static RootPtr initRootInfo(int &argc, char ** &argv)
     {0,0,0,0}
   };
 
+  string passwordProgram;
   for(;;)
   {
     int option_index = 0;
@@ -295,7 +297,7 @@ static RootPtr initRootInfo(int &argc, char ** &argv)
     switch(res)
     {
     case 'p':
-      opts->passwordProgram.assign(optarg);
+      passwordProgram.assign(optarg);
       break;
     default:
       LOG(WARNING) << "getopt error: " << res;
@@ -306,17 +308,22 @@ static RootPtr initRootInfo(int &argc, char ** &argv)
   argc -= optind;
   argv += optind;
 
+  string rootDir;
   if(argc == 0)
   {
     cerr << _("Incorrect number of arguments") << "\n";
   } else
   {
-    opts->rootDir = string( argv[0] );
+    rootDir = string( argv[0] );
+
+    opts->passwordReader = passwordProgram.empty()
+      ? std::make_shared<EncfsPasswordReader>( false )
+      : std::make_shared<EncfsPasswordReader>( false, passwordProgram, rootDir );
 
     --argc;
     ++argv;
 
-    if(checkDir( opts->rootDir ))
+    if(checkDir( rootDir ))
       result = initFS( NULL, opts );
 
     if(!result)
@@ -430,16 +437,17 @@ static int cmd_ls( int argc, char **argv )
       {
         shared_ptr<FileNode> fnode = 
           rootInfo->root->lookupNode( name.c_str(), "encfsctl-ls" );
-        struct stat stbuf;
-        fnode->getAttr( &stbuf );
+        FsFileAttrs attrs;
+        fnode->getAttr( attrs );
 
         struct tm stm;
-        localtime_r( &stbuf.st_mtime, &stm );
+        time_t mtime = attrs.mtime;
+        localtime_r( &mtime, &stm );
         stm.tm_year += 1900;
         // TODO: when I add "%s" to the end and name.c_str(), I get a
         // seg fault from within strlen.  Why ???
         printf("%11i %4i-%02i-%02i %02i:%02i:%02i %s\n",
-            int(stbuf.st_size), 
+            int(attrs.size), 
             int(stm.tm_year), int(stm.tm_mon), int(stm.tm_mday),
             int(stm.tm_hour), int(stm.tm_min), int(stm.tm_sec),
             name.c_str());
@@ -557,12 +565,12 @@ static int copyContents(const shared_ptr<EncFS_Root> &rootInfo,
     return EXIT_FAILURE;
   } else
   {
-    struct stat st;
+    FsFileAttrs attrs;
 
-    if(node->getAttr(&st) != 0)
+    if(node->getAttr(attrs) != 0)
       return EXIT_FAILURE;
 
-    if((st.st_mode & S_IFLNK) == S_IFLNK)
+    if(attrs.type == FsFileType::POSIX_LINK)
     {
       string d = rootInfo->root->cipherPath(encfsName);
       char linkContents[PATH_MAX+2];
@@ -576,7 +584,9 @@ static int copyContents(const shared_ptr<EncFS_Root> &rootInfo,
           targetName);
     } else
     {
-      int outfd = creat(targetName, st.st_mode);
+      mode_t mode = attrs.posix_mode ? *attrs.posix_mode :
+        attrs.type == FsFileType::DIRECTORY ? 0777 : 0666;
+      int outfd = creat(targetName, mode);
 
       WriteOutput output(outfd);
       processContents( rootInfo, encfsName, output );
@@ -604,13 +614,14 @@ static int traverseDirs(const shared_ptr<EncFS_Root> &rootInfo,
   // Lookup directory node so we can create a destination directory
   // with the same permissions
   {
-    struct stat st;
+    FsFileAttrs attrs;
     shared_ptr<FileNode> dirNode = 
       rootInfo->root->lookupNode( volumeDir.c_str(), "encfsctl" );
-    if(dirNode->getAttr(&st))
+    if(dirNode->getAttr(attrs))
       return EXIT_FAILURE;
 
-    mkdir(destDir.c_str(), st.st_mode);
+    mode_t mode = attrs.posix_mode ? *attrs.posix_mode : 0777;
+    mkdir(destDir.c_str(), mode);
   }
 
   // show files in directory
@@ -758,11 +769,13 @@ static int do_chpasswd( bool useStdin, bool annotate, int argc, char **argv )
     return EXIT_FAILURE;
   }
 
+  auto passwordReader = std::make_shared<EncfsPasswordReader>( useStdin );
+
   // ask for existing password
   cout << _("Enter current Encfs password\n");
   if (annotate)
     cerr << "$PROMPT$ passwd" << endl;
-  CipherKey userKey = getUserKey( config, useStdin );
+  CipherKey userKey = getUserKey( config, passwordReader );
   if(!userKey.valid())
     return EXIT_FAILURE;
 
@@ -800,7 +813,7 @@ static int do_chpasswd( bool useStdin, bool annotate, int argc, char **argv )
       cerr << "$PROMPT$ new_passwd" << endl;
   }
 
-  userKey = getNewUserKey( config, useStdin, string(), string() );
+  userKey = getNewUserKey( config, passwordReader );
 
   // re-encode the volume key using the new user key and write it out..
   int result = EXIT_FAILURE;

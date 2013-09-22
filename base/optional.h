@@ -72,16 +72,16 @@ public:
   : optional()
   {}
 
-  constexpr optional(T && val)
+  constexpr optional(T val)
   : _val( std::move( val ) )
   , _engaged( true )
   {}
 
-  optional &operator=(const optional & val)
+  optional &operator=(optional val)
   {
     if(val._engaged)
     {
-      _val = val._val;
+      _val = std::move(val._val);
       _engaged = true;
     } else
     {
@@ -96,21 +96,6 @@ public:
   : optional()
   {
     *this = val;
-  }
-
-  optional &operator=(optional && val)
-  {
-    if(val._engaged)
-    {
-      _val = std::move(val._val);
-      _engaged = true;
-    } else
-    {
-      if(_engaged)
-        _val.~T();
-      _engaged = false;
-    }
-    return *this;
   }
 
   optional(optional && val)

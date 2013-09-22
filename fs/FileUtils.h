@@ -26,26 +26,27 @@
 #include "fs/encfs.h"
 #include "fs/FSConfig.h"
 #include "fs/FsIO.h"
+#include "fs/PasswordReader.h"
 
 namespace encfs {
 
 // true if path is a directory
-bool isDirectory( std::shared_ptr<FsIO> fs_io, const char *fileName );
+bool isDirectory( const std::shared_ptr<FsIO> &fs_io, const char *fileName );
 
 // true if the path points to an existing node (of any type)
-bool fileExists( std::shared_ptr<FsIO> fs_io, const char *fileName );
+bool fileExists( const std::shared_ptr<FsIO> &fs_io, const char *fileName );
 
 // true if starts with '/'
-bool isAbsolutePath( std::shared_ptr<FsIO> fs_io, const char *fileName );
+bool isAbsolutePath( const std::shared_ptr<FsIO> &fs_io, const char *fileName );
 // pointer to just after the last '/'
-const char *lastPathElement( std::shared_ptr<FsIO> fs_io, const char *name );
+const char *lastPathElement( const std::shared_ptr<FsIO> &fs_io, const char *name );
 
-std::string parentDirectory( std::shared_ptr<FsIO> fs_io, const std::string &path );
+std::string parentDirectory( const std::shared_ptr<FsIO> &fs_io, const std::string &path );
 
 // ask the user for permission to create the directory.  If they say ok, then
 // do it and return true.
-bool userAllowMkdir(std::shared_ptr<FsIO> fs_io, const char *dirPath, mode_t mode );
-bool userAllowMkdir(std::shared_ptr<FsIO> fs_io, int promptno, const char *dirPath, mode_t mode );
+bool userAllowMkdir(const std::shared_ptr<FsIO> &fs_io, const char *dirPath, mode_t mode );
+bool userAllowMkdir(const std::shared_ptr<FsIO> &fs_io, int promptno, const char *dirPath, mode_t mode );
 
 class CipherV1;
 class DirNode;
@@ -62,11 +63,11 @@ struct EncFS_Root
 
 typedef shared_ptr<EncFS_Root> RootPtr;
 
-enum ConfigMode
+enum class ConfigMode
 {
-  Config_Prompt,
-  Config_Standard,
-  Config_Paranoia
+  Prompt,
+  Standard,
+  Paranoia
 };
 
 struct EncFS_Opts
@@ -79,9 +80,7 @@ struct EncFS_Opts
   bool checkKey;  // check crypto key decoding
   bool forceDecode; // force decode on MAC block failures
 
-  std::string passwordProgram; // path to password program (or empty)
-  bool useStdin; // read password from stdin rather then prompting
-  bool annotate; // print annotation line prompt to stderr.
+  bool annotate;
 
   bool ownerCreate; // set owner of new files to caller
 
@@ -90,33 +89,32 @@ struct EncFS_Opts
   ConfigMode configMode;
 
   shared_ptr<FsIO> fs_io;
+  shared_ptr<PasswordReader> passwordReader;
 
   EncFS_Opts()
+  : createIfNotFound(true)
+  , idleTracking(false)
+  , mountOnDemand(false)
+  , checkKey(true)
+  , forceDecode(false)
+  , annotate(false)
+  , ownerCreate(false)
+  , reverseEncryption(false)
+  , configMode(ConfigMode::Prompt)
   {
-    createIfNotFound = true;
-    idleTracking = false;
-    mountOnDemand = false;
-    checkKey = true;
-    forceDecode = false;
-    useStdin = false;
-    annotate = false;
-    ownerCreate = false;
-    reverseEncryption = false;
-    configMode = Config_Prompt;
-    fs_io = shared_ptr<FsIO>();
   }
 };
 
 /*
     Read existing config file.  Looks for any supported configuration version.
  */
-ConfigType readConfig( shared_ptr<FsIO> fs_io, const std::string &rootDir, EncfsConfig &config ); 
+ConfigType readConfig( const shared_ptr<FsIO> &fs_io, const std::string &rootDir, EncfsConfig &config ); 
 
 /*
     Save the configuration.  Saves back as the same configuration type as was
     read from.
  */
-bool saveConfig( shared_ptr<FsIO> fs_io, const std::string &rootdir, const EncfsConfig &config );
+bool saveConfig( const shared_ptr<FsIO> &fs_io, const std::string &rootdir, const EncfsConfig &config );
 
 class EncFS_Context;
 
@@ -127,16 +125,16 @@ RootPtr createConfig( EncFS_Context *ctx,
 
 void showFSInfo( const EncfsConfig &config );
 
-bool readV4Config( const char *configFile, EncfsConfig &config, 
+bool readV4Config( const shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config, 
     struct ConfigInfo *);
 
-bool readV5Config( const char *configFile, EncfsConfig &config, 
+bool readV5Config( const shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config, 
     struct ConfigInfo *);
 
-bool readV6Config( const char *configFile, EncfsConfig &config,
+bool readV6Config( const shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config,
     struct ConfigInfo *);
 
-bool readProtoConfig( const char *configFile, EncfsConfig &config,
+bool readProtoConfig( const shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config,
     struct ConfigInfo *);
 
 }  // namespace encfs

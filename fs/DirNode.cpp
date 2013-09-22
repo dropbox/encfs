@@ -182,7 +182,7 @@ bool RenameOp::apply()
       bool preserve_mtime;
       try
       {
-        old_mtime = dn->fs_io->get_mtime( oldCNamePath );
+        old_mtime = dn->fs_io->get_attrs( oldCNamePath ).mtime;
         preserve_mtime = true;
       } catch (...)
       {
@@ -582,7 +582,7 @@ DirNode::rename(const char *fromPlaintext, const char *toPlaintext)
     bool preserve_mtime = true;
     try
     {
-      old_mtime = fs_io->get_mtime( fromCName );
+      old_mtime = fs_io->get_attrs( fromCName ).mtime;
     } catch (const Error &err)
     {
       LOG(WARNING) << "get_mtime error: " << err.what();

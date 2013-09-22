@@ -26,6 +26,7 @@
 #include "cipher/CipherKey.h"
 #include "fs/encfs.h"
 #include "fs/fsconfig.pb.h"
+#include "fs/PasswordReader.h"
 
 #include <vector>
 
@@ -46,14 +47,11 @@ struct EncFS_Opts;
 class CipherV1;
 class NameIO;
 
-CipherKey getUserKey(const EncfsConfig &config, bool useStdin);
 CipherKey getUserKey(const EncfsConfig &config,
-                     const std::string &passwordProgram,
-                     const std::string &rootDir);
+                     shared_ptr<PasswordReader> passwordReader);
+CipherKey getNewUserKey(EncfsConfig &config,
+                        shared_ptr<PasswordReader> passwordReader);
 
-CipherKey getNewUserKey(EncfsConfig &config, bool useStdin, 
-    const std::string &program, const std::string &rootDir);
-    
 shared_ptr<CipherV1> getCipher(const EncfsConfig &cfg);
 shared_ptr<CipherV1> getCipher(const Interface &iface, int keySize);
 

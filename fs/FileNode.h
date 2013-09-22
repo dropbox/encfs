@@ -64,11 +64,11 @@ public:
     int open(int flags) const;
 
     // getAttr returns 0 on success, -errno on failure
-    int getAttr(struct stat *stbuf) const;
-    off_t getSize() const;
+    int getAttr(FsFileAttrs &stbuf) const;
+    fs_off_t getSize() const;
 
-    ssize_t read(off_t offset, unsigned char *data, ssize_t size) const;
-    bool write(off_t offset, unsigned char *data, ssize_t size);
+    ssize_t read(fs_off_t offset, byte *data, size_t size) const;
+    bool write(fs_off_t offset, byte *data, size_t size);
 
     // truncate the file to a particular size
     int truncate( off_t size );

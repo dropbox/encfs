@@ -143,9 +143,9 @@ bool CipherFileIO::setIV( uint64_t iv )
   return base->setIV( iv );
 }
 
-off_t CipherFileIO::adjustedSize(off_t rawSize) const
+fs_off_t CipherFileIO::adjustedSize(fs_off_t rawSize) const
 {
-  off_t size = rawSize;
+  fs_off_t size = rawSize;
 
   if (rawSize >= headerLen) 
     size -= headerLen;
@@ -153,21 +153,21 @@ off_t CipherFileIO::adjustedSize(off_t rawSize) const
   return size;
 }
 
-int CipherFileIO::getAttr( struct stat *stbuf ) const
+int CipherFileIO::getAttr( FsFileAttrs &stbuf ) const
 {
   int res = base->getAttr( stbuf );
 
   // adjust size if we have a file header
-  if((res == 0) && S_ISREG(stbuf->st_mode))
-    stbuf->st_size = adjustedSize(stbuf->st_size);
+  if((res == 0) && stbuf.type == FsFileType::REGULAR)
+    stbuf.size = adjustedSize(stbuf.size);
 
   return res;
 }
 
-off_t CipherFileIO::getSize() const
+fs_off_t CipherFileIO::getSize() const
 {
   // No check on S_ISREG here -- getSize only for normal files!
-  off_t size = base->getSize();
+  fs_off_t size = base->getSize();
   return adjustedSize(size);
 }
 
@@ -279,11 +279,16 @@ bool CipherFileIO::writeHeader( )
 
 ssize_t CipherFileIO::readOneBlock( const IORequest &req ) const
 {
+  if(req.offset < 0)
+  {
+    throw std::invalid_argument( "negative offset!" );
+  }
   // read raw data, then decipher it..
-  int bs = blockSize();
-  rAssert(req.dataLen <= bs);
+  auto bs = blockSize();
+  assert(bs >= 0);
+  rAssert(req.dataLen <= (size_t) bs);
 
-  off_t blockNum = req.offset / bs;
+  fs_off_t blockNum = req.offset / bs;
 
   ssize_t readSize = 0;
   IORequest tmpReq = req;
@@ -328,8 +333,8 @@ ssize_t CipherFileIO::readOneBlock( const IORequest &req ) const
 
 bool CipherFileIO::writeOneBlock( const IORequest &req )
 {
-  int bs = blockSize();
-  off_t blockNum = req.offset / bs;
+  auto bs = blockSize();
+  fs_off_t blockNum = req.offset / bs;
 
   if(headerLen != 0 && fileIV == 0)
     initHeader();
@@ -337,7 +342,8 @@ bool CipherFileIO::writeOneBlock( const IORequest &req )
   MemBlock mb;
 
   bool ok;
-  if (req.dataLen == bs)
+  assert( bs >= 0 );
+  if (req.dataLen == (size_t) bs)
   {
     ok = blockWrite( req.data, bs, blockNum ^ fileIV );
   } else
@@ -376,17 +382,17 @@ bool CipherFileIO::writeOneBlock( const IORequest &req )
   return ok;
 }
 
-bool CipherFileIO::blockWrite( unsigned char *buf, int size, 
-                              uint64_t _iv64 ) const
+bool CipherFileIO::blockWrite( byte *buf, size_t size, 
+                               uint64_t _iv64 ) const
 {
   if (!fsConfig->reverseEncryption)
-    return cipher->blockEncode( buf, size, _iv64 );
+    return cipher->blockEncode( (byte *) buf, size, _iv64 );
   else
-    return cipher->blockDecode( buf, size, _iv64 );
+    return cipher->blockDecode( (byte *) buf, size, _iv64 );
 } 
 
-bool CipherFileIO::streamWrite( unsigned char *buf, int size, 
-                               uint64_t _iv64 ) const
+bool CipherFileIO::streamWrite( byte *buf, size_t size, 
+                                uint64_t _iv64 ) const
 {
   if (!fsConfig->reverseEncryption)
     return cipher->streamEncode( buf, size, _iv64 );
@@ -395,15 +401,15 @@ bool CipherFileIO::streamWrite( unsigned char *buf, int size,
 } 
 
 
-bool CipherFileIO::blockRead( unsigned char *buf, int size, 
-                             uint64_t _iv64 ) const
+bool CipherFileIO::blockRead( byte *buf, size_t size, 
+                              uint64_t _iv64 ) const
 {
   if (fsConfig->reverseEncryption)
     return cipher->blockEncode( buf, size, _iv64 );
   else if(_allowHoles)
   {
     // special case - leave all 0's alone
-    for(int i=0; i<size; ++i)
+    for(decltype(size) i=0; i<size; ++i)
       if(buf[i] != 0)
         return cipher->blockDecode( buf, size, _iv64 );
 
@@ -412,8 +418,8 @@ bool CipherFileIO::blockRead( unsigned char *buf, int size,
     return cipher->blockDecode( buf, size, _iv64 );
 } 
 
-bool CipherFileIO::streamRead( unsigned char *buf, int size, 
-                              uint64_t _iv64 ) const
+bool CipherFileIO::streamRead( byte *buf, size_t size, 
+                               uint64_t _iv64 ) const
 {
   if (fsConfig->reverseEncryption)
     return cipher->streamEncode( buf, size, _iv64 );
@@ -421,7 +427,7 @@ bool CipherFileIO::streamRead( unsigned char *buf, int size,
     return cipher->streamDecode( buf, size, _iv64 );
 } 
 
-int CipherFileIO::truncate( off_t size )
+int CipherFileIO::truncate( fs_off_t size )
 {
   rAssert(size >= 0);
 

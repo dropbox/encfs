@@ -22,6 +22,30 @@
 
 namespace encfs {
 
+// create a custom errno category that returns the right
+// error condition in default_error_condition
+// (using generic_category to match with errc, not every implementation of
+//  system_category does: (required by the C++11 standard, 19.5.1.5p4)
+//  system_category().default_error_condition(errno).category == generic_category() )
+class errno_error_category : public std::error_category
+{
+public:
+  errno_error_category() {}
+
+  std::error_condition
+  default_error_condition(int __i) const noexcept
+  { return std::make_error_condition( static_cast<std::errc>( __i ) ); }
+
+  virtual const char *name() const noexcept { return "errno_error"; }
+  virtual std::string message( int cond ) const { return strerror( cond ); }
+};
+
+const std::error_category &errno_category() noexcept
+{
+  static const errno_error_category errno_category_instance;
+  return errno_category_instance;
+}
+
 FileIO::~FileIO()
 {}
 

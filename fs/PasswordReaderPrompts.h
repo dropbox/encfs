@@ -18,27 +18,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <map>
-
-#include "fs/FsIO.h"
-
-using std::map;
+#ifndef _PasswordReaderPrompts_incl_
+#define _PasswordReaderPrompts_incl_
 
 namespace encfs {
 
-std::ostream& operator << (std::ostream& os, const Path& s)
+class PasswordReaderPrompts
 {
-  os << "Path(\"" << (const std::string &)s << "\")";
-  return os;
+public:
+  virtual SecureMem *readPassword() override;
+};
+
 }
 
-PathPoly::~PathPoly()
-{}
-
-DirectoryIO::~DirectoryIO()
-{}
-
-FsIO::~FsIO()
-{}
-
-}  // namespace encfs
+#endif

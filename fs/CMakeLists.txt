@@ -18,6 +18,11 @@ add_library (encfs-fs
     FileUtils.cpp
     FsIO.cpp
     PosixFsIO.cpp
+    PasswordReader.cpp
+    EncfsPasswordReader.cpp
+    ProgramPasswordReader.cpp
+    PromptPasswordReader.cpp
+    StdinPasswordReader.cpp
     ${PROTO_SRCS}
     ${PROTO_HDRS}
 )

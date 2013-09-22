@@ -18,27 +18,37 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <map>
-
-#include "fs/FsIO.h"
-
-using std::map;
+#include "fs/PasswordReaderPrompts.h"
 
 namespace encfs {
 
-std::ostream& operator << (std::ostream& os, const Path& s)
+SecureMem *PasswordReaderPrompt::readPassword()
 {
-  os << "Path(\"" << (const std::string &)s << "\")";
-  return os;
+  SecureMem *buf = new SecureMem(MaxPassBuf);
+  SecureMem *buf2 = new SecureMem(MaxPassBuf);
+
+  do
+  {
+    // xgroup(common)
+    char *res1 = readpassphrase(_("New Encfs Password: "), 
+        (char *)buf->data(), buf->size()-1, RPP_ECHO_OFF);
+    // xgroup(common)
+    char *res2 = readpassphrase(_("Verify Encfs Password: "), 
+        (char *)buf2->data(), buf2->size()-1, RPP_ECHO_OFF);
+
+    if(res1 && res2
+       && !strncmp((char*)buf->data(), (char*)buf2->data(), MaxPassBuf))
+    {
+      break; 
+    } else
+    {
+      // xgroup(common) -- probably not common, but group with the others
+      cerr << _("Passwords did not match, please try again\n");
+    }
+  } while(1);
+
+  delete buf2;
+  return buf;
 }
 
-PathPoly::~PathPoly()
-{}
-
-DirectoryIO::~DirectoryIO()
-{}
-
-FsIO::~FsIO()
-{}
-
-}  // namespace encfs
+}

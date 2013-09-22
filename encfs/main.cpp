@@ -47,6 +47,8 @@
 #include "fs/Context.h"
 #include "fs/FsIO.h"
 #include "fs/PosixFsIO.h"
+#include "fs/PasswordReader.h"
+#include "fs/EncfsPasswordReader.h"
 
 #include <locale.h>
 
@@ -81,6 +83,8 @@ struct EncFS_Args
   bool isThreaded; // true == threaded
   bool isVerbose; // false == only enable warning/error messages
   int idleTimeout; // 0 == idle time in minutes to trigger unmount
+  bool useStdin; // true == accept password from stdin
+  string passwordProgram; // program to execute to get filesystem password
   const char *fuseArgv[MaxFuseArgs];
   int fuseArgc;
 
@@ -100,7 +104,7 @@ struct EncFS_Args
     if(opts->checkKey) ss << "(keyCheck) ";
     if(opts->forceDecode) ss << "(forceDecode) ";
     if(opts->ownerCreate) ss << "(ownerCreate) ";
-    if(opts->useStdin) ss << "(useStdin) ";
+    if(useStdin) ss << "(useStdin) ";
     if(opts->annotate) ss << "(annotate) ";
     if(opts->reverseEncryption) ss << "(reverseEncryption) ";
     if(opts->mountOnDemand) ss << "(mountOnDemand) ";
@@ -197,7 +201,7 @@ bool processArgs(int argc, char *argv[],
   out->opts->checkKey = true;
   out->opts->forceDecode = false;
   out->opts->ownerCreate = false;
-  out->opts->useStdin = false;
+  out->useStdin = false;
   out->opts->annotate = false;
   out->opts->reverseEncryption = false;
 
@@ -256,16 +260,16 @@ bool processArgs(int argc, char *argv[],
     switch( res )
     {
     case '1':
-      out->opts->configMode = Config_Standard;
+      out->opts->configMode = ConfigMode::Standard;
       break;
     case '2':
-      out->opts->configMode = Config_Paranoia;
+      out->opts->configMode = ConfigMode::Paranoia;
       break;
     case 's':
       out->isThreaded = false;
       break;
     case 'S':
-      out->opts->useStdin = true;
+      out->useStdin = true;
       break;
     case 513:
       out->opts->annotate = true;
@@ -305,7 +309,7 @@ bool processArgs(int argc, char *argv[],
       PUSHARG( optarg );
       break;
     case 'p':
-      out->opts->passwordProgram.assign( optarg );
+      out->passwordProgram.assign( optarg );
       break;
     case 'P':
       if(geteuid() != 0)
@@ -412,7 +416,7 @@ bool processArgs(int argc, char *argv[],
     }
   }
 
-  if(out->opts->mountOnDemand && out->opts->passwordProgram.empty())
+  if(out->opts->mountOnDemand && out->passwordProgram.empty())
   {
     cerr << 
       // xgroup(usage)
@@ -519,7 +523,6 @@ int main(int argc, char *argv[])
   for(int i=0; i<MaxFuseArgs; ++i)
     encfsArgs->fuseArgv[i] = NULL; // libfuse expects null args..
 
-  // set the raw file io factory here
   // TODO: is this better down earlier in this method
   // or in EncFS_Args
   encfsArgs->opts->fs_io = std::make_shared<PosixFsIO>();
@@ -529,6 +532,11 @@ int main(int argc, char *argv[])
     usage(argv[0]);
     return EXIT_FAILURE;
   }
+
+  encfsArgs->opts->passwordReader =
+    std::make_shared<EncfsPasswordReader>( encfsArgs->useStdin,
+                                           encfsArgs->passwordProgram,
+                                           encfsArgs->opts->rootDir );
 
   if(encfsArgs->isVerbose)
     FLAGS_minloglevel = 0;

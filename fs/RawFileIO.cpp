@@ -179,15 +179,31 @@ int RawFileIO::open(int flags)
   return result;
 }
 
-int RawFileIO::getAttr( struct stat *stbuf ) const
+int RawFileIO::getAttr( FsFileAttrs &stbuf ) const
 {
-  int res = lstat( name.c_str(), stbuf );
-  int eno = errno;
+  struct stat st;
+  memset( &st, 0, sizeof( struct stat ));
+  /* TODO: this should use fstat() */
+  int res = lstat( name.c_str(), &st );
 
-  LOG_IF(INFO, res < 0) << "getAttr error on " << name
-    << ": " << strerror( eno );
+  if(res < 0)
+  {
+    int eno = errno;
+    LOG_IF(INFO, res < 0) << "getAttr error on " << name
+                          << ": " << strerror( eno );
+    return -eno;
+  }
+  else {
+    stbuf.type = (S_ISDIR(st.st_mode) ? FsFileType::DIRECTORY :
+                  S_ISREG(st.st_mode) ? FsFileType::REGULAR :
+                  FsFileType::UNKNOWN);
+    assert( st.st_mtime >= FS_TIME_MIN );
+    assert( st.st_mtime <= FS_TIME_MAX );
+    stbuf.mtime = (fs_time_t) st.st_mtime;
+    stbuf.size = (fs_off_t) st.st_size;
 
-  return ( res < 0 ) ? -eno : 0;
+    return 0;
+  }
 }
 
 void RawFileIO::setFileName( const char *fileName )
@@ -200,7 +216,7 @@ const char *RawFileIO::getFileName() const
   return name.c_str();
 }
 
-off_t RawFileIO::getSize() const
+fs_off_t RawFileIO::getSize() const
 {
   if(!knownSize)
   {
@@ -246,8 +262,8 @@ bool RawFileIO::write( const IORequest &req )
 
   int retrys = 10;
   void *buf = req.data;
-  ssize_t bytes = req.dataLen;
-  off_t offset = req.offset;
+  size_t bytes = req.dataLen;
+  fs_off_t offset = req.offset;
 
   while( bytes && retrys > 0 )
   {
@@ -261,6 +277,7 @@ bool RawFileIO::write( const IORequest &req )
       return false;
     }
 
+    assert( bytes >= writeSize );
     bytes -= writeSize;
     offset += writeSize;
     buf = (void*)((char*)buf + writeSize);
@@ -286,7 +303,7 @@ bool RawFileIO::write( const IORequest &req )
   }
 }
 
-int RawFileIO::truncate( off_t size )
+int RawFileIO::truncate( fs_off_t size )
 {
   int res;
 

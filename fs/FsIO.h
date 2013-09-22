@@ -32,35 +32,10 @@
 
 #include "base/optional.h"
 #include "base/shared_ptr.h"
+#include "fs/fstypes.h"
 #include "fs/FileIO.h"
 
 namespace encfs {
-
-typedef uintptr_t fs_dir_handle_t;
-typedef intmax_t fs_time_t;
-typedef uintmax_t fs_posix_mode_t;
-typedef uintmax_t fs_posix_uid_t;
-typedef uintmax_t fs_posix_gid_t;
-typedef uintmax_t fs_posix_ino_t;
-
-enum {
-  FS_TIME_MIN=INTMAX_MIN,
-  FS_TIME_MAX=INTMAX_MAX,
-};
-
-enum class FsFileType {
-  UNKNOWN,
-  DIRECTORY,
-  REGULAR,
-};
-
-enum class FsErrorCondition {
-  NONE,
-  ACCESS,
-  IO,
-  BUSY,
-  GENERIC,
-};
 
 class Path;
 
@@ -85,13 +60,13 @@ public:
     std::string name;
     opt::optional<FsFileType> type;
 
-    FsDirEnt(std::string && name_,
-              opt::optional<FsFileType> && type_)
+    FsDirEnt(std::string name_,
+              opt::optional<FsFileType> type_)
     : name( std::move( name_ ) )
     , type( std::move( type_ ) )
     {}
 
-    FsDirEnt(std::string && name_)
+    explicit FsDirEnt(std::string name_)
     : FsDirEnt( std::move( name_ ), opt::nullopt )
     {}
 };
@@ -112,9 +87,11 @@ private:
 public:
     template<class T,
       typename std::enable_if<std::is_convertible<T *, PathPoly *>::value, int>::type = 0>
-    Path(const shared_ptr<T> &from)
-      : _impl( from )
-    {}
+    Path(shared_ptr<T> from)
+      : _impl( std::move( from ) )
+    {
+      assert(_impl);
+    }
 
     operator const std::string & () const
     {
@@ -126,7 +103,7 @@ public:
       return _impl->c_str();
     }
 
-    Path join(const std::string & path) const
+    Path join(const std::string &path) const
     {
       return _impl->join( path );
     }
@@ -152,48 +129,54 @@ public:
     }
 };
 
-/* wraps a polymorphic DirectoryIO pointer */
-class Directory
+template<class T>
+class _UniqueWrapper
 {
-private:
-    std::unique_ptr<DirectoryIO> _impl;
+protected:
+    typedef T element_type;
+    std::unique_ptr<T> _impl;
 
 public:
-    template<class T,
-      typename std::enable_if<std::is_convertible<T *, DirectoryIO *>::value, int>::type = 0>
-    Directory(std::unique_ptr<T> && from)
-      : _impl(std::move( from ) )
-    {}
-
-    Directory(Directory && d) = default;
-    Directory &operator=(Directory && d) = default;
-
-    opt::optional<FsDirEnt> readdir()
+    _UniqueWrapper(std::unique_ptr<T> from)
+    : _impl( std::move( from ) )
     {
-      return _impl->readdir();
+      assert( _impl );
     }
 
-    operator std::unique_ptr<DirectoryIO> ()
+    _UniqueWrapper(_UniqueWrapper && d) = default;
+    _UniqueWrapper &operator=(_UniqueWrapper && d) = default;
+
+    std::unique_ptr<T> take_ptr()
     {
       return std::move( _impl );
     }
 };
 
-/* wraps a polymorphic FileIO pointer */
-class File
+/* wraps a polymorphic DirectoryIO pointer */
+class Directory : public _UniqueWrapper<DirectoryIO>
 {
-private:
-    std::unique_ptr<FileIO> _impl;
-
 public:
-    template<class T,
-      typename std::enable_if<std::is_convertible<T *, FileIO *>::value, int>::type = 0>
-    File(std::unique_ptr<T> && from)
-    : _impl( std::move( from ) )
+    template<class U,
+      typename std::enable_if<std::is_convertible<U *, element_type *>::value, int>::type = 0>
+    Directory(std::unique_ptr<U> from)
+    : _UniqueWrapper( std::move( from ) )
     {}
 
-    File(File && d) = default;
-    File &operator=(File && d) = default;
+    opt::optional<FsDirEnt> readdir()
+    {
+      return _impl->readdir();
+    }
+};
+
+/* wraps a polymorphic FileIO pointer */
+class File : public _UniqueWrapper<FileIO>
+{
+public:
+    template<class U,
+      typename std::enable_if<std::is_convertible<U *, element_type *>::value, int>::type = 0>
+    File(std::unique_ptr<U> from)
+    : _UniqueWrapper( std::move( from ) )
+    {}
 
     Interface interface() const
     {
@@ -225,11 +208,22 @@ public:
     }
 
     // get filesystem attributes for a file
-    int getAttr( struct stat *stbuf ) const
+    int getAttr( FsFileAttrs &stbuf ) const
     {
       return _impl->getAttr( stbuf );
     }
-    off_t getSize( ) const
+
+    FsFileAttrs get_attrs() const
+    {
+      FsFileAttrs attrs;
+      auto ret = getAttr(attrs);
+      if (ret) {
+        throw std::system_error( -ret, errno_category() );
+      }
+      return std::move( attrs );
+    }
+
+    fs_off_t getSize() const
     {
       return _impl->getSize();
     }
@@ -238,6 +232,12 @@ public:
     {
       return _impl->read( req );
     }
+
+    ssize_t read(fs_off_t offset, byte *data, size_t dataLen) const
+    {
+      return read( IORequest( offset, data, dataLen ) );
+    }
+
     bool write( const IORequest &req )
     {
       return _impl->write( req );
@@ -251,11 +251,6 @@ public:
     bool isWritable() const
     {
       return _impl->isWritable();
-    }
-
-    operator std::unique_ptr<FileIO> ()
-    {
-      return std::move( _impl );
     }
 };
 
@@ -283,10 +278,9 @@ public:
     virtual void unlink(const Path &path) =0;
     virtual void rmdir(const Path &path) =0;
 
-    virtual fs_time_t get_mtime(const Path &path) =0;
     virtual void set_mtime(const Path &path, fs_time_t mtime) =0;
 
-    virtual FsFileType get_type(const Path &path) =0;
+    virtual FsFileAttrs get_attrs(const Path &path) =0;
 };
 
 }  // namespace encfs

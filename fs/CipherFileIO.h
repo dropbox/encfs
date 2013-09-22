@@ -43,40 +43,40 @@ public:
                   const FSConfigPtr &cfg);
     virtual ~CipherFileIO();
 
-    virtual Interface interface() const;
+    virtual Interface interface() const override;
 
-    virtual void setFileName( const char *fileName );
-    virtual const char *getFileName() const;
-    virtual bool setIV( uint64_t iv );
+    virtual void setFileName( const char *fileName ) override;
+    virtual const char *getFileName() const override;
+    virtual bool setIV( uint64_t iv ) override;
 
-    virtual int open( int flags );
+    virtual int open( int flags ) override;
 
-    virtual int getAttr( struct stat *stbuf ) const;
-    virtual off_t getSize() const;
+    virtual int getAttr( FsFileAttrs &stbuf ) const override;
+    virtual fs_off_t getSize() const override;
 
     // NOTE: if truncate is used to extend the file, the extended plaintext is
     // not 0.  The extended ciphertext may be 0, resulting in non-zero
     // plaintext.
-    virtual int truncate( off_t size );
+    virtual int truncate( fs_off_t size ) override;
 
-    virtual bool isWritable() const;
+    virtual bool isWritable() const override;
 
 private:
-    virtual ssize_t readOneBlock( const IORequest &req ) const;
-    virtual bool writeOneBlock( const IORequest &req );
+    virtual ssize_t readOneBlock( const IORequest &req ) const override;
+    virtual bool writeOneBlock( const IORequest &req ) override;
 
     void initHeader();
     bool writeHeader();
-    bool blockRead( unsigned char *buf, int size, 
+    bool blockRead( byte *buf, size_t size, 
 	             uint64_t iv64 ) const;
-    bool streamRead( unsigned char *buf, int size, 
+    bool streamRead( byte *buf, size_t size, 
 	             uint64_t iv64 ) const;
-    bool blockWrite( unsigned char *buf, int size, 
+    bool blockWrite( byte *buf, size_t size, 
 	             uint64_t iv64 ) const;
-    bool streamWrite( unsigned char *buf, int size, 
+    bool streamWrite( byte *buf, size_t size, 
 	             uint64_t iv64 ) const;
 
-    off_t adjustedSize(off_t size) const;
+    fs_off_t adjustedSize(fs_off_t size) const;
 
     shared_ptr<FileIO> base;
 

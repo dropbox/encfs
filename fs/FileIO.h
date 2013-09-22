@@ -21,30 +21,36 @@
 #ifndef _FileIO_incl_
 #define _FileIO_incl_
 
-#include "base/Interface.h"
-#include "fs/encfs.h"
-
 #include <inttypes.h>
+
+#include <system_error>
+
+#include "base/Interface.h"
+#include "base/types.h"
+#include "fs/encfs.h"
+#include "fs/fstypes.h"
 
 namespace encfs {
 
+const std::error_category &errno_category() noexcept;
+
 struct IORequest
 {
-    off_t offset;
+    fs_off_t offset;
 
     // amount of bytes to read/write.
-    int dataLen;
-    unsigned char *data;
+    byte *data;
+    size_t dataLen;
 
-    IORequest();
+    IORequest(fs_off_t offset_, byte *data_, size_t len_)
+    : offset(offset_)
+    , data(data_)
+    , dataLen(len_)
+    {}
+
+    IORequest() : IORequest(0, nullptr, 0)
+    {}
 };
-
-inline IORequest::IORequest()
-    : offset(0)
-    , dataLen(0)
-    , data(0)
-{
-}
 
 class FileIO
 {
@@ -66,15 +72,15 @@ public:
     // open file for specified mode.  There is no corresponding close, so a
     // file is open until the FileIO interface is destroyed.
     virtual int open( int flags ) =0;
-   
+
     // get filesystem attributes for a file
-    virtual int getAttr( struct stat *stbuf ) const =0;
-    virtual off_t getSize( ) const =0;
+    virtual int getAttr( FsFileAttrs & ) const =0;
+    virtual fs_off_t getSize() const =0;
 
     virtual ssize_t read( const IORequest &req ) const =0;
     virtual bool write( const IORequest &req ) =0;
 
-    virtual int truncate( off_t size ) =0;
+    virtual int truncate( fs_off_t size ) =0;
 
     virtual bool isWritable() const =0;
 };

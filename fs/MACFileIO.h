@@ -39,22 +39,22 @@ public:
     MACFileIO();
     virtual ~MACFileIO();
 
-    virtual Interface interface() const;
+    virtual Interface interface() const override;
 
-    virtual void setFileName( const char *fileName );
-    virtual const char *getFileName() const;
-    virtual bool setIV( uint64_t iv );
+    virtual void setFileName( const char *fileName ) override;
+    virtual const char *getFileName() const override;
+    virtual bool setIV( uint64_t iv ) override;
 
-    virtual int open( int flags );
-    virtual int getAttr( struct stat *stbuf ) const;
-    virtual off_t getSize() const;
+    virtual int open( int flags ) override;
+    virtual int getAttr( FsFileAttrs &stbuf ) const override;
+    virtual fs_off_t getSize() const override;
 
-    virtual int truncate( off_t size );
+    virtual int truncate( fs_off_t size ) override;
 
-    virtual bool isWritable() const;
+    virtual bool isWritable() const override;
 
 private:
-    virtual ssize_t readOneBlock( const IORequest &req ) const;
+    virtual ssize_t readOneBlock( const IORequest &req ) const override;
     virtual bool writeOneBlock( const IORequest &req );
 
     shared_ptr<FileIO> base;

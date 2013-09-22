@@ -34,22 +34,22 @@ public:
     RawFileIO( const std::string &fileName );
     virtual ~RawFileIO();
 
-    virtual Interface interface() const;
+    virtual Interface interface() const override;
 
-    virtual void setFileName( const char *fileName );
-    virtual const char *getFileName() const;
+    virtual void setFileName( const char *fileName ) override;
+    virtual const char *getFileName() const override;
 
-    virtual int open( int flags );
+    virtual int open( int flags ) override;
     
-    virtual int getAttr( struct stat *stbuf ) const;
-    virtual off_t getSize() const;
+    virtual int getAttr( FsFileAttrs &stbuf ) const override;
+    virtual fs_off_t getSize() const override;
 
-    virtual ssize_t read( const IORequest & req ) const;
-    virtual bool write( const IORequest &req );
+    virtual ssize_t read( const IORequest & req ) const override;
+    virtual bool write( const IORequest &req ) override;
 
-    virtual int truncate( off_t size );
+    virtual int truncate( fs_off_t size ) override;
 
-    virtual bool isWritable() const;
+    virtual bool isWritable() const override;
 protected:
 
     std::string name;

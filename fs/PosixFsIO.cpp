@@ -46,45 +46,13 @@
 
 namespace encfs {
 
-// create a custom posix category that returns the right
-// error condition in default_error_condition
-// (using generic_category to match with errc, not every implementation of
-//  system_category does: (required by the C++11 standard, 19.5.1.5p4)
-//  system_category().default_error_condition(errno).category == generic_category() )
-class posix_error_category : public std::error_category
-{
-public:
-  posix_error_category() {}
-
-  std::error_condition
-  default_error_condition(int __i) const noexcept
-  { return std::make_error_condition( static_cast<std::errc>( __i ) ); }
-
-  virtual const char *name() const noexcept { return "posix_error"; }
-  virtual std::string message( int cond ) const { return strerror( cond ); }
-};
-
-const std::error_category &posix_category() noexcept
-{
-  static const posix_error_category posix_category_instance;
-  return posix_category_instance;
-}
-
 class PosixPath : public PathPoly
 {
 private:
     std::string _path;
 
 public:
-    PosixPath(const char *p)
-    : _path( p )
-    {}
-
-    PosixPath(const std::string & str)
-    : _path( str )
-    {}
-
-    PosixPath(std::string && path)
+    PosixPath(std::string path)
     : _path( std::move( path ) )
     {}
 
@@ -143,7 +111,7 @@ public:
 
 static void current_fs_error(int thiserror = -1) {
   if (thiserror < 0) thiserror = errno;
-  throw std::system_error( thiserror, posix_category() );
+  throw std::system_error( thiserror, errno_category() );
 }
 
 class PosixDirectoryIO final : public DirectoryIO
@@ -199,8 +167,8 @@ opt::optional<FsDirEnt> PosixDirectoryIO::readdir()
   return opt::nullopt;
 }
 
-static bool endswith(const std::string & haystack,
-                     const std::string & needle) {
+static bool endswith(const std::string &haystack,
+                     const std::string &needle) {
   if (needle.length() > haystack.length()) {
     return false;
   }
@@ -213,7 +181,7 @@ Path PosixFsIO::pathFromString(const std::string &path)
 {
   /* TODO: throw exception if path is not a UTF-8 posix path */
   if (path[0] != '/') {
-    throw std::runtime_error("Bad path");
+    throw std::runtime_error("Not absolute path");
   }
 
   std::string newpath = path;
@@ -221,7 +189,7 @@ Path PosixFsIO::pathFromString(const std::string &path)
     newpath = path.substr(0, path.length() - 1);
   }
 
-  return std::make_shared<PosixPath>(newpath);
+  return std::make_shared<PosixPath>( std::move( newpath ) );
 }
 
 Directory PosixFsIO::opendir(const Path &path)
@@ -301,32 +269,21 @@ void PosixFsIO::rmdir(const Path &path)
   if(res < 0) current_fs_error();
 }
 
-FsFileType PosixFsIO::get_type(const Path &path)
+FsFileAttrs PosixFsIO::get_attrs(const Path &path)
 {
   struct stat st;
   const int res_stat = ::stat( path.c_str(), &st );
   if (res_stat < 0) current_fs_error();
 
-  if (S_ISDIR(st.st_mode)) {
-    return FsFileType::DIRECTORY;
-  }
-  else if (S_ISREG(st.st_mode)) {
-    return FsFileType::REGULAR;
-  }
-  else {
-    return FsFileType::UNKNOWN;
-  }
-}
-
-fs_time_t PosixFsIO::get_mtime(const Path &path)
-{
-  struct stat st;
-  const int res_stat = ::stat( path.c_str(), &st );
-  if (res_stat < 0) current_fs_error();
-
+  const FsFileType type = (S_ISDIR(st.st_mode) ? FsFileType::DIRECTORY :
+                           S_ISREG(st.st_mode) ? FsFileType::REGULAR :
+                           FsFileType::UNKNOWN);
   assert( st.st_mtime >= FS_TIME_MIN );
   assert( st.st_mtime <= FS_TIME_MAX );
-  return (fs_time_t) st.st_mtime;
+  const fs_time_t mtime = (fs_time_t) st.st_mtime;
+  const fs_off_t size = (fs_off_t) st.st_size;
+
+  return { .type = type, .mtime = mtime, .size = size };
 }
 
 void PosixFsIO::set_mtime(const Path &path, fs_time_t mtime)

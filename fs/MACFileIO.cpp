@@ -134,28 +134,28 @@ static off_t locWithoutHeader( off_t offset, int blockSize, int headerSize )
   return offset - blockNum * headerSize;
 }
 
-int MACFileIO::getAttr( struct stat *stbuf ) const
+int MACFileIO::getAttr( FsFileAttrs &stbuf ) const
 {
   int res = base->getAttr( stbuf );
 
-  if(res == 0 && S_ISREG(stbuf->st_mode))
+  if((res == 0) && stbuf.type == FsFileType::REGULAR)
   {
     // have to adjust size field..
     int headerSize = macBytes + randBytes;
     int bs = blockSize() + headerSize;
-    stbuf->st_size = locWithoutHeader( stbuf->st_size, bs, headerSize );
+    stbuf.size = locWithoutHeader( stbuf.size, bs, headerSize );
   }
 
   return res;
 }
 
-off_t MACFileIO::getSize() const
+fs_off_t MACFileIO::getSize() const
 {
   // adjust the size to hide the header overhead we tack on..
   int headerSize = macBytes + randBytes;
   int bs = blockSize() + headerSize;
 
-  off_t size = base->getSize();
+  fs_off_t size = base->getSize();
   if(size > 0)
     size = locWithoutHeader( size, bs, headerSize );
 
@@ -275,7 +275,7 @@ bool MACFileIO::writeOneBlock( const IORequest &req )
   return ok;
 }
 
-int MACFileIO::truncate( off_t size )
+int MACFileIO::truncate( fs_off_t size )
 {
   int headerSize = macBytes + randBytes;
   int bs = blockSize() + headerSize;

@@ -18,27 +18,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <map>
+#ifndef _PasswordReader_incl_
+#define _PasswordReader_incl_
 
-#include "fs/FsIO.h"
+#include <cstddef>
 
-using std::map;
+#include "cipher/MemoryPool.h"
 
 namespace encfs {
 
-std::ostream& operator << (std::ostream& os, const Path& s)
+class PasswordReader
 {
-  os << "Path(\"" << (const std::string &)s << "\")";
-  return os;
+public:
+  virtual ~PasswordReader() =0;
+  virtual SecureMem *readPassword(size_t maxLen, bool newPass) =0;
+};
+
 }
 
-PathPoly::~PathPoly()
-{}
-
-DirectoryIO::~DirectoryIO()
-{}
-
-FsIO::~FsIO()
-{}
-
-}  // namespace encfs
+#endif

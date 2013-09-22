@@ -73,9 +73,9 @@ FileNode::FileNode(DirNode *parent_, const FSConfigPtr &cfg,
   this->fsConfig = cfg;
 
   // chain RawFileIO & CipherFileIO
-  std::unique_ptr<FileIO> rawfile =
+  auto rawfile =
     cfg->opts->fs_io->openfile( cfg->opts->fs_io->pathFromString( _cname ) );
-  io = shared_ptr<FileIO>( new CipherFileIO( std::move( rawfile ), fsConfig ));
+  io = shared_ptr<FileIO>( new CipherFileIO( rawfile.take_ptr(), fsConfig ));
 
   if(cfg->config->block_mac_bytes() || cfg->config->block_mac_rand_bytes())
     io = shared_ptr<FileIO>(new MACFileIO(io, fsConfig));
@@ -107,8 +107,8 @@ string FileNode::plaintextParent() const
 
 static bool setIV(const shared_ptr<FileIO> &io, uint64_t iv)
 {
-  struct stat stbuf;
-  if((io->getAttr(&stbuf) < 0) || S_ISREG(stbuf.st_mode))
+  FsFileAttrs attrs;
+  if((io->getAttr(attrs) < 0) || attrs.type == FsFileType::REGULAR)
     return io->setIV( iv );
   else
     return true;
@@ -219,23 +219,21 @@ int FileNode::open(int flags) const
   return res;
 }
 
-int FileNode::getAttr(struct stat *stbuf) const
+int FileNode::getAttr(FsFileAttrs &stbuf) const
 {
   Lock _lock( mutex );
 
-  int res = io->getAttr( stbuf );
-  return res;
+  return io->getAttr( stbuf );
 }
 
-off_t FileNode::getSize() const
+fs_off_t FileNode::getSize() const
 {
   Lock _lock( mutex );
 
-  int res = io->getSize();
-  return res;
+  return io->getSize();;
 }
 
-ssize_t FileNode::read( off_t offset, unsigned char *data, ssize_t size ) const
+ssize_t FileNode::read( fs_off_t offset, byte *data, size_t size ) const
 {
   IORequest req;
   req.offset = offset;
@@ -247,7 +245,7 @@ ssize_t FileNode::read( off_t offset, unsigned char *data, ssize_t size ) const
   return io->read( req );
 }
 
-bool FileNode::write(off_t offset, unsigned char *data, ssize_t size)
+bool FileNode::write(fs_off_t offset, byte *data, size_t size)
 {
   VLOG(1) << "FileNode::write offset " << offset
     << ", data size " << size;

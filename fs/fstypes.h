@@ -18,27 +18,54 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <map>
+#ifndef _fstypes_incl_
+#define _fstypes_incl_
 
-#include "fs/FsIO.h"
-
-using std::map;
+#include <base/optional.h>
 
 namespace encfs {
 
-std::ostream& operator << (std::ostream& os, const Path& s)
+typedef uintptr_t fs_dir_handle_t;
+typedef intmax_t fs_time_t;
+typedef intmax_t fs_off_t;
+typedef uintmax_t fs_posix_mode_t;
+typedef uintmax_t fs_posix_uid_t;
+typedef uintmax_t fs_posix_gid_t;
+typedef uintmax_t fs_posix_ino_t;
+
+enum
 {
-  os << "Path(\"" << (const std::string &)s << "\")";
-  return os;
-}
+  FS_TIME_MIN=INTMAX_MIN,
+  FS_TIME_MAX=INTMAX_MAX,
+};
 
-PathPoly::~PathPoly()
-{}
+enum class FsFileType
+{
+  UNKNOWN,
+  DIRECTORY,
+  REGULAR,
+  POSIX_LINK,
+};
 
-DirectoryIO::~DirectoryIO()
-{}
+enum class FsErrorCondition
+{
+  NONE,
+  ACCESS,
+  IO,
+  BUSY,
+  GENERIC,
+};
 
-FsIO::~FsIO()
-{}
+class FsFileAttrs
+{
+public:
+  FsFileType type;
+  fs_time_t mtime;
+  fs_off_t size;
+  opt::optional<fs_posix_gid_t> posix_gid;
+  opt::optional<fs_posix_mode_t> posix_mode;
+};
 
 }  // namespace encfs
+
+#endif
