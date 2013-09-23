@@ -37,6 +37,19 @@
 
 namespace encfs {
 
+class FsDirEnt
+{
+public:
+    std::string name;
+    opt::optional<FsFileType> type;
+
+    explicit FsDirEnt(std::string name_,
+                      opt::optional<FsFileType> type_ = opt::nullopt)
+    : name( std::move( name_ ) )
+    , type( std::move( type_ ) )
+    {}
+};
+
 class Path;
 
 class PathPoly
@@ -50,25 +63,6 @@ public:
     virtual std::string basename() const =0;
     virtual Path dirname() const =0;
     virtual bool operator==(const shared_ptr<PathPoly> &p) const =0;
-};
-
-std::ostream& operator << (std::ostream& os, const Path& s);
-
-class FsDirEnt
-{
-public:
-    std::string name;
-    opt::optional<FsFileType> type;
-
-    FsDirEnt(std::string name_,
-              opt::optional<FsFileType> type_)
-    : name( std::move( name_ ) )
-    , type( std::move( type_ ) )
-    {}
-
-    explicit FsDirEnt(std::string name_)
-    : FsDirEnt( std::move( name_ ), opt::nullopt )
-    {}
 };
 
 class DirectoryIO
@@ -129,6 +123,8 @@ public:
     }
 };
 
+std::ostream& operator << (std::ostream& os, const Path& s);
+
 template<class T>
 class _UniqueWrapper
 {
@@ -142,9 +138,6 @@ public:
     {
       assert( _impl );
     }
-
-    _UniqueWrapper(_UniqueWrapper && d) = default;
-    _UniqueWrapper &operator=(_UniqueWrapper && d) = default;
 
     std::unique_ptr<T> take_ptr()
     {
