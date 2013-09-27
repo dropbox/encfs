@@ -21,14 +21,17 @@
 // defines needed for RedHat 7.3...
 #define _BSD_SOURCE // pick up setenv on RH7.3
 
+#include "base/config.h"
+
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 
 #include <string>
 
 #include <glog/logging.h>
 
-#include "base/Config.h"
 #include "base/i18n.h"
 
 #include "fs/ProgramPasswordReader.h"

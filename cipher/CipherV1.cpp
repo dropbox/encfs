@@ -56,6 +56,7 @@
 using std::list;
 using std::string;
 using std::vector;
+using std::shared_ptr;
 
 namespace encfs {
 
@@ -270,7 +271,7 @@ bool CipherV1::initCiphers(const Interface &iface, const Interface &realIface,
   Registry<BlockCipher> blockCipherRegistry = BlockCipher::GetRegistry();
   Registry<StreamCipher> streamCipherRegistry = StreamCipher::GetRegistry();
 
-  int defaultKeyLength;
+  int defaultKeyLength = 0;
   Range keyRange;
 
   if (implements(AESInterface, iface)) {
@@ -290,11 +291,12 @@ bool CipherV1::initCiphers(const Interface &iface, const Interface &realIface,
     _blockCipher.reset( blockCipherRegistry.CreateForMatch("NullCipher") );
     _streamCipher.reset( streamCipherRegistry.CreateForMatch("NullCipher") );
   }
-
-  if (!_blockCipher || !_streamCipher) {
+  else {
     LOG(INFO) << "Unsupported cipher " << iface.name();
     return false;
   }
+
+  assert( _blockCipher && _streamCipher );
 
   if (keyLength <= 0)
     _keySize = defaultKeyLength / 8;

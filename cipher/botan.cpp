@@ -19,9 +19,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <memory>
+
 #include "cipher/botan.h"
 #include "base/config.h"
-#include "base/shared_ptr.h"
 
 #include <glog/logging.h>
 #include <botan/botan.h>
@@ -44,6 +45,7 @@
 
 using namespace Botan;
 using std::string;
+using std::shared_ptr;
 
 namespace encfs {
 namespace botan {

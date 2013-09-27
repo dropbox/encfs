@@ -21,14 +21,15 @@
 #ifndef _XmlReader_incl_
 #define _XmlReader_incl_
 
+#include <memory>
 #include <string>
-#include "base/shared_ptr.h"
+
 #include "base/types.h"
 
 namespace encfs {
 
 class XmlValue;
-typedef shared_ptr<XmlValue> XmlValuePtr;
+typedef std::shared_ptr<XmlValue> XmlValuePtr;
 
 class Interface;
 
@@ -79,7 +80,7 @@ public:
 
 private:
   struct XmlReaderData;
-  shared_ptr<XmlReaderData> pd;
+  std::shared_ptr<XmlReaderData> pd;
 };
 
 }  // namespace encfs

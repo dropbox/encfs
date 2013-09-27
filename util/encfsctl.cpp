@@ -16,7 +16,19 @@
  */
 
 
-#include "fs/encfs.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include <cstdio>
+
+#include <iostream>
+#include <list>
+#include <memory>
+#include <string>
+
+#include <getopt.h>
+#include <glog/logging.h>
 
 #include "base/autosprintf.h"
 #include "base/config.h"
@@ -28,6 +40,7 @@
 #include "cipher/MAC.h"
 #include "cipher/StreamCipher.h"
 
+#include "fs/encfs.h"
 #include "fs/FileUtils.h"
 #include "fs/Context.h"
 #include "fs/FileNode.h"
@@ -35,18 +48,6 @@
 #include "fs/PosixFsIO.h"
 #include "fs/EncfsPasswordReader.h"
 
-#include <glog/logging.h>
-
-#include <iostream>
-#include <string>
-#include <cstdio>
-#include <list>
-#include <memory>
-
-#include <getopt.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 
 using namespace encfs;
 using gnu::autosprintf;
@@ -54,6 +55,7 @@ using std::cerr;
 using std::cin;
 using std::cout;
 using std::endl;
+using std::shared_ptr;
 using std::string;
 using std::vector;
 

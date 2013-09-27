@@ -41,8 +41,11 @@
 #include <vector>
 
 #include "base/optional.h"
+
 #include "fs/PosixFsIO.h"
 #include "fs/RawFileIO.h"
+
+using std::shared_ptr;
 
 namespace encfs {
 

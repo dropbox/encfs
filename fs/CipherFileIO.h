@@ -21,11 +21,11 @@
 #ifndef _CipherFileIO_incl_
 #define _CipherFileIO_incl_
 
+#include <cstdint>
+
 #include "cipher/CipherKey.h"
 #include "fs/BlockFileIO.h"
 #include "fs/FileUtils.h"
-
-#include <inttypes.h>
 
 namespace encfs {
 
@@ -39,11 +39,11 @@ class CipherV1;
 class CipherFileIO : public BlockFileIO
 {
 public:
-    CipherFileIO( const shared_ptr<FileIO> &base,
+    CipherFileIO( const std::shared_ptr<FileIO> &base,
                   const FSConfigPtr &cfg);
 
     bool setIV( uint64_t iv );
-    void setBase( const shared_ptr<FileIO> &base );
+    void setBase( const std::shared_ptr<FileIO> &base );
 
     virtual ~CipherFileIO();
 
@@ -78,7 +78,7 @@ private:
 
     fs_off_t adjustedSize(fs_off_t size) const;
 
-    shared_ptr<FileIO> base;
+    std::shared_ptr<FileIO> base;
 
     FSConfigPtr fsConfig;
 
@@ -89,7 +89,7 @@ private:
     uint64_t externalIV;
     uint64_t fileIV;
 
-    shared_ptr<CipherV1> cipher;
+    std::shared_ptr<CipherV1> cipher;
 };
 
 }  // namespace encfs

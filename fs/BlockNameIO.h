@@ -21,9 +21,9 @@
 #ifndef _BlockNameIO_incl_
 #define _BlockNameIO_incl_
 
-#include "fs/NameIO.h"
-
 #include <memory>
+
+#include "fs/NameIO.h"
 
 namespace encfs {
 
@@ -40,7 +40,7 @@ class BlockNameIO : public NameIO
   static Interface CurrentInterface(bool caseSensitive = false);
 
   BlockNameIO(const Interface &iface,
-              const shared_ptr<CipherV1> &cipher, 
+              const std::shared_ptr<CipherV1> &cipher, 
               bool caseSensitiveEncoding = false );
   virtual ~BlockNameIO();
 
@@ -60,7 +60,7 @@ class BlockNameIO : public NameIO
  private:
   int _interface;
   int _bs;
-  shared_ptr<CipherV1> _cipher;
+  std::shared_ptr<CipherV1> _cipher;
   bool _caseSensitive;
 };
 

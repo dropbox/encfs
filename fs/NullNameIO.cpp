@@ -18,11 +18,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cstring>
+
 #include "base/base64.h"
 #include "cipher/CipherV1.h"
+
 #include "fs/NullNameIO.h"
 
-#include <cstring>
+using std::shared_ptr;
 
 namespace encfs {
 

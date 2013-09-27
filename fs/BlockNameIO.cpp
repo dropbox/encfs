@@ -18,15 +18,18 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "fs/BlockNameIO.h"
+#include <cstring>
+
+#include <glog/logging.h>
 
 #include "base/base64.h"
 #include "base/Error.h"
 #include "base/i18n.h"
 #include "cipher/CipherV1.h"
 
-#include <cstring>
-#include <glog/logging.h>
+#include "fs/BlockNameIO.h"
+
+using std::shared_ptr;
 
 namespace encfs {
 

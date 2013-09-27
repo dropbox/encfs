@@ -53,15 +53,15 @@ class DirNode;
 
 struct EncFS_Root
 {
-  shared_ptr<CipherV1> cipher;
+  std::shared_ptr<CipherV1> cipher;
   CipherKey volumeKey;
-  shared_ptr<DirNode> root;
+  std::shared_ptr<DirNode> root;
 
   EncFS_Root();
   ~EncFS_Root();
 };
 
-typedef shared_ptr<EncFS_Root> RootPtr;
+typedef std::shared_ptr<EncFS_Root> RootPtr;
 
 enum class ConfigMode
 {
@@ -88,8 +88,8 @@ struct EncFS_Opts
 
   ConfigMode configMode;
 
-  shared_ptr<FsIO> fs_io;
-  shared_ptr<PasswordReader> passwordReader;
+  std::shared_ptr<FsIO> fs_io;
+  std::shared_ptr<PasswordReader> passwordReader;
 
   EncFS_Opts()
   : createIfNotFound(true)
@@ -108,33 +108,33 @@ struct EncFS_Opts
 /*
     Read existing config file.  Looks for any supported configuration version.
  */
-ConfigType readConfig( const shared_ptr<FsIO> &fs_io, const std::string &rootDir, EncfsConfig &config ); 
+ConfigType readConfig( const std::shared_ptr<FsIO> &fs_io, const std::string &rootDir, EncfsConfig &config ); 
 
 /*
     Save the configuration.  Saves back as the same configuration type as was
     read from.
  */
-bool saveConfig( const shared_ptr<FsIO> &fs_io, const std::string &rootdir, const EncfsConfig &config );
+bool saveConfig( const std::shared_ptr<FsIO> &fs_io, const std::string &rootdir, const EncfsConfig &config );
 
 class EncFS_Context;
 
-RootPtr initFS( EncFS_Context *ctx, const shared_ptr<EncFS_Opts> &opts );
+RootPtr initFS( EncFS_Context *ctx, const std::shared_ptr<EncFS_Opts> &opts );
 
 RootPtr createConfig( EncFS_Context *ctx, 
-    const shared_ptr<EncFS_Opts> &opts );
+    const std::shared_ptr<EncFS_Opts> &opts );
 
 void showFSInfo( const EncfsConfig &config );
 
-bool readV4Config( const shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config, 
+bool readV4Config( const std::shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config, 
     struct ConfigInfo *);
 
-bool readV5Config( const shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config, 
+bool readV5Config( const std::shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config, 
     struct ConfigInfo *);
 
-bool readV6Config( const shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config,
+bool readV6Config( const std::shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config,
     struct ConfigInfo *);
 
-bool readProtoConfig( const shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config,
+bool readProtoConfig( const std::shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config,
     struct ConfigInfo *);
 
 }  // namespace encfs

@@ -21,12 +21,12 @@
 #ifndef _FileIO_incl_
 #define _FileIO_incl_
 
-#include <inttypes.h>
-
+#include <memory>
 #include <system_error>
 
 #include "base/Interface.h"
 #include "base/types.h"
+
 #include "fs/encfs.h"
 #include "fs/fstypes.h"
 
@@ -104,7 +104,7 @@ int withExceptionCatcher(int defaultRes, F fn, Args... args)
 }
 
 template<typename R, typename... Args, typename std::enable_if<!std::is_void<R>::value, int>::type = 0>
-std::function<int(Args..., R *)> wrapWithExceptionCatcher(int defaultRes, std::function<R(Args...)> fn)
+std::function<int(R *, Args...)> wrapWithExceptionCatcher(int defaultRes, std::function<R(Args...)> fn)
 {
   return [=] (Args... args, R *res) {
     return withExceptionCatcher( defaultRes, fn, res, args... );
@@ -119,14 +119,13 @@ std::function<int(Args...)> wrapWithExceptionCatcher(int defaultRes, std::functi
   };
 }
 
-/*
 template<typename F, typename R, typename... Args>
-std::function<int(Args..., R *)> wrapWithExceptionCatcher(int defaultRes, F fn)
+std::function<int(R *, Args...)> wrapWithExceptionCatcher(int defaultRes, F fn)
 {
   return [=] (Args... args, R *res) {
     return withExceptionCatcher( defaultRes, fn, args..., res );
   };
-  }*/
+}
 
 struct IORequest
 {

@@ -21,13 +21,13 @@
 #ifndef _NameIO_incl_
 #define _NameIO_incl_
 
-#include <string>
-#include <list>
+#include <cstdint>
 
-#include <inttypes.h>
+#include <list>
+#include <memory>
+#include <string>
 
 #include "base/Interface.h"
-#include "base/shared_ptr.h"
 
 namespace encfs {
 
@@ -36,8 +36,8 @@ class CipherV1;
 class NameIO
 {
  public:
-  typedef shared_ptr<NameIO> (*Constructor)(const Interface &iface,
-                                            const shared_ptr<CipherV1> &cipher);
+  typedef std::shared_ptr<NameIO> (*Constructor)(const Interface &iface,
+                                            const std::shared_ptr<CipherV1> &cipher);
 
   struct Algorithm
   {
@@ -50,10 +50,10 @@ class NameIO
   typedef std::list<Algorithm> AlgorithmList;
   static AlgorithmList GetAlgorithmList( bool includeHidden = false );
 
-  static shared_ptr<NameIO> New(const Interface &iface,
-                                const shared_ptr<CipherV1> &cipher);
-  static shared_ptr<NameIO> New(const std::string &name,
-                                const shared_ptr<CipherV1> &cipher);
+  static std::shared_ptr<NameIO> New(const Interface &iface,
+                                const std::shared_ptr<CipherV1> &cipher);
+  static std::shared_ptr<NameIO> New(const std::string &name,
+                                const std::shared_ptr<CipherV1> &cipher);
 
   static bool Register( const char *name, const char *description,
                        const Interface &iface, Constructor constructor, 

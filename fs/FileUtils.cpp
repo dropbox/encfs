@@ -18,6 +18,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
+#include <iostream>
+#include <memory>
+#include <sstream>
+
+#include <glog/logging.h>
+
+#include <google/protobuf/text_format.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
+
 #include "fs/encfs.h"
 #include "fs/fsconfig.pb.h"
 
@@ -34,25 +48,12 @@
 #include "fs/BlockNameIO.h"
 #include "fs/Context.h"
 #include "fs/DirNode.h"
-#include "fs/FileUtils.h"
 #include "fs/FSConfig.h"
 #include "fs/NullNameIO.h"
 #include "fs/StreamNameIO.h"
 #include "fs/FsIO.h"
 
-#include <glog/logging.h>
-
-#include <cctype>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-
-#include <iostream>
-#include <memory>
-#include <sstream>
-
-#include <google/protobuf/text_format.h>
-#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
+#include "fs/FileUtils.h"
 
 using gnu::autosprintf;
 using std::cout;

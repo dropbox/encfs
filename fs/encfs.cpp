@@ -15,10 +15,8 @@
  * more details.
  */
 
-#include "fs/encfs.h"
+#include "base/config.h"
 
-#include <cstdio>
-#include <cstring>
 #include <unistd.h>
 #include <fcntl.h>
 #include <dirent.h>
@@ -37,9 +35,13 @@
 #include <sys/xattr.h>
 #endif
 
+#include <cstdio>
+#include <cstring>
+
 #include <functional>
-#include <string>
 #include <map>
+#include <memory>
+#include <string>
 
 #ifdef HAVE_TR1_TUPLE
 #include <tr1/tuple>
@@ -53,21 +55,24 @@ using std::make_tuple;
 using std::tuple;
 #endif
 
-#include "base/config.h"
-#include "base/shared_ptr.h"
+#include <glog/logging.h>
+
 #include "base/Mutex.h"
 #include "base/Error.h"
+
 #include "cipher/MemoryPool.h"
+
+#include "fs/Context.h"
 #include "fs/DirNode.h"
 #include "fs/FileUtils.h"
-#include "fs/Context.h"
 #include "fs/PosixFsIO.h"
 
-#include <glog/logging.h>
+#include "fs/encfs.h"
 
 using std::map;
 using std::string;
 using std::vector;
+using std::shared_ptr;
 
 namespace encfs {
 
@@ -147,9 +152,11 @@ std::function<int(const char *, Args..., R *)> defaultFsWrap(const char *request
                                                              const shared_ptr<T> &obj,
                                                              R (T::*fn)(const Path &, Args...))
 {
-  auto c_mknod = fsMethodToCStyleFn( obj, fn );
-  return [=] (const char *path, Args... args, R *ret) {
-    return withCipherPath(requestor, c_mknod, path, args..., ret);
+  return [=] (const char *path, R *ret, Args... args) {
+    auto c_mknod_ = fsMethodToCStyleFn( obj, fn );
+    // curry in the ret argument
+    auto c_mknod = [=] (const char *path, Args... args) { return c_mknod_( ret, path, args... ); };
+    return withCipherPath( requestor, c_mknod, path, args... );
   };
 }
 
@@ -893,8 +900,8 @@ int _do_getxattr(const string &cyName,
 int encfs_getxattr( const char *path, const char *name,
                     char *value, size_t size )
 {
-  return withCipherPath( "getxattr", path, _do_getxattr,
-                         name, (void *) value, size );
+  return withCipherPath( "getxattr", _do_getxattr,
+                          path, name, (void *) value, size );
 }
 #endif
 

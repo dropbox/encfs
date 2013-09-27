@@ -21,9 +21,10 @@
 #ifndef _CipherV1_incl_
 #define _CipherV1_incl_
 
+#include <memory>
+
 #include "base/Interface.h"
 #include "base/Mutex.h"
-#include "base/shared_ptr.h"
 
 #include "cipher/BlockCipher.h"
 #include "cipher/StreamCipher.h"
@@ -77,18 +78,18 @@ class CipherV1
   Interface iface;
   Interface realIface;
 
-  shared_ptr<BlockCipher> _blockCipher;
-  shared_ptr<StreamCipher> _streamCipher;
-  shared_ptr<PBKDF> _pbkdf;
+  std::shared_ptr<BlockCipher> _blockCipher;
+  std::shared_ptr<StreamCipher> _streamCipher;
+  std::shared_ptr<PBKDF> _pbkdf;
 
   // HMac is stateful, so access is controlled via mutex.
   mutable Mutex _hmacMutex;
-  mutable shared_ptr<MAC> _hmac;
+  mutable std::shared_ptr<MAC> _hmac;
 
   unsigned int _keySize; // in bytes
   unsigned int _ivLength;
 
-  shared_ptr<SecureMem> _iv;
+  std::shared_ptr<SecureMem> _iv;
   bool _keySet;
 
  public:
@@ -107,8 +108,8 @@ class CipherV1
 
   // Returns a list of supported algorithms.
   static std::list<CipherAlgorithm> GetAlgorithmList();
-  static shared_ptr<CipherV1> New(const std::string &name, int keyLen = -1);
-  static shared_ptr<CipherV1> New(const Interface &alg, int keyLen = -1);
+  static std::shared_ptr<CipherV1> New(const std::string &name, int keyLen = -1);
+  static std::shared_ptr<CipherV1> New(const Interface &alg, int keyLen = -1);
 
   // Password-based key derivation function which determines the
   // number of iterations based on a desired execution time (in microseconds).

@@ -1,10 +1,11 @@
 #ifndef BLOCKCIPHER_H
 #define BLOCKCIPHER_H
 
+#include <memory>
+
 #include "base/Interface.h"
 #include "base/Range.h"
 #include "base/Registry.h"
-#include "base/shared_ptr.h"
 #include "base/types.h"
 #include "cipher/StreamCipher.h"
 

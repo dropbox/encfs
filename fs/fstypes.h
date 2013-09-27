@@ -21,6 +21,8 @@
 #ifndef _fstypes_incl_
 #define _fstypes_incl_
 
+#include <cstdint>
+
 #include <memory>
 
 namespace encfs {

@@ -39,6 +39,7 @@ using std::list;
 using std::make_pair;
 using std::multimap;
 using std::string;
+using std::shared_ptr;
 
 namespace encfs {
 

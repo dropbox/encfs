@@ -23,7 +23,8 @@
 
 #include <cstring>
 
-#include "base/shared_ptr.h"
+#include <memory>
+
 #include "base/types.h"
 
 namespace encfs {
@@ -51,7 +52,7 @@ class CipherKey
 
  private:
   bool _valid;
-  shared_ptr<SecureMem> _mem;
+  std::shared_ptr<SecureMem> _mem;
 };
 
 bool operator == (const CipherKey &a, const CipherKey &b);

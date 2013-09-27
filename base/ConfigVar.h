@@ -21,8 +21,9 @@
 #ifndef _ConfigVar_incl_
 #define _ConfigVar_incl_
 
+#include <memory>
 #include <string>
-#include "base/shared_ptr.h"
+
 #include "base/types.h"
 
 namespace encfs {
@@ -35,7 +36,7 @@ class ConfigVar
 	int offset;
     };
 
-    shared_ptr<ConfigVarData> pd;
+     std::shared_ptr<ConfigVarData> pd;
 
 public:
     ConfigVar();

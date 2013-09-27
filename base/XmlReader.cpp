@@ -18,23 +18,27 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "base/XmlReader.h"
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
 
-#include <algorithm>
 #include <cstring>
+
+#include <algorithm>
 #include <map>
+#include <memory>
+
+#include <glog/logging.h>
 
 #include <tinyxml.h>
 
-#include <glog/logging.h>
 #include "base/base64.h"
 #include "base/Interface.h"
-#include "base/shared_ptr.h"
+
+#include "base/XmlReader.h"
+
+using std::shared_ptr;
 
 namespace encfs {
 

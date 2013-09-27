@@ -16,27 +16,28 @@
  *
  */
 
-#include "fs/encfs.h"
+#include "base/config.h"
+
+#include <cstdlib>
 
 #include <algorithm>
 #include <iostream>
-#include <cstdlib>
 #include <sstream>
-
-#include "base/config.h"
-#include "base/Interface.h"
-#include "base/Error.h"
-#include "cipher/CipherV1.h"
-#include "cipher/MemoryPool.h"
-#include "fs/DirNode.h"
-#include "fs/FileUtils.h"
-#include "fs/StreamNameIO.h"
-#include "fs/BlockNameIO.h"
-#include "fs/NullNameIO.h"
 
 #include <glog/logging.h>
 
 #include <google/protobuf/text_format.h>
+
+#include "base/Error.h"
+#include "base/Interface.h"
+#include "cipher/CipherV1.h"
+#include "cipher/MemoryPool.h"
+#include "fs/BlockNameIO.h"
+#include "fs/DirNode.h"
+#include "fs/FileUtils.h"
+#include "fs/NullNameIO.h"
+#include "fs/StreamNameIO.h"
+#include "fs/encfs.h"
 
 #ifdef HAVE_TR1_UNORDERED_SET
 #include <tr1/unordered_set>
@@ -47,8 +48,8 @@ using std::unordered_set;
 #endif
 
 using std::cerr;
+using std::shared_ptr;
 using std::string;
-using namespace encfs;
 
 namespace encfs {
 
@@ -464,6 +465,8 @@ bool runTests(const shared_ptr<CipherV1> &cipher, bool verbose)
 
 int main(int /*argc*/, char *argv[])
 {
+  using namespace encfs;
+
   FLAGS_logtostderr = 1;
   FLAGS_minloglevel = 1;
 

@@ -31,7 +31,7 @@
 #include <memory>
 
 #include "base/optional.h"
-#include "base/shared_ptr.h"
+
 #include "fs/fstypes.h"
 #include "fs/FileIO.h"
 
@@ -62,7 +62,7 @@ public:
     virtual Path join(const std::string & path) const =0;
     virtual std::string basename() const =0;
     virtual Path dirname() const =0;
-    virtual bool operator==(const shared_ptr<PathPoly> &p) const =0;
+    virtual bool operator==(const std::shared_ptr<PathPoly> &p) const =0;
 };
 
 class DirectoryIO
@@ -76,12 +76,12 @@ public:
 class Path
 {
 private:
-    shared_ptr<PathPoly> _impl;
+    std::shared_ptr<PathPoly> _impl;
 
 public:
     template<class T,
       typename std::enable_if<std::is_convertible<T *, PathPoly *>::value, int>::type = 0>
-    Path(shared_ptr<T> from)
+    Path(std::shared_ptr<T> from)
       : _impl( std::move( from ) )
     {
       assert(_impl);
@@ -112,12 +112,12 @@ public:
       return _impl->dirname();
     }
 
-    bool operator==(const shared_ptr<PathPoly> &p) const
+    bool operator==(const std::shared_ptr<PathPoly> &p) const
     {
       return (*_impl) == p;
     }
 
-    operator shared_ptr<PathPoly> () const
+    operator std::shared_ptr<PathPoly> () const
     {
       return _impl;
     }

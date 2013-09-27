@@ -24,6 +24,7 @@
 #include <cstring>
 
 #include <iostream>
+#include <memory>
 
 #include <glog/logging.h>
 
@@ -32,14 +33,15 @@
 #include "base/Error.h"
 #include "base/Mutex.h"
 #include "base/optional.h"
-#include "base/shared_ptr.h"
 #include "fs/Context.h"
-#include "fs/DirNode.h"
 #include "fs/FileUtils.h"
 #include "fs/fsconfig.pb.h"
 
+#include "fs/DirNode.h"
+
 using std::list;
 using std::string;
+using std::shared_ptr;
 
 namespace encfs {
 

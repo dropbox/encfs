@@ -19,11 +19,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "cipher/CipherKey.h"
+#include <memory>
 
-#include "base/shared_ptr.h"
 #include "base/types.h"
 #include "cipher/MemoryPool.h"
+
+#include "cipher/CipherKey.h"
 
 namespace encfs {
 

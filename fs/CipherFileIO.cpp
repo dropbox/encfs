@@ -18,17 +18,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "fs/CipherFileIO.h"
+#include <fcntl.h>
+
+#include <cerrno>
+
+#include <glog/logging.h>
 
 #include "base/Error.h"
 #include "cipher/CipherV1.h"
 #include "cipher/MemoryPool.h"
 #include "fs/fsconfig.pb.h"
 
-#include <glog/logging.h>
+#include "fs/CipherFileIO.h"
 
-#include <fcntl.h>
-#include <cerrno>
+using std::shared_ptr;
 
 namespace encfs {
 

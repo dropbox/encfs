@@ -25,6 +25,8 @@
 #include "fs/FileUtils.h"
 #include "fs/DirNode.h"
 
+using std::shared_ptr;
+
 namespace encfs {
 
 EncFS_Context::EncFS_Context()

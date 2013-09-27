@@ -18,14 +18,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Include encfs first, because we need to include fuse.h before any inclusion
-// of sys/stat.h or other system headers (to be safe)
-#include "fs/encfs.h"
-
 #include <cerrno>
 #include <cstring>
 
-#include "base/config.h"
+#include <memory>
+
+#include <glog/logging.h>
+
 #include "base/Error.h"
 #include "base/Mutex.h"
 #include "cipher/MemoryPool.h"
@@ -33,14 +32,14 @@
 #include "fs/CipherFileIO.h"
 #include "fs/DirNode.h"
 #include "fs/FileIO.h"
-#include "fs/FileNode.h"
 #include "fs/FileUtils.h"
 #include "fs/MACFileIO.h"
 #include "fs/fsconfig.pb.h"
 
-#include <glog/logging.h>
+#include "fs/FileNode.h"
 
 using std::string;
+using std::shared_ptr;
 
 namespace encfs {
 

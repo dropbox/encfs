@@ -21,9 +21,11 @@
 #ifndef _encfs_incl_
 #define _encfs_incl_
 
-#include "base/config.h"
-#include <fuse.h>
 #include <unistd.h>
+
+#include <fuse.h>
+
+#include "base/config.h"
 
 #if defined(HAVE_SYS_XATTR_H) | defined(HAVE_ATTR_XATTR_H)
 #define HAVE_XATTR

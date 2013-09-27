@@ -21,8 +21,9 @@
 #ifndef _FSConfig_incl_
 #define _FSConfig_incl_
 
+#include <memory>
+
 #include "base/Interface.h"
-#include "base/shared_ptr.h"
 #include "cipher/CipherKey.h"
 #include "fs/encfs.h"
 #include "fs/fsconfig.pb.h"
@@ -48,12 +49,12 @@ class CipherV1;
 class NameIO;
 
 CipherKey getUserKey(const EncfsConfig &config,
-                     shared_ptr<PasswordReader> passwordReader);
+                     std::shared_ptr<PasswordReader> passwordReader);
 CipherKey getNewUserKey(EncfsConfig &config,
-                        shared_ptr<PasswordReader> passwordReader);
+                        std::shared_ptr<PasswordReader> passwordReader);
 
-shared_ptr<CipherV1> getCipher(const EncfsConfig &cfg);
-shared_ptr<CipherV1> getCipher(const Interface &iface, int keySize);
+std::shared_ptr<CipherV1> getCipher(const EncfsConfig &cfg);
+std::shared_ptr<CipherV1> getCipher(const Interface &iface, int keySize);
 
 // helpers for serializing to/from a stream
 std::ostream &operator << (std::ostream &os, const EncfsConfig &cfg);
@@ -62,12 +63,12 @@ std::istream &operator >> (std::istream &os, EncfsConfig &cfg);
 // Filesystem state
 struct FSConfig
 {
-    shared_ptr<EncfsConfig> config;
-    shared_ptr<EncFS_Opts> opts;
+    std::shared_ptr<EncfsConfig> config;
+    std::shared_ptr<EncFS_Opts> opts;
 
-    shared_ptr<CipherV1> cipher;
+    std::shared_ptr<CipherV1> cipher;
     CipherKey key;
-    shared_ptr<NameIO> nameCoding;
+    std::shared_ptr<NameIO> nameCoding;
 
     bool forceDecode; // force decode on MAC block failures
     bool reverseEncryption; // reverse encryption operation
@@ -80,7 +81,7 @@ struct FSConfig
         idleTracking(false) { }
 };
 
-typedef shared_ptr<FSConfig> FSConfigPtr;
+typedef std::shared_ptr<FSConfig> FSConfigPtr;
 
 }  // namespace encfs
 

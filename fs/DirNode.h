@@ -21,7 +21,7 @@
 #ifndef _DirNode_incl_
 #define _DirNode_incl_
 
-#include <inttypes.h>
+#include <cstdint>
 
 #include <map>
 #include <memory>
@@ -31,8 +31,9 @@
 
 #include "base/Mutex.h"
 #include "base/optional.h"
-#include "base/shared_ptr.h"
+
 #include "cipher/CipherKey.h"
+
 #include "fs/FileNode.h"
 #include "fs/NameIO.h"
 #include "fs/FSConfig.h"
@@ -51,7 +52,7 @@ public:
     DirTraverse();
     DirTraverse(Directory && dir_io,
                 uint64_t iv,
-	        const shared_ptr<NameIO> &naming);
+	        const std::shared_ptr<NameIO> &naming);
     DirTraverse(DirTraverse && src);
     DirTraverse& operator=(DirTraverse && other);
 
@@ -75,7 +76,7 @@ private:
     // initialization vector to use.  Not very general purpose, but makes it
     // more efficient to support filename IV chaining..
     uint64_t iv;
-    shared_ptr<NameIO> naming;
+    std::shared_ptr<NameIO> naming;
 };
 inline bool DirTraverse::valid() const { return (bool) dir_io; }
 
@@ -92,14 +93,14 @@ public:
     std::string rootDirectory();
 
     // find files
-    shared_ptr<FileNode> lookupNode( const char *plaintextName, 
+    std::shared_ptr<FileNode> lookupNode( const char *plaintextName, 
 	                      const char *requestor );
 
     /*
 	Combined lookupNode + node->open() call.  If the open fails, then the
 	node is not retained.  If the open succeeds, then the node is returned.
     */
-    shared_ptr<FileNode> openNode( const char *plaintextName,
+    std::shared_ptr<FileNode> openNode( const char *plaintextName,
                                    const char *requestor,
                                    bool requestWrite, bool createNode,
                                    int *openResult );
@@ -137,7 +138,7 @@ public:
     // returns idle time of filesystem in seconds
     int idleSeconds();
 
-    shared_ptr<FsIO> get_fs() { return fs_io; }
+    std::shared_ptr<FsIO> get_fs() { return fs_io; }
 
 protected:
 
@@ -147,8 +148,8 @@ protected:
 	this call has no effect.
 	Returns the FileNode if it was found.
     */
-    shared_ptr<FileNode> renameNode( const char *from, const char *to );
-    shared_ptr<FileNode> renameNode( const char *from, const char *to, 
+    std::shared_ptr<FileNode> renameNode( const char *from, const char *to );
+    std::shared_ptr<FileNode> renameNode( const char *from, const char *to, 
 	                             bool forwardMode );
 
     /*
@@ -157,7 +158,7 @@ protected:
 	called after renaming the directory, passing in the plaintext from and
 	to paths.
     */
-    shared_ptr<RenameOp> newRenameOp( const char *from, const char *to );
+    std::shared_ptr<RenameOp> newRenameOp( const char *from, const char *to );
 
 private:
 
@@ -167,7 +168,7 @@ private:
     bool genRenameList( std::list<RenameEl> &list, const char *fromP,
                         const char *toP );
     
-    shared_ptr<FileNode> findOrCreate( const char *plainName);
+    std::shared_ptr<FileNode> findOrCreate( const char *plainName);
 
     Path appendToRoot(const std::string &path);
 
@@ -179,8 +180,8 @@ private:
     FSConfigPtr fsConfig;
     Path rootDir;
 
-    shared_ptr<NameIO> naming;
-    shared_ptr<FsIO> fs_io;
+    std::shared_ptr<NameIO> naming;
+    std::shared_ptr<FsIO> fs_io;
 };
 
 }  // namespace encfs

@@ -16,18 +16,18 @@
  *
  */
 
-#include "fs/encfs.h"
+#include <unistd.h>
+#include <sys/time.h>
+
+#include <cassert>
+#include <cerrno>
+#include <clocale>
+#include <cstdio>
+#include <cstring>
 
 #include <iostream>
 #include <string>
 #include <sstream>
-
-#include <cassert>
-#include <cstdio>
-#include <unistd.h>
-#include <sys/time.h>
-#include <cerrno>
-#include <cstring>
 
 #include <getopt.h>
 
@@ -42,15 +42,15 @@
 
 #include "cipher/CipherV1.h"
 
+#include "fs/EncfsPasswordReader.h"
 #include "fs/FileUtils.h"
+#include "fs/FsIO.h"
 #include "fs/DirNode.h"
 #include "fs/Context.h"
-#include "fs/FsIO.h"
 #include "fs/PosixFsIO.h"
 #include "fs/PasswordReader.h"
-#include "fs/EncfsPasswordReader.h"
 
-#include <locale.h>
+#include "fs/encfs.h"
 
 // Fuse version >= 26 requires another argument to fuse_unmount, which we
 // don't have.  So use the backward compatible call instead..
@@ -64,12 +64,14 @@ inline static int MAX(int a, int b)
 }
 #endif
 
-using namespace encfs;
 using gnu::autosprintf;
 using std::cerr;
 using std::endl;
-using std::string;
 using std::ostringstream;
+using std::shared_ptr;
+using std::string;
+
+using namespace encfs;
 
 namespace encfs {
 

@@ -21,6 +21,10 @@
 #ifndef _FileNode_incl_
 #define _FileNode_incl_
 
+#include <cstdint>
+
+#include <string>
+
 #include "base/Mutex.h"
 
 #include "cipher/CipherKey.h"
@@ -28,10 +32,6 @@
 #include "fs/encfs.h"
 #include "fs/CipherFileIO.h"
 #include "fs/FileUtils.h"
-
-#include <inttypes.h>
-
-#include <string>
 
 namespace encfs {
 
@@ -88,8 +88,8 @@ private:
 
     FSConfigPtr fsConfig;
 
-    shared_ptr<FileIO> io;
-    shared_ptr<CipherFileIO> cipher_io;
+    std::shared_ptr<FileIO> io;
+    std::shared_ptr<CipherFileIO> cipher_io;
     std::string _pname; // plaintext name
     std::string _cname; // encrypted name
     DirNode *parent;

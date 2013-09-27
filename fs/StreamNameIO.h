@@ -33,7 +33,7 @@ public:
     static Interface CurrentInterface();
 
     StreamNameIO( const Interface &iface,
-	          const shared_ptr<CipherV1> &cipher);
+	          const std::shared_ptr<CipherV1> &cipher);
     virtual ~StreamNameIO();
 
     virtual Interface interface() const;
@@ -50,7 +50,7 @@ protected:
 	                    uint64_t *iv, char *plaintextName ) const;
 private:
     int _interface;
-    shared_ptr<CipherV1> _cipher;
+    std::shared_ptr<CipherV1> _cipher;
 };
 
 }  // namespace encfs

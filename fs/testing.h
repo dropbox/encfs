@@ -11,7 +11,7 @@ namespace encfs {
 
 class FileIO;
 
-FSConfigPtr makeConfig(const shared_ptr<CipherV1>& cipher, int blockSize);
+FSConfigPtr makeConfig(const std::shared_ptr<CipherV1>& cipher, int blockSize);
 
 void runWithCipher(const std::string& cipherName, int blockSize,
                    void (*func)(FSConfigPtr& config));

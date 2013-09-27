@@ -18,17 +18,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "fs/MACFileIO.h"
-#include "fs/fsconfig.pb.h"
+
+#include <cstring>
+
+#include <memory>
+
+#include <glog/logging.h>
 
 #include "base/Error.h"
 #include "base/i18n.h"
 #include "cipher/MemoryPool.h"
 #include "fs/FileUtils.h"
+#include "fs/fsconfig.pb.h"
 
-#include <glog/logging.h>
+#include "fs/MACFileIO.h"
 
-#include <cstring>
+using std::shared_ptr;
 
 namespace encfs {
 

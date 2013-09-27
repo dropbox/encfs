@@ -23,11 +23,9 @@
 
 #include <sys/stat.h>
 
-#include <inttypes.h>
-#include <memory>
+#include <cstdint>
 
 #include "fs/FsIO.h"
-
 
 #ifndef linux
 #include <cerrno>
