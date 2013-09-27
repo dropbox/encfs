@@ -41,12 +41,11 @@ public:
     virtual ~BlockFileIO();
 
     // implemented in terms of blocks.
-    virtual ssize_t read( const IORequest &req ) const override;
-    virtual bool write( const IORequest &req ) override;
-
-    virtual int blockSize() const override;
+    virtual size_t read( const IORequest &req ) const override;
+    virtual void write( const IORequest &req ) override;
 
 protected:
+    int blockSize() const;
 
     int blockTruncate( off_t size, FileIO *base );
     void padFile( off_t oldSize, off_t newSize, bool forceWrite );

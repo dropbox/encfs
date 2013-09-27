@@ -48,7 +48,6 @@ CipherFileIO::CipherFileIO( const shared_ptr<FileIO> &_base,
     , perFileIV( cfg->config->unique_iv() )
     , externalIV( 0 )
     , fileIV( 0 )
-    , lastFlags( 0 )
 {
   fsConfig = cfg;
   cipher = cfg->cipher;
@@ -74,26 +73,6 @@ Interface CipherFileIO::interface() const
   return CipherFileIO_iface;
 }
 
-int CipherFileIO::open( int flags )
-{
-  int res = base->open( flags );
-    
-  if( res >= 0 )
-    lastFlags = flags;
-
-  return res;
-}
-
-void CipherFileIO::setFileName( const char *fileName )
-{
-  base->setFileName( fileName );
-}
-
-const char *CipherFileIO::getFileName() const
-{
-  return base->getFileName();
-}
-
 bool CipherFileIO::setIV( uint64_t iv )
 {
   VLOG(1) << "in setIV, current IV = " << externalIV
@@ -110,26 +89,16 @@ bool CipherFileIO::setIV( uint64_t iv )
   {
     // we have an old IV, and now a new IV, so we need to update the fileIV
     // on disk.
-    if(fileIV == 0)
+
+    // ensure the file is open for read/write..
+    if(!base->isWritable())
     {
-      // ensure the file is open for read/write..
-      int newFlags = lastFlags | O_RDWR;
-      int res = base->open( newFlags );
-      if(res < 0)
-      {
-        if(res == -EISDIR)
-        {
-          // duh -- there are no file headers for directories!
-          externalIV = iv;
-          return base->setIV( iv );
-        } else
-        {
-          VLOG(1) << "writeHeader failed to re-open for write";
-          return false;
-        }
-      }
-      initHeader();
+      VLOG(1) << "writeHeader failed to re-open for write";
+      return false;
     }
+
+    if(fileIV == 0)
+      initHeader();
 
     uint64_t oldIV = externalIV;
     externalIV = iv;
@@ -140,7 +109,16 @@ bool CipherFileIO::setIV( uint64_t iv )
     }
   }
 
-  return base->setIV( iv );
+  return true;
+}
+
+void CipherFileIO::setBase( const shared_ptr<FileIO> &base_ )
+{
+  base = base_;
+  // NB: base must refer to the same underlying file
+  //     since we can't check that, we signal to
+  //     write out the header again
+  fileIV = 0;
 }
 
 fs_off_t CipherFileIO::adjustedSize(fs_off_t rawSize) const
@@ -153,24 +131,19 @@ fs_off_t CipherFileIO::adjustedSize(fs_off_t rawSize) const
   return size;
 }
 
-int CipherFileIO::getAttr( FsFileAttrs &stbuf ) const
+FsFileAttrs CipherFileIO::get_attrs() const
 {
-  int res = base->getAttr( stbuf );
+  auto res = base->get_attrs();
 
   // adjust size if we have a file header
-  if((res == 0) && stbuf.type == FsFileType::REGULAR)
-    stbuf.size = adjustedSize(stbuf.size);
+  if(res.type == FsFileType::REGULAR)
+    res.size = adjustedSize(res.size);
 
   return res;
 }
 
-fs_off_t CipherFileIO::getSize() const
-{
-  // No check on S_ISREG here -- getSize only for normal files!
-  fs_off_t size = base->getSize();
-  return adjustedSize(size);
-}
-
+/* TODO: this should really return an error or throw an exception
+   when initializing the file header fails */
 void CipherFileIO::initHeader( )
 {
   int cbs = cipher->cipherBlockSize();
@@ -180,7 +153,7 @@ void CipherFileIO::initHeader( )
 
   // check if the file has a header, and read it if it does..  Otherwise,
   // create one.
-  off_t rawSize = base->getSize();
+  auto rawSize = base->get_attrs().size;
   if(rawSize >= headerLen)
   {
     VLOG(1) << "reading existing header, rawSize = " << rawSize;
@@ -217,19 +190,16 @@ void CipherFileIO::initHeader( )
       LOG_IF(WARNING, fileIV == 0)
         << "Unexpected result: randomize returned 8 null bytes!";
     } while(fileIV == 0); // don't accept 0 as an option..
-   
+
     cipher->streamEncode( mb.data, sizeof(uint64_t), externalIV );
 
-    if( base->isWritable() )
-    {
-      IORequest req;
-      req.offset = 0;
-      req.data = mb.data;
-      req.dataLen = sizeof(uint64_t);
+    IORequest req;
+    req.offset = 0;
+    req.data = mb.data;
+    req.dataLen = sizeof(uint64_t);
 
-      base->write( req );
-    } else
-      VLOG(1) << "base not writable, IV not written..";
+    assert( base->isWritable() );
+    base->write( req );
   }
   VLOG(1) << "initHeader finished, fileIV = " << fileIV;
 }
@@ -238,14 +208,9 @@ bool CipherFileIO::writeHeader( )
 {
   if( !base->isWritable() )
   {
-    // open for write..
-    int newFlags = lastFlags | O_RDWR;
-    if( base->open( newFlags ) < 0 )
-    {
-      VLOG(1) << "writeHeader failed to re-open for write";
-      return false;
-    }
-  } 
+    VLOG(1) << "writeHeader failed to re-open for write";
+    return false;
+  }
 
   LOG_IF(ERROR, fileIV == 0)
     << "Internal error: fileIV == 0 in writeHeader!!!";
@@ -272,6 +237,7 @@ bool CipherFileIO::writeHeader( )
   req.data = mb.data;
   req.dataLen = headerLen;
 
+  /* TODO: return failure if write fails */
   base->write( req );
 
   return true;
@@ -279,13 +245,11 @@ bool CipherFileIO::writeHeader( )
 
 ssize_t CipherFileIO::readOneBlock( const IORequest &req ) const
 {
-  if(req.offset < 0)
-  {
-    throw std::invalid_argument( "negative offset!" );
-  }
   // read raw data, then decipher it..
   auto bs = blockSize();
   assert(bs >= 0);
+  assert(req.offset >= 0);
+  assert(!(req.offset % bs));
   rAssert(req.dataLen <= (size_t) bs);
 
   fs_off_t blockNum = req.offset / bs;
@@ -354,10 +318,10 @@ bool CipherFileIO::writeOneBlock( const IORequest &req )
 
   if( ok )
   {
+    IORequest nreq = req;
+
     if(headerLen != 0)
     {
-      IORequest nreq = req;
-
       if (mb.data == NULL)
       {
         nreq.offset += headerLen;
@@ -369,16 +333,21 @@ bool CipherFileIO::writeOneBlock( const IORequest &req )
         nreq.dataLen = bs;
         base->truncate(req.offset + req.dataLen + headerLen);
       }
+    }
 
-      ok = base->write( nreq );
-    } else
-      ok = base->write( req );
+    try
+    {
+      base->write( nreq );
+    } catch ( ... )
+    {
+      ok = false;
+    }
   } else
   {
     VLOG(1) << "encodeBlock failed for block " << blockNum
       << ", size " << req.dataLen;
-    ok = false;
   }
+
   return ok;
 }
 
@@ -427,39 +396,41 @@ bool CipherFileIO::streamRead( byte *buf, size_t size,
     return cipher->streamDecode( buf, size, _iv64 );
 } 
 
-int CipherFileIO::truncate( fs_off_t size )
+void CipherFileIO::truncate( fs_off_t size )
 {
   rAssert(size >= 0);
+  if(!base->isWritable())
+  {
+    VLOG(1) << "writeHeader failed to re-open for write";
+    throw std::runtime_error("file not opened for writing");
+  }
 
   if(headerLen == 0)
   {
-    return blockTruncate( size, base.get() );
+    auto res = blockTruncate( size, base.get() );
+    if (res < 0) throw std::runtime_error("blockTruncate() failed");
   } else if(0 == fileIV)
   {
-    // empty file.. create the header..
-    if( !base->isWritable() )
-    {
-      // open for write..
-      int newFlags = lastFlags | O_RDWR;
-      if( base->open( newFlags ) < 0 )
-        VLOG(1) << "writeHeader failed to re-open for write";
-    }
     initHeader();
   }
 
   // can't let BlockFileIO call base->truncate(), since it would be using
   // the wrong size..
   int res = blockTruncate( size, 0 );
-
   if(res == 0)
     base->truncate( size + headerLen );
-
-  return res;
+  else
+    throw std::runtime_error("blockTruncate() failed");
 }
 
 bool CipherFileIO::isWritable() const
 {
   return base->isWritable();
+}
+
+void CipherFileIO::sync(bool a) const
+{
+  return base->sync( a );
 }
 
 }  // namespace encfs

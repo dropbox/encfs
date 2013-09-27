@@ -171,72 +171,27 @@ public:
     : _UniqueWrapper( std::move( from ) )
     {}
 
-    Interface interface() const
-    {
-      return _impl->interface();
-    }
-
-    int blockSize() const
-    {
-      return _impl->blockSize();
-    }
-
-    void setFileName(const char *fileName)
-    {
-      return _impl->setFileName( fileName );
-    }
-    const char *getFileName() const
-    {
-      return _impl->getFileName();
-    }
-
-    bool setIV( uint64_t iv )
-    {
-      return _impl->setIV( iv );
-    }
-
-    int open( int flags )
-    {
-      return _impl->open( flags );
-    }
-
-    // get filesystem attributes for a file
-    int getAttr( FsFileAttrs &stbuf ) const
-    {
-      return _impl->getAttr( stbuf );
-    }
-
     FsFileAttrs get_attrs() const
     {
-      FsFileAttrs attrs;
-      auto ret = getAttr(attrs);
-      if (ret) {
-        throw std::system_error( -ret, errno_category() );
-      }
-      return std::move( attrs );
+      return _impl->get_attrs();
     }
 
-    fs_off_t getSize() const
-    {
-      return _impl->getSize();
-    }
-
-    ssize_t read( const IORequest &req ) const
+    size_t read( const IORequest &req ) const
     {
       return _impl->read( req );
     }
 
-    ssize_t read(fs_off_t offset, byte *data, size_t dataLen) const
+    size_t read(fs_off_t offset, byte *data, size_t dataLen) const
     {
       return read( IORequest( offset, data, dataLen ) );
     }
 
-    bool write( const IORequest &req )
+    void write( const IORequest &req )
     {
       return _impl->write( req );
     }
 
-    int truncate( off_t size )
+    void truncate( off_t size )
     {
       return _impl->truncate( size );
     }
@@ -259,10 +214,7 @@ public:
                           bool open_for_write = false,
                           bool create = false) =0;
 
-    virtual void mkdir(const Path &path,
-                       fs_posix_mode_t mode = 0,
-                       fs_posix_uid_t uid = 0,
-                       fs_posix_gid_t gid = 0) =0;
+    virtual void mkdir(const Path &path) =0;
 
     virtual void rename(const Path &pathSrc, const Path &pathDst) =0;
 

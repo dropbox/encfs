@@ -65,7 +65,7 @@ public:
     // return next plaintext filename
     // If fileType is not 0, then it is used to return the filetype
     // (or 0 if unknown)
-    std::string nextPlaintextName(FsFileType *fileType=0, fs_posix_ino_t *inode=0);
+    std::string nextPlaintextName(FsFileType *fileType=0);
 
     // Return cipher name of next undecodable filename..
     // The opposite of nextPlaintextName(), as that skips undecodable names..
@@ -99,12 +99,15 @@ public:
 	Combined lookupNode + node->open() call.  If the open fails, then the
 	node is not retained.  If the open succeeds, then the node is returned.
     */
-    shared_ptr<FileNode> openNode( const char *plaintextName, 
-	    const char *requestor, int flags, int *openResult );
+    shared_ptr<FileNode> openNode( const char *plaintextName,
+                                   const char *requestor,
+                                   bool requestWrite, bool createNode,
+                                   int *openResult );
 
     std::string cipherPath( const char *plaintextPath );
     std::string cipherPathWithoutRoot( const char *plaintextPath );
     std::string plainPath( const char *cipherPath );
+    std::string plaintextParent(const std::string &path);
 
     // relative cipherPath is the same as cipherPath except that it doesn't
     // prepent the mount point.  That it, it doesn't return a fully qualified
@@ -125,10 +128,7 @@ public:
     DirTraverse openDir( const char *plainDirName );
 
     // uid and gid are used as the directory owner, only if not zero
-    int mkdir( const char *plaintextPath,
-               fs_posix_mode_t mode = 0,
-               fs_posix_uid_t uid = 0,
-               fs_posix_gid_t gid = 0);
+    int mkdir( const char *plaintextPath );
 
     int rename( const char *fromPlaintext, const char *toPlaintext );
 
@@ -136,6 +136,8 @@ public:
 
     // returns idle time of filesystem in seconds
     int idleSeconds();
+
+    shared_ptr<FsIO> get_fs() { return fs_io; }
 
 protected:
 
@@ -174,8 +176,8 @@ private:
     EncFS_Context *ctx;
 
     // passed in as configuration
-    Path rootDir;
     FSConfigPtr fsConfig;
+    Path rootDir;
 
     shared_ptr<NameIO> naming;
     shared_ptr<FsIO> fs_io;

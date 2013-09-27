@@ -107,7 +107,7 @@ bool BlockFileIO::cacheWriteOneBlock( const IORequest &req )
   return ok;
 }
 
-ssize_t BlockFileIO::read( const IORequest &req ) const
+size_t BlockFileIO::read( const IORequest &req ) const
 {
   rAssert( _blockSize != 0 );
 
@@ -172,7 +172,7 @@ ssize_t BlockFileIO::read( const IORequest &req ) const
   }
 }
 
-bool BlockFileIO::write( const IORequest &req )
+void BlockFileIO::write( const IORequest &req )
 {
   if(req.offset < 0)
   {
@@ -180,7 +180,7 @@ bool BlockFileIO::write( const IORequest &req )
   }
   rAssert( _blockSize != 0 );
 
-  fs_off_t fileSize = getSize();
+  auto fileSize = get_attrs().size;
   assert( fileSize >= 0 );
 
   // where write request begins
@@ -208,12 +208,20 @@ bool BlockFileIO::write( const IORequest &req )
   {
     // if writing a full block.. pretty safe..
     if( req.dataLen == (size_t) _blockSize )
-      return cacheWriteOneBlock( req );
+    {
+      const bool wrote = cacheWriteOneBlock( req );
+      if (!wrote) throw std::runtime_error("couldn't write block");
+      return;
+    }
 
     // if writing a partial block, but at least as much as what is
     // already there..
     if(blockNum == lastFileBlock && req.dataLen >= (size_t) lastBlockSize)
-      return cacheWriteOneBlock( req );
+    {
+      const bool wrote = cacheWriteOneBlock( req );
+      if (!wrote) throw std::runtime_error("couldn't write block");
+      return;
+    }
   } 
 
   // have to merge data with existing block(s)..
@@ -223,7 +231,6 @@ bool BlockFileIO::write( const IORequest &req )
   blockReq.data = NULL;
   blockReq.dataLen = _blockSize;
 
-  bool ok = true;
   auto size = req.dataLen;
   auto inPtr = req.data;
   while( size )
@@ -269,8 +276,9 @@ bool BlockFileIO::write( const IORequest &req )
     // Finally, write the damn thing!
     if(!cacheWriteOneBlock( blockReq ))
     {
-      ok = false;
-      break;
+      // TODO: partial write... we should probably change
+      //       write() API
+      throw std::runtime_error("couldn't write block");
     }
 
     // prepare to start all over with the next block..
@@ -280,7 +288,7 @@ bool BlockFileIO::write( const IORequest &req )
     partialOffset = 0;
   }
 
-  return ok;
+  return;
 }
 
 int BlockFileIO::blockSize() const
@@ -374,7 +382,11 @@ int BlockFileIO::blockTruncate( off_t size, FileIO *base )
   int partialBlock = size % _blockSize;
   int res = 0;
 
-  off_t oldSize = getSize();
+  auto oldSize = get_attrs().size;
+  /* NB: originally this function dealt with a truncate method
+     that didn't throw exceptions. to ease the transition process
+     we use this helper */
+  auto truncate = wrapWithExceptionCatcher( (int) std::errc::io_error, bindMethod( base, &FileIO::truncate ) );
 
   if( size > oldSize )
   {
@@ -382,8 +394,7 @@ int BlockFileIO::blockTruncate( off_t size, FileIO *base )
     // states that it will pad with 0's.
     // do the truncate so that the underlying filesystem can allocate
     // the space, and then we'll fill it in padFile..
-    if(base)
-      base->truncate( size );
+    if(base) truncate( size );
 
     const bool forceWrite = true;
     padFile( oldSize, size, forceWrite );
@@ -409,8 +420,7 @@ int BlockFileIO::blockTruncate( off_t size, FileIO *base )
         ssize_t rdSz = cacheReadOneBlock( req );
 
         // do the truncate
-        if(base)
-          res = base->truncate( size );
+        if(base) res = truncate( size );
 
         // write back out partial block
         req.dataLen = partialBlock;
@@ -421,13 +431,11 @@ int BlockFileIO::blockTruncate( off_t size, FileIO *base )
           LOG(ERROR) << "truncate failure: read size " << rdSz
             << ", partial block of " << partialBlock;
         }
-
       } else
       {
         // truncating on a block bounday.  No need to re-encode the last
         // block..
-        if(base)
-          res = base->truncate( size );
+        if(base) res = truncate( size );
       }
 
       return res;

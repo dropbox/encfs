@@ -208,16 +208,14 @@ File PosixFsIO::openfile(const Path &path,
   int flags = O_RDONLY
     | (open_for_write ? O_WRONLY : 0)
     | (create ? O_CREAT : 0);
-  const int ret_open = file_->open( flags );
-  if (ret_open < 0) current_fs_error( -ret_open );
+  const int ret_open = file_->open( flags, 0777 );
+  if(ret_open < 0) current_fs_error( -ret_open );
   return std::move( file_ );
 }
 
 void PosixFsIO::mkdir(const Path &path,
-                      fs_posix_mode_t mode,
-                      fs_posix_uid_t uid, fs_posix_gid_t gid)
+                      mode_t mode, uid_t uid, gid_t gid)
 {
-#ifdef linux
   // if uid or gid are set, then that should be the directory owner
   int olduid = -1;
   int oldgid = -1;
@@ -226,23 +224,22 @@ void PosixFsIO::mkdir(const Path &path,
     olduid = setfsuid( uid );
   if(gid != 0)
     oldgid = setfsgid( gid );
-#else
-  /* to avoid compiler warnings */
-  (void) uid;
-  (void) gid;
-#endif
 
   const int res = ::mkdir( path.c_str(), mode );
   const int save_errno = errno;
 
-#ifdef linux
+  /* NB: the following should really not fail */
   if(olduid >= 0)
     setfsuid( olduid );
   if(oldgid >= 0)
     setfsgid( oldgid );
-#endif
 
   if(res < 0) current_fs_error( save_errno );
+}
+
+void PosixFsIO::mkdir(const Path &path)
+{
+  mkdir( path, 0777, 0, 0 );
 }
 
 void PosixFsIO::rename(const Path &path_src, const Path &path_dst)
@@ -282,8 +279,12 @@ FsFileAttrs PosixFsIO::get_attrs(const Path &path)
   assert( st.st_mtime <= FS_TIME_MAX );
   const fs_time_t mtime = (fs_time_t) st.st_mtime;
   const fs_off_t size = (fs_off_t) st.st_size;
+  std::unique_ptr<PosixFsExtraFileAttrs> extra ( new PosixFsExtraFileAttrs() );
+  extra->gid = st.st_gid;
+  extra->uid = st.st_uid;
+  extra->mode = st.st_mode;
 
-  return { .type = type, .mtime = mtime, .size = size };
+  return { .type = type, .mtime = mtime, .size = size, .extra = std::move( extra ) };
 }
 
 void PosixFsIO::set_mtime(const Path &path, fs_time_t mtime)
@@ -299,5 +300,38 @@ void PosixFsIO::set_mtime(const Path &path, fs_time_t mtime)
   const int res_utimes = ::utimes( path.c_str(), new_times );
   if (res_utimes < 0) current_fs_error();
 }
+
+void PosixFsIO::mknod(const Path &path,
+                      mode_t mode, dev_t rdev, uid_t uid, gid_t gid)
+{
+  int olduid = -1;
+  int oldgid = -1;
+
+  if(uid != 0)
+  {
+    olduid = setfsuid( uid );
+    if(olduid < 0) current_fs_error();
+  }
+  if(gid != 0)
+  {
+    oldgid = setfsgid( gid );
+    if(oldgid < 0) current_fs_error();
+  }
+
+  /*
+   * cf. xmp_mknod() in fusexmp.c
+   * The regular file stuff could be stripped off if there
+   * were a create method (advised to have)
+   */
+  int res = ::mknod( path.c_str(), mode, rdev );
+
+  if(olduid >= 0)
+    setfsuid( olduid );
+  if(oldgid >= 0)
+    setfsgid( oldgid );
+
+  if(res == -1) current_fs_error();
+}
+
 
 }  // namespace encfs

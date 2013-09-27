@@ -41,17 +41,13 @@ public:
 
     virtual Interface interface() const override;
 
-    virtual void setFileName( const char *fileName ) override;
-    virtual const char *getFileName() const override;
-    virtual bool setIV( uint64_t iv ) override;
+    virtual FsFileAttrs get_attrs() const override;
 
-    virtual int open( int flags ) override;
-    virtual int getAttr( FsFileAttrs &stbuf ) const override;
-    virtual fs_off_t getSize() const override;
-
-    virtual int truncate( fs_off_t size ) override;
+    virtual void truncate( fs_off_t size ) override;
 
     virtual bool isWritable() const override;
+
+    virtual void sync(bool datasync) const override;
 
 private:
     virtual ssize_t readOneBlock( const IORequest &req ) const override;

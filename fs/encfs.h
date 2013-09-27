@@ -29,34 +29,6 @@
 #define HAVE_XATTR
 #endif
 
-#ifndef linux
-#include <cerrno>
-
-static __inline int setfsuid(uid_t uid)
-{
-    uid_t olduid = geteuid();
-
-    seteuid(uid);
-
-    if (errno != EINVAL)
-        errno = 0;
-
-    return olduid;
-}
-
-static __inline int setfsgid(gid_t gid)
-{
-    gid_t oldgid = getegid();
-
-    setegid(gid);
-
-    if (errno != EINVAL)
-        errno = 0;
-
-    return oldgid;
-}
-#endif
-
 namespace encfs {
 
 int encfs_getattr(const char *path, struct stat *stbuf);

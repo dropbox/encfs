@@ -40,7 +40,6 @@ endif (WITH_COMMON_CRYPTO)
 
 # Tweak compiler flags.
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror")
-set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 
 include (CheckCXXCompilerFlag)
 check_cxx_compiler_flag (-std=c++11 HAVE_C11_FLAG)

@@ -308,22 +308,21 @@ static RootPtr initRootInfo(int &argc, char ** &argv)
   argc -= optind;
   argv += optind;
 
-  string rootDir;
   if(argc == 0)
   {
     cerr << _("Incorrect number of arguments") << "\n";
   } else
   {
-    rootDir = string( argv[0] );
+    opts->rootDir = string( argv[0] );
 
     opts->passwordReader = passwordProgram.empty()
       ? std::make_shared<EncfsPasswordReader>( false )
-      : std::make_shared<EncfsPasswordReader>( false, passwordProgram, rootDir );
+      : std::make_shared<EncfsPasswordReader>( false, passwordProgram, opts->rootDir );
 
     --argc;
     ++argv;
 
-    if(checkDir( rootDir ))
+    if(checkDir( opts->rootDir ))
       result = initFS( NULL, opts );
 
     if(!result)
@@ -464,8 +463,11 @@ int processContents( const shared_ptr<EncFS_Root> &rootInfo,
     const char *path, T &op )
 {
   int errCode = 0;
+  bool requestWrite = false;
+  bool createFile = false;
   shared_ptr<FileNode> node = rootInfo->root->openNode( path, "encfsctl",
-      O_RDONLY, &errCode );
+                                                        requestWrite, createFile,
+                                                        &errCode );
 
   if(!node)
   {
@@ -474,7 +476,9 @@ int processContents( const shared_ptr<EncFS_Root> &rootInfo,
     node = rootInfo->root->lookupNode( plainName.c_str(), "encfsctl" );
     if(node)
     {
-      errCode = node->open( O_RDONLY );
+      const bool requestWrite = false;
+      const bool create = false;
+      errCode = node->open( requestWrite, create );
       if(errCode < 0)
         node.reset();
     }
@@ -570,7 +574,10 @@ static int copyContents(const shared_ptr<EncFS_Root> &rootInfo,
     if(node->getAttr(attrs) != 0)
       return EXIT_FAILURE;
 
-    if(attrs.type == FsFileType::POSIX_LINK)
+    PosixFsExtraFileAttrs *extra = NULL;
+    if(attrs.extra &&
+       (extra = dynamic_cast<PosixFsExtraFileAttrs *>(attrs.extra.get())) &&
+       S_ISLNK( extra->mode ))
     {
       string d = rootInfo->root->cipherPath(encfsName);
       char linkContents[PATH_MAX+2];
@@ -584,8 +591,9 @@ static int copyContents(const shared_ptr<EncFS_Root> &rootInfo,
           targetName);
     } else
     {
-      mode_t mode = attrs.posix_mode ? *attrs.posix_mode :
-        attrs.type == FsFileType::DIRECTORY ? 0777 : 0666;
+      mode_t mode = extra
+        ? extra->mode
+        : attrs.type == FsFileType::DIRECTORY ? 0777 : 0666;
       int outfd = creat(targetName, mode);
 
       WriteOutput output(outfd);
@@ -620,7 +628,11 @@ static int traverseDirs(const shared_ptr<EncFS_Root> &rootInfo,
     if(dirNode->getAttr(attrs))
       return EXIT_FAILURE;
 
-    mode_t mode = attrs.posix_mode ? *attrs.posix_mode : 0777;
+    PosixFsExtraFileAttrs *extra = NULL;
+    mode_t mode = (attrs.extra &&
+                   (extra = dynamic_cast<PosixFsExtraFileAttrs *>(attrs.extra.get())))
+      ? extra->mode
+      : 0777;
     mkdir(destDir.c_str(), mode);
   }
 

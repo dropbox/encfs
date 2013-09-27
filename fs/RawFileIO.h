@@ -30,35 +30,33 @@ namespace encfs {
 class RawFileIO : public FileIO
 {
 public:
-    RawFileIO();
     RawFileIO( const std::string &fileName );
+
+    // can't copy RawFileIO unless we dup fd
+    RawFileIO( const RawFileIO & ) = delete;
+    RawFileIO &operator=( const RawFileIO & ) = delete;
+
+    int open( int flags, mode_t mode );
+
     virtual ~RawFileIO();
 
     virtual Interface interface() const override;
 
-    virtual void setFileName( const char *fileName ) override;
-    virtual const char *getFileName() const override;
+    virtual FsFileAttrs get_attrs() const override;
 
-    virtual int open( int flags ) override;
-    
-    virtual int getAttr( FsFileAttrs &stbuf ) const override;
-    virtual fs_off_t getSize() const override;
+    virtual size_t read( const IORequest & req ) const override;
+    virtual void write( const IORequest &req ) override;
 
-    virtual ssize_t read( const IORequest & req ) const override;
-    virtual bool write( const IORequest &req ) override;
-
-    virtual int truncate( fs_off_t size ) override;
+    virtual void truncate( fs_off_t size ) override;
 
     virtual bool isWritable() const override;
-protected:
 
+    virtual void sync(bool datasync) const override;
+
+protected:
     std::string name;
 
-    mutable bool knownSize;
-    mutable off_t fileSize;
-
     int fd;
-    int oldfd;
     bool canWrite;
 };
 

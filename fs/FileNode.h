@@ -17,17 +17,20 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-                             
+
 #ifndef _FileNode_incl_
 #define _FileNode_incl_
 
 #include "base/Mutex.h"
+
 #include "cipher/CipherKey.h"
+
 #include "fs/encfs.h"
+#include "fs/CipherFileIO.h"
 #include "fs/FileUtils.h"
 
 #include <inttypes.h>
-#include <sys/types.h>
+
 #include <string>
 
 namespace encfs {
@@ -56,16 +59,14 @@ public:
     bool setName( const char *plaintextName, const char *cipherName,
 	    uint64_t iv, bool setIVFirst = true);
 
-    // create node
-    // If uid/gid are not 0, then chown is used change ownership as specified
-    int mknod(mode_t mode, dev_t rdev, uid_t uid = 0, gid_t gid = 0);
+    // Returns < 0 on error (-errno)
+    int open(bool requestWrite, bool create);
 
-    // Returns < 0 on error (-errno), file descriptor on success.
-    int open(int flags) const;
+    void flush();
 
     // getAttr returns 0 on success, -errno on failure
-    int getAttr(FsFileAttrs &stbuf) const;
-    fs_off_t getSize() const;
+    int getAttr(FsFileAttrs &stbuf);
+    fs_off_t getSize();
 
     ssize_t read(fs_off_t offset, byte *data, size_t size) const;
     bool write(fs_off_t offset, byte *data, size_t size);
@@ -88,6 +89,7 @@ private:
     FSConfigPtr fsConfig;
 
     shared_ptr<FileIO> io;
+    shared_ptr<CipherFileIO> cipher_io;
     std::string _pname; // plaintext name
     std::string _cname; // encrypted name
     DirNode *parent;

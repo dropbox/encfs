@@ -144,7 +144,7 @@ bool userAllowMkdir( const shared_ptr<FsIO> &fs_io, const char *path, mode_t mod
   return userAllowMkdir(fs_io, 0, path, mode);
 }
 
-bool userAllowMkdir( const shared_ptr<FsIO> &fs_io, int promptno, const char *path, mode_t mode )
+bool userAllowMkdir( const shared_ptr<FsIO> &fs_io, int promptno, const char *path, mode_t /*mode*/ )
 {
   // TODO: can we internationalize the y/n names?  Seems strange to prompt in
   // their own language but then have to respond 'y' or 'n'.
@@ -171,7 +171,9 @@ bool userAllowMkdir( const shared_ptr<FsIO> &fs_io, int promptno, const char *pa
   {
     try
     {
-      fs_io->mkdir( fs_io->pathFromString( path ), mode );
+      // TODO: propagate mode in a X-platform way
+      // posix_mkdir()?
+      fs_io->mkdir( fs_io->pathFromString( path ) );
     } catch ( const Error & err )
     {
       cerr <<  _("Unable to create directory: ") << err.what() << "\n";
@@ -1455,8 +1457,7 @@ RootPtr initFS( EncFS_Context *ctx, const shared_ptr<EncFS_Opts> &opts )
     rootInfo = RootPtr( new EncFS_Root );
     rootInfo->cipher = cipher;
     rootInfo->volumeKey = volumeKey;
-    rootInfo->root = shared_ptr<DirNode>( 
-        new DirNode( ctx, opts->rootDir, fsConfig ));
+    rootInfo->root = std::make_shared<DirNode>( ctx, opts->rootDir, fsConfig );
   } else
   {
     if(opts->createIfNotFound)

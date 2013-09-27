@@ -21,17 +21,13 @@
 #ifndef _fstypes_incl_
 #define _fstypes_incl_
 
-#include <base/optional.h>
+#include <memory>
 
 namespace encfs {
 
 typedef uintptr_t fs_dir_handle_t;
 typedef intmax_t fs_time_t;
 typedef intmax_t fs_off_t;
-typedef uintmax_t fs_posix_mode_t;
-typedef uintmax_t fs_posix_uid_t;
-typedef uintmax_t fs_posix_gid_t;
-typedef uintmax_t fs_posix_ino_t;
 
 enum
 {
@@ -44,16 +40,11 @@ enum class FsFileType
   UNKNOWN,
   DIRECTORY,
   REGULAR,
-  POSIX_LINK,
 };
 
-enum class FsErrorCondition
-{
-  NONE,
-  ACCESS,
-  IO,
-  BUSY,
-  GENERIC,
+class FsExtraFileAttrs {
+public:
+  virtual ~FsExtraFileAttrs() {};
 };
 
 class FsFileAttrs
@@ -62,8 +53,7 @@ public:
   FsFileType type;
   fs_time_t mtime;
   fs_off_t size;
-  opt::optional<fs_posix_gid_t> posix_gid;
-  opt::optional<fs_posix_mode_t> posix_mode;
+  std::unique_ptr<FsExtraFileAttrs> extra;
 };
 
 }  // namespace encfs

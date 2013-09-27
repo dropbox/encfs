@@ -21,12 +21,51 @@
 #ifndef _PosixFsIO_incl_
 #define _PosixFsIO_incl_
 
+#include <sys/stat.h>
+
 #include <inttypes.h>
 #include <memory>
 
 #include "fs/FsIO.h"
 
+
+#ifndef linux
+#include <cerrno>
+
+static __inline int setfsuid(uid_t uid)
+{
+    uid_t olduid = geteuid();
+
+    seteuid(uid);
+
+    if (errno != EINVAL)
+        errno = 0;
+
+    return olduid;
+}
+
+static __inline int setfsgid(gid_t gid)
+{
+    gid_t oldgid = getegid();
+
+    setegid(gid);
+
+    if (errno != EINVAL)
+        errno = 0;
+
+    return oldgid;
+}
+#endif
+
 namespace encfs {
+
+class PosixFsExtraFileAttrs : public FsExtraFileAttrs
+{
+public:
+  decltype(stat::st_gid) gid;
+  decltype(stat::st_uid) uid;
+  decltype(stat::st_mode) mode;
+};
 
 /* forward declaration */
 class PosixFsIO;
@@ -41,10 +80,7 @@ public:
                           bool open_for_write = false,
                           bool create = false) override;
 
-    virtual void mkdir(const Path &path,
-                       fs_posix_mode_t mode = 0,
-                       fs_posix_uid_t uid = 0,
-                       fs_posix_gid_t gid = 0) override;
+    virtual void mkdir(const Path &path) override;
 
     virtual void rename(const Path &pathSrc, const Path &pathDst) override;
 
@@ -56,6 +92,13 @@ public:
     virtual void set_mtime(const Path &path, fs_time_t mtime) override;
 
     virtual FsFileAttrs get_attrs(const Path &path) override;
+
+    // extra posix-specific methods
+    virtual void mknod(const Path &path,
+                       mode_t mode, dev_t device, uid_t uid, gid_t gid);
+    virtual void mkdir(const Path &path,
+                       mode_t mode, uid_t uid, gid_t gid);
+
 };
 
 }  // namespace encfs

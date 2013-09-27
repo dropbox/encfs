@@ -34,6 +34,100 @@ namespace encfs {
 
 const std::error_category &errno_category() noexcept;
 
+static inline int get_errno_or_default(const std::system_error &err, int nomatch)
+{
+  if(err.code().default_error_condition().category() == std::generic_category()) return err.code().value();
+  return nomatch;
+}
+
+static inline int get_errno_or_abort(const std::system_error &err)
+{
+  if(err.code().default_error_condition().category() == std::generic_category()) return err.code().value();
+  throw err;
+}
+
+template<typename T, typename R, typename... Args>
+std::function<R(Args...)> bindMethod(const std::shared_ptr<T> &obj, R (T::*fn)(Args...))
+{
+  return [=](Args... args) {
+    return (obj.get()->*fn)( args... );
+  };
+}
+
+template<typename T, typename R, typename... Args>
+std::function<R(Args...)> bindMethod(const std::shared_ptr<T> &obj, R (T::*fn)(Args...) const)
+{
+  return [=](Args... args) {
+    return (obj.get()->*fn)( args... );
+  };
+}
+
+template<typename T, typename R, typename... Args>
+std::function<R(Args...)> bindMethod(T *obj, R (T::*fn)(Args...))
+{
+  return [=](Args... args) {
+    return (obj->*fn)( args... );
+  };
+}
+
+template<typename R, typename F, typename... Args, typename std::enable_if<!std::is_void<R>::value, int>::type = 0>
+int withExceptionCatcher(int defaultRes, F fn, R *res, Args... args)
+{
+  try
+  {
+    if (res) *res = fn( args... );
+    else fn( args... );
+    return 0;
+  } catch( const std::system_error &err )
+  {
+    return -get_errno_or_default( err, defaultRes );
+  } catch ( ... )
+  {
+    return -defaultRes;
+  }
+}
+
+template<typename F, typename... Args>
+int withExceptionCatcher(int defaultRes, F fn, Args... args)
+{
+  try
+  {
+    fn( args... );
+    return 0;
+  } catch( const std::system_error &err )
+  {
+    return -get_errno_or_default( err, defaultRes );
+  } catch ( ... )
+  {
+    return -defaultRes;
+  }
+}
+
+template<typename R, typename... Args, typename std::enable_if<!std::is_void<R>::value, int>::type = 0>
+std::function<int(Args..., R *)> wrapWithExceptionCatcher(int defaultRes, std::function<R(Args...)> fn)
+{
+  return [=] (Args... args, R *res) {
+    return withExceptionCatcher( defaultRes, fn, res, args... );
+  };
+}
+
+template<typename... Args>
+std::function<int(Args...)> wrapWithExceptionCatcher(int defaultRes, std::function<void(Args...)> fn)
+{
+  return [=] (Args... args) {
+    return withExceptionCatcher( defaultRes, fn, args... );
+  };
+}
+
+/*
+template<typename F, typename R, typename... Args>
+std::function<int(Args..., R *)> wrapWithExceptionCatcher(int defaultRes, F fn)
+{
+  return [=] (Args... args, R *res) {
+    return withExceptionCatcher( defaultRes, fn, args..., res );
+  };
+  }*/
+
 struct IORequest
 {
     fs_off_t offset;
@@ -59,30 +153,16 @@ public:
 
     virtual Interface interface() const =0;
 
-    // default implementation returns 1, meaning this is not block oriented.
-    virtual int blockSize() const; 
+    virtual FsFileAttrs get_attrs() const =0;
 
-    virtual void setFileName(const char *fileName) =0;
-    virtual const char *getFileName() const =0;
+    virtual size_t read(const IORequest &req) const =0;
+    virtual void write(const IORequest &req) =0;
 
-    // Not sure about this -- it is specific to CipherFileIO, but the
-    // alternative methods of exposing this interface aren't much nicer..
-    virtual bool setIV( uint64_t iv );
-
-    // open file for specified mode.  There is no corresponding close, so a
-    // file is open until the FileIO interface is destroyed.
-    virtual int open( int flags ) =0;
-
-    // get filesystem attributes for a file
-    virtual int getAttr( FsFileAttrs & ) const =0;
-    virtual fs_off_t getSize() const =0;
-
-    virtual ssize_t read( const IORequest &req ) const =0;
-    virtual bool write( const IORequest &req ) =0;
-
-    virtual int truncate( fs_off_t size ) =0;
+    virtual void truncate(fs_off_t size) =0;
 
     virtual bool isWritable() const =0;
+
+    virtual void sync(bool datasync) const =0;
 };
 
 }  // namespace encfs

@@ -23,6 +23,7 @@
 #ifndef _optional_incl_
 #define _optional_incl_
 
+#include <new>
 #include <stdexcept>
 
 #include "base/config.h"
@@ -77,17 +78,24 @@ public:
   , _engaged( true )
   {}
 
-  optional &operator=(optional val)
+  optional &operator=(const optional &val)
   {
     if(val._engaged)
     {
-      _val = std::move(val._val);
-      _engaged = true;
+      if (_engaged) _val = val._val;
+      else
+      {
+        // construct in place
+        new (&_val) T( val._val );
+        _engaged = true;
+      }
     } else
     {
       if(_engaged)
+      {
         _val.~T();
-      _engaged = false;
+        _engaged = false;
+      }
     }
     return *this;
   }
@@ -98,6 +106,28 @@ public:
     *this = val;
   }
 
+  optional &operator=(optional && val)
+  {
+    if(val._engaged)
+    {
+      if(_engaged) _val = std::move( val._val );
+      else
+      {
+        // construct in place
+        new (&_val) T( std::move( val._val ) );
+        _engaged = true;
+      }
+    } else
+    {
+      if(_engaged)
+      {
+        _val.~T();
+        _engaged = false;
+      }
+    }
+    return *this;
+  }
+
   optional(optional && val)
   : optional()
   {
@@ -106,31 +136,34 @@ public:
 
   ~optional()
   {
-    if (_engaged)
+    if(_engaged)
+    {
       _val.~T();
+      _engaged = false;
+    }
   }
 
   constexpr const T &operator *() const
   {
-    static_assert(_engaged, "bad optional access");
+    static_assert( _engaged, "bad optional access" );
     return _val;
   }
 
   T &operator *()
   {
-    if (!_engaged) { throw bad_optional_access("bad optional access"); }
+    if(!_engaged) { throw bad_optional_access( "bad optional access" ); }
     return _val;
   }
 
   constexpr const T *operator ->() const
   {
-    static_assert(_engaged, "bad optional access");
+    static_assert( _engaged, "bad optional access" );
     return &_val;
   }
 
   T *operator ->()
   {
-    if (!_engaged) { throw bad_optional_access("bad optional access"); }
+    if(!_engaged) { throw bad_optional_access( "bad optional access" ); }
     return &_val;
   }
 

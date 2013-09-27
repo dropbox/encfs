@@ -37,7 +37,7 @@
 #include <sys/xattr.h>
 #endif
 
-
+#include <functional>
 #include <string>
 #include <map>
 
@@ -95,11 +95,30 @@ static EncFS_Context * context()
     can be done here.
 */
 
+template<typename T, typename R, typename... Args>
+std::function<int(const std::string &, Args..., R *)> fsMethodToCStyleFn(const shared_ptr<T> &obj,
+                                                                         R (T::*fn)(const Path &, Args...))
+{
+  std::function<R(const std::string &, Args...)> string_fn = [=] (const std::string &p, Args... args) {
+    return (obj.get()->*fn)( obj->pathFromString( p ), args... );
+  };
+  return wrapWithExceptionCatcher( EIO, std::move( string_fn ) );
+}
+
+template<typename T, typename... Args>
+std::function<int(const std::string &, Args...)> fsMethodToCStyleFn(const shared_ptr<T> &obj,
+                                                                    void (T::*fn)(const Path &, Args...))
+{
+  std::function<void(const std::string &, Args...)> string_fn = [=] (const std::string &p, Args... args) {
+    return (obj.get()->*fn)( obj->pathFromString( p ), args... );
+  };
+  return wrapWithExceptionCatcher( EIO, std::move( string_fn ) );
+}
+
 // helper function -- apply a functor to a cipher path, given the plain path
-template<typename T>
-static int withCipherPath( const char *opName, const char *path,
-    int (*op)(EncFS_Context *, const string &name, T data ), T data,
-    bool passReturnCode = false )
+template<typename T, typename... Args>
+static int withCipherPath( const char *opName, T op,
+                           const char *path, Args... args )
 {
   EncFS_Context *ctx = context();
 
@@ -113,20 +132,36 @@ static int withCipherPath( const char *opName, const char *path,
     string cyName = FSRoot->cipherPath( path );
     VLOG(1) << opName << " " << cyName.c_str();
 
-    res = op( ctx, cyName, data );
-
-    if(res == -1)
-    {
-      res = -errno;
-      LOG(INFO) << opName << " error: " << strerror(-res);
-    } else if(!passReturnCode)
-      res = ESUCCESS;
+    res = op( cyName, args... );
+    if(res < 0) LOG(INFO) << opName << " error: " << strerror(-res);
   } catch( Error &err )
   {
-    LOG(ERROR) << "error caught in " << opName << 
+    LOG(ERROR) << "error caught in " << opName <<
       ":" << err.what();
   }
   return res;
+}
+
+template<typename T, typename R, typename... Args>
+std::function<int(const char *, Args..., R *)> defaultFsWrap(const char *requestor,
+                                                             const shared_ptr<T> &obj,
+                                                             R (T::*fn)(const Path &, Args...))
+{
+  auto c_mknod = fsMethodToCStyleFn( obj, fn );
+  return [=] (const char *path, Args... args, R *ret) {
+    return withCipherPath(requestor, c_mknod, path, args..., ret);
+  };
+}
+
+template<typename T, typename... Args>
+std::function<int(const char *, Args...)> defaultFsWrap(const char *requestor,
+                                                             const shared_ptr<T> &obj,
+                                                             void (T::*fn)(const Path &, Args...))
+{
+  auto c_mknod = fsMethodToCStyleFn( obj, fn );
+  return [=] (const char *path, Args... args) {
+    return withCipherPath(requestor, c_mknod, path, args...);
+  };
 }
 
 // helper function -- apply a functor to a node
@@ -164,11 +199,47 @@ static int withFileNode( const char *opName,
   return res;
 }
 
+static int encfs_file_type_to_dirent_type(FsFileType ft) {
+  static std::map<FsFileType, int> theMapper = {
+    {FsFileType::DIRECTORY, DT_DIR},
+    {FsFileType::REGULAR, DT_REG},
+  };
+  /* DT_UNKNOWN should be zero since that is what is returned if
+     the type constant does not exist in the map */
+  static_assert(!DT_UNKNOWN, "DT_UNKNOWN must be 0");
+  return theMapper[ft];
+}
+
+static int encfs_file_type_to_stat_type(FsFileType ft) {
+  static std::map<FsFileType, int> theMapper = {
+    {FsFileType::DIRECTORY, S_IFDIR},
+    {FsFileType::REGULAR, S_IFREG},
+  };
+  return theMapper[ft];
+}
+
+static void fill_stbuf_from_file_attrs(struct stat *stbuf, FsFileAttrs *attrs)
+{
+  stbuf->st_size = attrs->size;
+  PosixFsExtraFileAttrs *extra = NULL;
+  if (attrs->extra &&
+      (extra = dynamic_cast<PosixFsExtraFileAttrs *>(attrs->extra.get())))
+  {
+    stbuf->st_mode = extra->mode;
+    stbuf->st_gid = extra->gid;
+    stbuf->st_uid = extra->uid;
+  } else
+    stbuf->st_mode = encfs_file_type_to_stat_type( attrs->type ) | 0777;
+  stbuf->st_mtime = attrs->mtime;
+}
+
 int _do_getattr(FileNode *fnode, struct stat *stbuf)
 {
   FsFileAttrs attrs;
   int res = fnode->getAttr(attrs);
-  if(res == ESUCCESS && attrs.type == FsFileType::POSIX_LINK)
+  if(res == ESUCCESS)
+    fill_stbuf_from_file_attrs(stbuf, &attrs);
+  if(res == ESUCCESS && S_ISLNK( stbuf->st_mode ))
   {
     EncFS_Context *ctx = context();
     shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
@@ -197,6 +268,10 @@ int _do_getattr(FileNode *fnode, struct stat *stbuf)
 
 int encfs_getattr(const char *path, struct stat *stbuf)
 {
+  // TODO: use FS getattr
+  // for now transparently taken care of by FileNode
+  // (but this is really bad since the FileNode uses fstat, not lstat like
+  //  getattr expects)
   return withFileNode( "getattr", path, NULL, _do_getattr, stbuf );
 }
 
@@ -204,17 +279,6 @@ int encfs_fgetattr(const char *path, struct stat *stbuf,
     struct fuse_file_info *fi)
 {
   return withFileNode( "fgetattr", path, fi, _do_getattr, stbuf );
-}
-
-static int encfs_file_type_to_fuse(FsFileType ft) {
-  static std::map<FsFileType, int> theMapper = {
-    {FsFileType::DIRECTORY, DT_DIR},
-    {FsFileType::REGULAR, DT_REG},
-  };
-  /* DT_UNKNOWN should be zero since that is what is returned if
-     the type constant does not exist in the map */
-  static_assert(!DT_UNKNOWN, "DT_UNKNOWN must be 0");
-  return theMapper[ft];
 }
 
 int encfs_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
@@ -236,17 +300,17 @@ int encfs_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
     if(dt.valid())
     {
       FsFileType fileType = FsFileType::UNKNOWN;
-      fs_posix_ino_t inode = 0;
+      ino_t inode = 0;
 
-      std::string name = dt.nextPlaintextName( &fileType, &inode );
+      std::string name = dt.nextPlaintextName( &fileType );
       while( !name.empty() )
       {
-        res = filler( h, name.c_str(), encfs_file_type_to_fuse(fileType), (ino_t) inode );
+        res = filler( h, name.c_str(), encfs_file_type_to_dirent_type(fileType), (ino_t) inode );
 
         if(res != ESUCCESS)
           break;
 
-        name = dt.nextPlaintextName( &fileType, &inode );
+        name = dt.nextPlaintextName( &fileType );
       } 
     } else
     {
@@ -261,8 +325,37 @@ int encfs_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
   }
 }
 
+int _do_mknod(const string &cyName, mode_t mode, dev_t rdev, uid_t uid, gid_t gid)
+{
+  EncFS_Context *ctx = context();
+
+  int res = -1;
+  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
+  if(!FSRoot)
+    return res;
+
+  assert( !S_ISREG( mode ) );
+  if (S_ISFIFO( mode ))
+  {
+    res = ::mkfifo( cyName.c_str(), mode );
+    if (res < 0) res = -errno;
+  }
+  else
+  {
+    auto posix_fs = std::dynamic_pointer_cast<PosixFsIO>( FSRoot->get_fs() );
+    if(posix_fs)
+    {
+      auto c_mknod = fsMethodToCStyleFn( posix_fs, &PosixFsIO::mknod );
+      res = c_mknod( cyName, mode, rdev, uid, gid );
+    }
+  }
+
+  return res;
+}
+
 int encfs_mknod(const char *path, mode_t mode, dev_t rdev)
 {
+  fuse_context *fctx = fuse_get_context();
   EncFS_Context *ctx = context();
 
   int res = -EIO;
@@ -270,35 +363,57 @@ int encfs_mknod(const char *path, mode_t mode, dev_t rdev)
   if(!FSRoot)
     return res;
 
+  auto posix_fs = std::dynamic_pointer_cast<PosixFsIO>( FSRoot->get_fs() );
+  if(!posix_fs)
+    return res;
+
+  using namespace std::placeholders;
+  std::function<int(uid_t, gid_t)> mknod_fn;
+  if(S_ISREG( mode ))
+  {
+    const bool requestWrite = false;
+    const bool createFile = true;
+    mknod_fn = [=] (uid_t /*uid*/, gid_t /*gid*/) {
+      // TODO: use uid, gid
+      int res;
+      FSRoot->openNode(path, "mknod", requestWrite, createFile, &res);
+      return res;
+    };
+  } else
+  {
+    mknod_fn = std::bind(withCipherPath<decltype(_do_mknod), mode_t, dev_t, uid_t, gid_t>,
+                         "mknod", _do_mknod,
+                         path, mode, rdev, _1, _2);
+  }
+
   try
   {
-    shared_ptr<FileNode> fnode = FSRoot->lookupNode( path, "mknod" );
-
-    VLOG(1) << "mknod on " << fnode->cipherName()
-            << ", mode " << mode << ", dev " << rdev;
-
     uid_t uid = 0;
     gid_t gid = 0;
     if(ctx->publicFilesystem)
     {
-      fuse_context *context = fuse_get_context();
-      uid = context->uid;
-      gid = context->gid;
+      uid = fctx->uid;
+      gid = fctx->gid;
     }
-    res = fnode->mknod( mode, rdev, uid, gid );
+
+    res = mknod_fn( uid, gid );
+
     // Is this error due to access problems?
-    if(ctx->publicFilesystem && -res == EACCES)
+    if(ctx->publicFilesystem && res == EACCES)
     {
       // try again using the parent dir's group
-      string parent = fnode->plaintextParent();
+      string parent = FSRoot->plaintextParent( path );
       LOG(INFO) << "attempting public filesystem workaround for " 
                 << parent.c_str();
       shared_ptr<FileNode> dnode = 
         FSRoot->lookupNode( parent.c_str(), "mknod" );
 
       FsFileAttrs attrs;
-      if(dnode->getAttr( attrs ) == 0 && attrs.posix_gid)
-        res = fnode->mknod( mode, rdev, uid, *attrs.posix_gid );
+      PosixFsExtraFileAttrs *posix_attrs;
+      if(dnode->getAttr( attrs ) == 0 &&
+         attrs.extra &&
+         (posix_attrs = dynamic_cast<PosixFsExtraFileAttrs *>(attrs.extra.get())))
+        res = mknod_fn( uid, posix_attrs->gid );
     }
   } catch( Error &err )
   {
@@ -317,6 +432,14 @@ int encfs_mkdir(const char *path, mode_t mode)
   if(!FSRoot)
     return res;
 
+  auto posix_fs = std::dynamic_pointer_cast<PosixFsIO>( FSRoot->get_fs() );
+  if(!posix_fs)
+    return res;
+
+  auto mkdir_fn = defaultFsWrap( "mkdir", posix_fs,
+                                 // pick the posix form of mkdir
+                                 (void (PosixFsIO::*)(const Path &, mode_t, uid_t, gid_t)) &PosixFsIO::mkdir );
+
   try
   {
     uid_t uid = 0;
@@ -326,18 +449,21 @@ int encfs_mkdir(const char *path, mode_t mode)
       uid = fctx->uid;
       gid = fctx->gid;
     }
-    res = FSRoot->mkdir( path, mode, uid, gid );
+    res = mkdir_fn( path, mode, uid, gid );
     // Is this error due to access problems?
     if(ctx->publicFilesystem && -res == EACCES)
     {
       // try again using the parent dir's group
-      string parent = parentDirectory( ctx->opts->fs_io, path );
+      string parent = FSRoot->plaintextParent( path );
       shared_ptr<FileNode> dnode = 
         FSRoot->lookupNode( parent.c_str(), "mkdir" );
 
       FsFileAttrs attrs;
-      if(dnode->getAttr( attrs ) == 0 && attrs.posix_gid)
-        res = FSRoot->mkdir( path, mode, uid, *attrs.posix_gid );
+      PosixFsExtraFileAttrs *posix_attrs;
+      if(dnode->getAttr( attrs ) == 0 &&
+         attrs.extra &&
+         (posix_attrs = dynamic_cast<PosixFsExtraFileAttrs *>(attrs.extra.get())))
+        res = mkdir_fn( path, mode, uid, posix_attrs->gid );
     }
   } catch( Error &err )
   {
@@ -368,22 +494,20 @@ int encfs_unlink(const char *path)
 }
 
 
-int _do_rmdir(EncFS_Context *, const string &cipherPath, int )
+int _do_rmdir(const string &cipherPath)
 {
-  return rmdir( cipherPath.c_str() );
+  const int res = rmdir( cipherPath.c_str() );
+  return (res == -1) ? -errno : ESUCCESS;
 }
 
 int encfs_rmdir(const char *path)
 {
-  return withCipherPath( "rmdir", path, _do_rmdir, 0 );
+  return withCipherPath( "rmdir", _do_rmdir, path );
 }
 
-int _do_readlink(EncFS_Context *ctx, const string &cyName,
-    tuple<char *, size_t> data )
+int _do_readlink(const string &cyName, char *buf, size_t size)
 {
-  char *buf = get<0>(data);
-  size_t size = get<1>(data);
-
+  EncFS_Context *ctx = context();
   int res = ESUCCESS;
   shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
   if(!FSRoot)
@@ -410,14 +534,13 @@ int _do_readlink(EncFS_Context *ctx, const string &cyName,
   } else
   {
     LOG(WARNING) << "Error decoding link";
-    return -1;
+    return -EIO;
   }
 }
 
 int encfs_readlink(const char *path, char *buf, size_t size)
 {
-  return withCipherPath( "readlink", path, _do_readlink, 
-      make_tuple(buf, size) );
+  return withCipherPath( "readlink", _do_readlink, path, buf, size );
 }
 
 int encfs_symlink(const char *from, const char *to)
@@ -502,30 +625,32 @@ int encfs_rename(const char *from, const char *to)
   return res;
 }
 
-int _do_chmod(EncFS_Context *, const string &cipherPath, mode_t mode)
+int _do_chmod(const string &cipherPath, mode_t mode)
 {
+  // TODO: wtf?!? fix this
+  int res;
 #ifdef HAVE_LCHMOD
-  return lchmod( cipherPath.c_str(), mode );
+  res = lchmod( cipherPath.c_str(), mode );
 #else
-  return chmod( cipherPath.c_str(), mode );
+  res = chmod( cipherPath.c_str(), mode );
 #endif
+  return (res == -1) ? -errno : ESUCCESS;
 }
 
 int encfs_chmod(const char *path, mode_t mode)
 {
-  return withCipherPath( "chmod", path, _do_chmod, mode );
+  return withCipherPath( "chmod", _do_chmod, path, mode );
 }
 
-int _do_chown(EncFS_Context *, const string &cyName, 
-    tuple<uid_t, gid_t> data)
+int _do_chown(const string &cyName, uid_t uid, gid_t gid)
 {
-  int res = lchown( cyName.c_str(), get<0>(data), get<1>(data) );
+  int res = lchown( cyName.c_str(), uid, gid );
   return (res == -1) ? -errno : ESUCCESS;
 }
 
 int encfs_chown(const char *path, uid_t uid, gid_t gid)
 {
-  return withCipherPath( "chown", path, _do_chown, make_tuple(uid, gid));
+  return withCipherPath( "chown", _do_chown, path, uid, gid);
 }
 
 int _do_truncate( FileNode *fnode, off_t size )
@@ -535,6 +660,7 @@ int _do_truncate( FileNode *fnode, off_t size )
 
 int encfs_truncate(const char *path, off_t size)
 {
+  /* TODO: use FsIO truncate, this is currently hacked in FileNode.cpp */
   return withFileNode( "truncate", path, NULL, _do_truncate, size );
 }
 
@@ -543,7 +669,7 @@ int encfs_ftruncate(const char *path, off_t size, struct fuse_file_info *fi)
   return withFileNode( "ftruncate", path, fi, _do_truncate, size );
 }
 
-int _do_utime(EncFS_Context *, const string &cyName, struct utimbuf *buf)
+int _do_utime(const string &cyName, struct utimbuf *buf)
 {
   int res = utime( cyName.c_str(), buf);
   return (res == -1) ? -errno : ESUCCESS;
@@ -551,11 +677,10 @@ int _do_utime(EncFS_Context *, const string &cyName, struct utimbuf *buf)
 
 int encfs_utime(const char *path, struct utimbuf *buf)
 {
-  return withCipherPath( "utime", path, _do_utime, buf );
+  return withCipherPath( "utime", _do_utime, path, buf );
 }
 
-int _do_utimens(EncFS_Context *, const string &cyName, 
-    const struct timespec ts[2])
+int _do_utimens(const string &cyName, const struct timespec ts[2])
 {
   struct timeval tv[2];
   tv[0].tv_sec = ts[0].tv_sec;
@@ -567,9 +692,9 @@ int _do_utimens(EncFS_Context *, const string &cyName,
   return (res == -1) ? -errno : ESUCCESS;
 }
 
-int encfs_utimens(const char *path, const struct timespec ts[2] )
+int encfs_utimens(const char *path, const struct timespec ts[2])
 {
-  return withCipherPath( "utimens", path, _do_utimens, ts );
+  return withCipherPath( "utimens", _do_utimens, path, ts );
 }
 
 int encfs_open(const char *path, struct fuse_file_info *file)
@@ -583,8 +708,12 @@ int encfs_open(const char *path, struct fuse_file_info *file)
 
   try
   {
-    shared_ptr<FileNode> fnode = 
-      FSRoot->openNode( path, "open", file->flags, &res );
+    bool requestWrite = ((file->flags & O_RDWR) ||
+                         (file->flags & O_WRONLY));
+
+    bool createFile = false;
+    shared_ptr<FileNode> fnode =
+      FSRoot->openNode( path, "open", requestWrite, createFile, &res );
 
     if(fnode)
     {
@@ -611,16 +740,7 @@ int _do_flush(FileNode *fnode, int )
      close the file.  However it is important to call close() for some
      underlying filesystems (like NFS).
    */
-  int res = fnode->open( O_RDONLY );
-  if(res >= 0)
-  {
-    int fh = res;
-    res = close(dup(fh));
-    if(res == -1)
-      res = -errno;
-  }
-
-  return res;
+  return withExceptionCatcher( EIO, bindMethod( fnode, &FileNode::flush ) );
 }
 
 int encfs_flush(const char *path, struct fuse_file_info *fi)
@@ -719,86 +839,85 @@ int encfs_statfs(const char *path, struct statvfs *st)
 
 
 #ifdef XATTR_ADD_OPT
-int _do_setxattr(EncFS_Context *, const string &cyName, 
-    tuple<const char *, const char *, size_t, uint32_t> data)
+int _do_setxattr(const string &cyName,
+    const char *name, const char *value, size_t size, uint32_t position)
 {
-  int options = XATTR_NOFOLLOW;
-  return ::setxattr( cyName.c_str(), get<0>(data), get<1>(data), 
-      get<2>(data), get<3>(data), options );
+  const int options = XATTR_NOFOLLOW;
+  int res = ::setxattr( cyName.c_str(), name, value, size, position, options );
+  return (res == -1) ? -errno : ESUCCESS;
 }
 int encfs_setxattr( const char *path, const char *name,
     const char *value, size_t size, int flags, uint32_t position )
 {
   (void)flags;
-  return withCipherPath( "setxattr", path, _do_setxattr, 
-      make_tuple(name, value, size, position) );
+  return withCipherPath( "setxattr", _do_setxattr,
+                         path, name, value, size, position);
 }
 #else
-int _do_setxattr(EncFS_Context *, const string &cyName, 
-    tuple<const char *, const char *, size_t, int> data)
+int _do_setxattr(const string &cyName,
+                 const char *name, const char *value, size_t size, int flags)
 {
-  return ::setxattr( cyName.c_str(), get<0>(data), get<1>(data), 
-      get<2>(data), get<3>(data) );
+  int res = ::setxattr( cyName.c_str(), name, value, size, flags );
+  return (res == -1) ? -errno : ESUCCESS;
 }
 int encfs_setxattr( const char *path, const char *name,
     const char *value, size_t size, int flags )
 {
-  return withCipherPath( "setxattr", path, _do_setxattr, 
-      make_tuple(name, value, size, flags) );
+  return withCipherPath( "setxattr", _do_setxattr,
+                         path, name, value, size, flags );
 }
 #endif
 
 
 #ifdef XATTR_ADD_OPT
-int _do_getxattr(EncFS_Context *, const string &cyName,
-    tuple<const char *, void *, size_t, uint32_t> data)
+int _do_getxattr(const string &cyName,
+                 const char *name, void *value, size_t size, uint32_t position)
 {
   int options = 0;
-  return ::getxattr( cyName.c_str(), get<0>(data), 
-      get<1>(data), get<2>(data), get<3>(data), options );
+  int res = ::getxattr( cyName.c_str(), name, value, size, position, options );
+  return (res == -1) ? -errno : res;
 }
 int encfs_getxattr( const char *path, const char *name,
     char *value, size_t size, uint32_t position )
 {
-  return withCipherPath( "getxattr", path, _do_getxattr, 
-      make_tuple(name, (void *)value, size, position), true );
+  return withCipherPath( "getxattr", _do_getxattr,
+                         path, name, (void *) value, size, position );
 }
 #else
-int _do_getxattr(EncFS_Context *, const string &cyName,
-    tuple<const char *, void *, size_t> data)
+int _do_getxattr(const string &cyName,
+                 const char *name, void *value, size_t size)
 {
-  return ::getxattr( cyName.c_str(), get<0>(data), 
-      get<1>(data), get<2>(data));
+  int res = ::getxattr( cyName.c_str(), name, value, size );
+  return (res == -1) ? -errno : res;
 }
 int encfs_getxattr( const char *path, const char *name,
-    char *value, size_t size )
+                    char *value, size_t size )
 {
-  return withCipherPath( "getxattr", path, _do_getxattr, 
-      make_tuple(name, (void *)value, size), true );
+  return withCipherPath( "getxattr", path, _do_getxattr,
+                         name, (void *) value, size );
 }
 #endif
 
 
-int _do_listxattr(EncFS_Context *, const string &cyName,
-    tuple<char *, size_t> data)
+int _do_listxattr(const string &cyName,
+                  char *list, size_t size)
 {
 #ifdef XATTR_ADD_OPT
   int options = 0;
-  int res = ::listxattr( cyName.c_str(), get<0>(data), get<1>(data),
-      options );
+  int res = ::listxattr( cyName.c_str(), list, size, options);
 #else
-  int res = ::listxattr( cyName.c_str(), get<0>(data), get<1>(data) );
+  int res = ::listxattr( cyName.c_str(), list, size );
 #endif
   return (res == -1) ? -errno : res;
 }
 
 int encfs_listxattr( const char *path, char *list, size_t size )
 {
-  return withCipherPath( "listxattr", path, _do_listxattr, 
-      make_tuple(list, size), true );
+  return withCipherPath( "listxattr", _do_listxattr, path,
+                         list, size );
 }
 
-int _do_removexattr(EncFS_Context *, const string &cyName, const char *name)
+int _do_removexattr(const string &cyName, const char *name)
 {
 #ifdef XATTR_ADD_OPT
   int options = 0;
@@ -806,12 +925,12 @@ int _do_removexattr(EncFS_Context *, const string &cyName, const char *name)
 #else
   int res = ::removexattr( cyName.c_str(), name );
 #endif
-  return (res == -1) ? -errno : res;
+  return (res == -1) ? -errno : ESUCCESS;
 }
 
 int encfs_removexattr( const char *path, const char *name )
 {
-  return withCipherPath( "removexattr", path, _do_removexattr, name );
+  return withCipherPath( "removexattr", _do_removexattr, path, name );
 }
 
 }  // namespace encfs

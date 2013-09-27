@@ -49,15 +49,4 @@ const std::error_category &errno_category() noexcept
 FileIO::~FileIO()
 {}
 
-int FileIO::blockSize() const
-{
-    return 1;
-}
-
-bool FileIO::setIV( uint64_t iv )
-{
-    (void)iv;
-    return true;
-}
-
 }  // namespace encfs

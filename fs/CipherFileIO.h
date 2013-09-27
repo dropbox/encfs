@@ -39,27 +39,27 @@ class CipherV1;
 class CipherFileIO : public BlockFileIO
 {
 public:
-    CipherFileIO( const shared_ptr<FileIO> &base, 
+    CipherFileIO( const shared_ptr<FileIO> &base,
                   const FSConfigPtr &cfg);
+
+    bool setIV( uint64_t iv );
+    void setBase( const shared_ptr<FileIO> &base );
+
     virtual ~CipherFileIO();
 
     virtual Interface interface() const override;
 
-    virtual void setFileName( const char *fileName ) override;
-    virtual const char *getFileName() const override;
-    virtual bool setIV( uint64_t iv ) override;
-
-    virtual int open( int flags ) override;
-
-    virtual int getAttr( FsFileAttrs &stbuf ) const override;
-    virtual fs_off_t getSize() const override;
+    virtual FsFileAttrs get_attrs() const override;
 
     // NOTE: if truncate is used to extend the file, the extended plaintext is
     // not 0.  The extended ciphertext may be 0, resulting in non-zero
     // plaintext.
-    virtual int truncate( fs_off_t size ) override;
+    virtual void truncate( fs_off_t size ) override;
 
     virtual bool isWritable() const override;
+
+    virtual void sync(bool datasync) const override;
+
 
 private:
     virtual ssize_t readOneBlock( const IORequest &req ) const override;
@@ -88,7 +88,6 @@ private:
     bool perFileIV;
     uint64_t externalIV;
     uint64_t fileIV;
-    int lastFlags;
 
     shared_ptr<CipherV1> cipher;
 };

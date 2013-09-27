@@ -68,10 +68,10 @@ DirTraverse& DirTraverse::operator=(DirTraverse && other)
   return *this;
 }
 
-std::string DirTraverse::nextPlaintextName(FsFileType */*fileType*/, fs_posix_ino_t */*inode*/)
+std::string DirTraverse::nextPlaintextName(FsFileType */*fileType*/)
 {
   opt::optional<FsDirEnt> dirent;
-  while(!(dirent = dir_io->readdir()))
+  while((dirent = dir_io->readdir()))
   {
     try
     {
@@ -275,8 +275,8 @@ DirNode::DirNode(EncFS_Context *_ctx,
                  const FSConfigPtr &_config)
   : mutex()
   , ctx( _ctx )
-  , rootDir( fsConfig->opts->fs_io->pathFromString( sourceDir ) )
   , fsConfig( _config )
+  , rootDir( fsConfig->opts->fs_io->pathFromString( sourceDir ) )
   , naming( fsConfig->nameCoding )
   , fs_io( fsConfig->opts->fs_io )
 {
@@ -311,6 +311,11 @@ string DirNode::cipherPath(const char *plaintextPath)
 string DirNode::cipherPathWithoutRoot(const char *plaintextPath)
 {
   return naming->encodePath( plaintextPath );
+}
+
+string DirNode::plaintextParent(const string &path)
+{
+  return parentDirectory( fs_io, path );
 }
 
 static bool startswith(const std::string &a, const std::string &b)
@@ -370,15 +375,22 @@ DirTraverse DirNode::openDir(const char *plaintextPath)
   auto cyName = appendToRoot( naming->encodePath( plaintextPath ) );
   //rDebug("openDir on %s", cyName.c_str() );
 
+  opt::optional<Directory> dir_io;
+  const int res = withExceptionCatcher( (int) std::errc::io_error,
+                                        bindMethod( fs_io, &FsIO::opendir ),
+                                        &dir_io, cyName );
+  if(res < 0) return DirTraverse();
+
+  assert( dir_io );
+
   try
   {
-    auto dir_io = fs_io->opendir( cyName );
     uint64_t iv = 0;
     // if we're using chained IV mode, then compute the IV at this
     // directory level..
     if( naming->getChainedNameIV() )
       naming->encodePath( plaintextPath, &iv );
-    return DirTraverse( std::move( dir_io ), iv, naming );
+    return DirTraverse( std::move( *dir_io ), iv, naming );
   } catch( Error &err )
   {
     LOG(ERROR) << "encode err: " << err.what();
@@ -519,31 +531,15 @@ DirNode::newRenameOp(const char *fromP, const char *toP)
     return shared_ptr<RenameOp>( new RenameOp(this, renameList) );
 }
 
-
-int DirNode::mkdir(const char *plaintextPath, fs_posix_mode_t mode,
-                       fs_posix_uid_t uid, fs_posix_gid_t gid)
+int DirNode::mkdir(const char *plaintextPath)
 {
   auto cyName = appendToRoot( naming->encodePath( plaintextPath ) );
 
   VLOG(1) << "mkdir on " << cyName;
 
-  try
-  {
-    try
-    {
-      fs_io->mkdir( cyName, mode, uid, gid );
-      return 0;
-    } catch ( const std::system_error & err )
-    {
-      if(err.code().category() == std::generic_category()) return -err.code().value();
-      throw;
-    }
-  } catch ( const Error & err )
-  {
-    LOG(WARNING) << "mkdir error on " << cyName
-                 << " mode " << mode << ": " << err.what();
-    return -(int) std::errc::io_error;
-  }
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::mkdir ),
+                               std::move( cyName ) );
 }
 
 int
@@ -583,34 +579,27 @@ DirNode::rename(const char *fromPlaintext, const char *toPlaintext)
     try
     {
       old_mtime = fs_io->get_attrs( fromCName ).mtime;
-    } catch (const Error &err)
+    } catch ( const std::exception &err )
     {
       LOG(WARNING) << "get_mtime error: " << err.what();
       preserve_mtime = false;
     }
 
     renameNode( fromPlaintext, toPlaintext );
-    try
-    {
-      fs_io->rename( fromCName, toCName );
-      if(preserve_mtime)
-      {
-        try
-        {
-          fs_io->set_mtime( toCName, old_mtime );
-        } catch (const Error &err)
-        {
-          LOG(WARNING) << "set_mtime error: " << err.what();
-        }
-      }
-    } catch (const Error &err)
+    res = withExceptionCatcher((int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::rename ),
+                               fromCName, toCName );
+    if(res < 0)
     {
       // undo
-      res = -(int) std::errc::io_error;
       renameNode( toPlaintext, fromPlaintext, false );
 
       if(renameOp)
         renameOp->undo();
+    } else if(preserve_mtime)
+    {
+      withExceptionCatcher(1, bindMethod( fs_io, &FsIO::set_mtime ),
+                           toCName, old_mtime );
     }
   } catch( Error &err )
   {
@@ -631,27 +620,16 @@ int DirNode::link(const char *from, const char *to)
 
   VLOG(1) << "link " << fromCName << " -> " << toCName;
 
-  int res = -(int) std::errc::operation_not_permitted;
+  int res = 0;
   if(fsConfig->config->external_iv())
   {
     VLOG(1) << "hard links not supported with external IV chaining!";
+    res = -(int) std::errc::operation_not_permitted;
   } else
   {
-    try
-    {
-      try
-      {
-        fs_io->link( fromCName, toCName );
-        res = 0;
-      } catch ( const std::system_error &err )
-      {
-        if (err.code().category() == std::generic_category()) res = -err.code().value();
-        else throw;
-      }
-    } catch (const Error &err )
-    {
-      res = -(int) std::errc::io_error;
-    }
+    res = withExceptionCatcher( (int) std::errc::io_error,
+                                bindMethod( fs_io, &FsIO::link ),
+                                fromCName, toCName );
   }
 
   return res;
@@ -734,8 +712,8 @@ DirNode::lookupNode( const char *plainName, const char * requestor )
     with the stored state of the file.
 */
 shared_ptr<FileNode>
-DirNode::openNode( const char *plainName, const char * requestor, int flags,
-                   int *result )
+DirNode::openNode( const char *plainName, const char * requestor,
+                   bool requestWrite, bool createFile, int *result )
 {
   (void)requestor;
   rAssert( result != NULL );
@@ -743,7 +721,7 @@ DirNode::openNode( const char *plainName, const char * requestor, int flags,
 
   shared_ptr<FileNode> node = findOrCreate( plainName );
 
-  if(node && (*result = node->open( flags )) >= 0)
+  if(node && (*result = node->open( requestWrite, createFile )) >= 0)
     return node;
   else
     return shared_ptr<FileNode>();
@@ -768,20 +746,9 @@ int DirNode::unlink( const char *plaintextName )
   } else
   {
     auto fullName = appendToRoot( cyName );
-    try
-    {
-      try
-      {
-        fs_io->unlink( fullName );
-      } catch ( const std::system_error &err )
-      {
-        if(err.code().category() == std::generic_category()) res = -err.code().value();
-        throw;
-      }
-    } catch ( const Error &err )
-    {
-      res = -(int) std::errc::io_error;
-    }
+    res = withExceptionCatcher( (int) std::errc::io_error,
+                                bindMethod( fs_io, &FsIO::unlink ),
+                                fullName );
   }
 
   return res;

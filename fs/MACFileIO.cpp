@@ -79,26 +79,6 @@ Interface MACFileIO::interface() const
   return MACFileIO_iface;
 }
 
-int MACFileIO::open( int flags )
-{
-  return base->open( flags );
-}
-
-void MACFileIO::setFileName( const char *fileName )
-{
-  base->setFileName( fileName );
-}
-
-const char *MACFileIO::getFileName() const
-{
-  return base->getFileName();
-}
-
-bool MACFileIO::setIV( uint64_t iv )
-{
-  return base->setIV( iv );
-}
-
 inline static off_t roundUpDivide( off_t numerator, int denominator )
 {
   // integer arithmetic always rounds down, so we can round up by adding
@@ -134,40 +114,31 @@ static off_t locWithoutHeader( off_t offset, int blockSize, int headerSize )
   return offset - blockNum * headerSize;
 }
 
-int MACFileIO::getAttr( FsFileAttrs &stbuf ) const
+FsFileAttrs MACFileIO::get_attrs() const
 {
-  int res = base->getAttr( stbuf );
+  FsFileAttrs res = base->get_attrs();
 
-  if((res == 0) && stbuf.type == FsFileType::REGULAR)
+  if(res.type == FsFileType::REGULAR)
   {
     // have to adjust size field..
     int headerSize = macBytes + randBytes;
     int bs = blockSize() + headerSize;
-    stbuf.size = locWithoutHeader( stbuf.size, bs, headerSize );
+    res.size = locWithoutHeader( res.size, bs, headerSize );
   }
 
   return res;
 }
 
-fs_off_t MACFileIO::getSize() const
-{
-  // adjust the size to hide the header overhead we tack on..
-  int headerSize = macBytes + randBytes;
-  int bs = blockSize() + headerSize;
-
-  fs_off_t size = base->getSize();
-  if(size > 0)
-    size = locWithoutHeader( size, bs, headerSize );
-
-  return size;
-}
-
 ssize_t MACFileIO::readOneBlock( const IORequest &req ) const
 {
+  assert(blockSize() >= 0);
+  assert(req.offset >= 0);
+  assert(!(req.offset % blockSize()));
+  rAssert(req.dataLen <= (size_t) blockSize());
+
   int headerSize = macBytes + randBytes;
 
   int bs = blockSize() + headerSize;
-
   MemBlock mb;
   mb.allocate( bs );
 
@@ -270,12 +241,17 @@ bool MACFileIO::writeOneBlock( const IORequest &req )
   }
 
   // now, we can let the next level have it..
-  bool ok = base->write( newReq );
-
-  return ok;
+  try
+  {
+    base->write( newReq );
+    return true;
+  } catch( ... )
+  {
+    return false;
+  }
 }
 
-int MACFileIO::truncate( fs_off_t size )
+void MACFileIO::truncate( fs_off_t size )
 {
   int headerSize = macBytes + randBytes;
   int bs = blockSize() + headerSize;
@@ -284,13 +260,18 @@ int MACFileIO::truncate( fs_off_t size )
 
   if(res == 0)
     base->truncate( locWithHeader( size, bs, headerSize ) );
-
-  return res;
+  else
+    throw std::runtime_error("error calling blockTruncate()");
 }
 
 bool MACFileIO::isWritable() const
 {
   return base->isWritable();
+}
+
+void MACFileIO::sync(bool datasync) const
+{
+  return base->sync( datasync );
 }
 
 }  // namespace encfs

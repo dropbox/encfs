@@ -39,12 +39,6 @@ namespace encfs {
 
 static Interface RawFileIO_iface = makeInterface("FileIO/Raw", 1, 0, 0);
 
-FileIO *NewRawFileIO( const Interface &iface )
-{
-    (void)iface;
-    return new RawFileIO();
-}
-
 inline void swap( int &x, int &y )
 {
     int tmp = x;
@@ -52,21 +46,9 @@ inline void swap( int &x, int &y )
     y = tmp;
 }
 
-RawFileIO::RawFileIO( )
-    : knownSize( false )
-    , fileSize(0)
-    , fd( -1 )
-    , oldfd( -1 )
-    , canWrite( false )
-{
-}
-
 RawFileIO::RawFileIO( const std::string &fileName )
     : name( fileName )
-    , knownSize( false )
-    , fileSize( 0 )
     , fd( -1 )
-    , oldfd( -1 )
     , canWrite( false )
 {
 }
@@ -74,16 +56,15 @@ RawFileIO::RawFileIO( const std::string &fileName )
 RawFileIO::~RawFileIO()
 {
   int _fd = -1;
-  int _oldfd = -1;
 
   swap( _fd, fd );
-  swap( _oldfd, oldfd );
-
-  if( _oldfd != -1 )
-    close( _oldfd );
 
   if( _fd != -1 )
-    close( _fd );
+  {
+    int ret = close( _fd );
+    LOG_IF(WARNING, ret)
+      << "Close failed, leaking file descriptor!";
+  }
 }
 
 Interface RawFileIO::interface() const
@@ -91,87 +72,27 @@ Interface RawFileIO::interface() const
   return RawFileIO_iface;
 }
 
-/*
-    Workaround for opening a file for write when permissions don't allow.
-    Since the kernel has already checked permissions, we can assume it is ok to
-    provide access.  So force it by changing permissions temporarily.  Should
-    be called with a lock around it so that there won't be a race condition
-    with calls to lstat picking up the wrong permissions.
-*/
-static int open_readonly_workaround(const char *path, int flags)
+/* wrapper for posix open */
+int RawFileIO::open(int flags, mode_t mode)
 {
-  int fd = -1;
-  struct stat stbuf;
-  memset(&stbuf, 0, sizeof(struct stat));
-  if(lstat( path, &stbuf ) != -1)
+  if(fd >= 0)
+    throw std::runtime_error( "already opened!" );
+
+  bool requestWrite = ((flags & O_RDWR) ||
+                       (flags & O_WRONLY));
+  int newFd = flags & O_CREAT
+    ? ::open( name.c_str(), flags, mode )
+    : ::open( name.c_str(), flags );
+
+  int result;
+  if(newFd >= 0)
   {
-    // make sure user has read/write permission..
-    chmod( path , stbuf.st_mode | 0600 );
-    fd = ::open( path , flags );
-    chmod( path , stbuf.st_mode );
+    canWrite = requestWrite;
+    result = fd = newFd;
   } else
   {
-    LOG(INFO) << "can't stat file " << path;
-  }
-
-  return fd;
-}
-
-/*
-    We shouldn't have to support all possible open flags, so untaint the flags
-    argument by only taking ones we understand and accept.
-    -  Since the kernel has already done permission tests before calling us, we
-       shouldn't have to worry about access control.
-    -  Basically we just need to distinguish between read and write flags
-    -  Also keep the O_LARGEFILE flag, in case the underlying filesystem needs
-       it..
-*/
-int RawFileIO::open(int flags)
-{
-  bool requestWrite = ((flags & O_RDWR) || (flags & O_WRONLY));
-
-  VLOG(1) << "open call for "
-    << (requestWrite ? "writable" : "read only")
-    << " file";
-
-  int result = 0;
-
-  // if we have a descriptor and it is writable, or we don't need writable..
-  if((fd >= 0) && (canWrite || !requestWrite))
-  {
-    VLOG(1) << "using existing file descriptor";
-    result = fd; // success
-  } else
-  {
-    int finalFlags = requestWrite ? O_RDWR : O_RDONLY;
-    int newFd = ::open( name.c_str(), finalFlags );
-
-    VLOG(1) << "open file with flags " << finalFlags << ", result = " << newFd;
-
-    if((newFd == -1) && (errno == EACCES))
-    {
-      VLOG(1) << "using readonly workaround for open";
-      newFd = open_readonly_workaround( name.c_str(), finalFlags );
-    }
-
-    if(newFd >= 0)
-    {
-      if(oldfd >= 0)
-      {
-        LOG(ERROR) << "leaking FD?: oldfd = "
-          << oldfd << ", fd = " << fd << ", newfd = " << newFd;
-      }
-
-      // the old fd might still be in use, so just keep it around for
-      // now.
-      canWrite = requestWrite;
-      oldfd = fd;
-      result = fd = newFd;
-    } else
-    {
-      result = -errno;
-      LOG(INFO) << "::open error: " << strerror(errno);
-    }
+    result = -errno;
+    LOG(INFO) << "::open error: " << strerror(errno);
   }
 
   LOG_IF(INFO, result < 0) << "file " << name << " open failure: " << -result;
@@ -179,65 +100,34 @@ int RawFileIO::open(int flags)
   return result;
 }
 
-int RawFileIO::getAttr( FsFileAttrs &stbuf ) const
+FsFileAttrs RawFileIO::get_attrs() const
 {
   struct stat st;
   memset( &st, 0, sizeof( struct stat ));
-  /* TODO: this should use fstat() */
-  int res = lstat( name.c_str(), &st );
+  int res = fstat( fd, &st );
 
   if(res < 0)
   {
     int eno = errno;
     LOG_IF(INFO, res < 0) << "getAttr error on " << name
                           << ": " << strerror( eno );
-    return -eno;
+    throw std::system_error( eno, errno_category() );
   }
-  else {
-    stbuf.type = (S_ISDIR(st.st_mode) ? FsFileType::DIRECTORY :
-                  S_ISREG(st.st_mode) ? FsFileType::REGULAR :
-                  FsFileType::UNKNOWN);
-    assert( st.st_mtime >= FS_TIME_MIN );
-    assert( st.st_mtime <= FS_TIME_MAX );
-    stbuf.mtime = (fs_time_t) st.st_mtime;
-    stbuf.size = (fs_off_t) st.st_size;
 
-    return 0;
-  }
+  FsFileAttrs attrs;
+
+  attrs.type = (S_ISDIR(st.st_mode) ? FsFileType::DIRECTORY :
+                S_ISREG(st.st_mode) ? FsFileType::REGULAR :
+                FsFileType::UNKNOWN);
+  assert( st.st_mtime >= FS_TIME_MIN );
+  assert( st.st_mtime <= FS_TIME_MAX );
+  attrs.mtime = (fs_time_t) st.st_mtime;
+  attrs.size = (fs_off_t) st.st_size;
+
+  return attrs;
 }
 
-void RawFileIO::setFileName( const char *fileName )
-{
-  name = fileName;
-}
-
-const char *RawFileIO::getFileName() const
-{
-  return name.c_str();
-}
-
-fs_off_t RawFileIO::getSize() const
-{
-  if(!knownSize)
-  {
-    struct stat stbuf;
-    memset( &stbuf, 0, sizeof( struct stat ));
-    int res = lstat( name.c_str(), &stbuf );
-
-    if(res == 0)
-    {
-      fileSize = stbuf.st_size;
-      knownSize = true;
-      return fileSize;
-    } else
-      return -1;
-  } else
-  {
-    return fileSize;
-  }
-}
-
-ssize_t RawFileIO::read( const IORequest &req ) const
+size_t RawFileIO::read( const IORequest &req ) const
 {
   rAssert( fd >= 0 );
 
@@ -246,14 +136,16 @@ ssize_t RawFileIO::read( const IORequest &req ) const
 
   if(readSize < 0)
   {
+    int eno = errno;
     LOG(INFO) << "read failed at offset " << req.offset
       << " for " << req.dataLen << " bytes: " << strerror(errno);
+    throw std::system_error( eno, errno_category() );
   }
 
   return readSize;
 }
 
-bool RawFileIO::write( const IORequest &req )
+void RawFileIO::write( const IORequest &req )
 {
   rAssert( fd >= 0 );
   rAssert( true == canWrite );
@@ -271,13 +163,18 @@ bool RawFileIO::write( const IORequest &req )
 
     if( writeSize < 0 )
     {
-      knownSize = false;
-      LOG(INFO) << "write failed at offset " << offset << " for " 
-        << bytes << " bytes: " << strerror(errno);
-      return false;
+      if(errno == EINTR) continue;
+
+      // NB: this is really bad, we potentially already wrote some
+      //     data. we should probably just keep iterating
+      //     or change this api to return how much was actually written
+      int eno = errno;
+      LOG(INFO) << "write failed at offset " << offset << " for "
+        << bytes << " bytes: " << strerror(eno);
+      throw std::system_error( eno, errno_category() );
     }
 
-    assert( bytes >= writeSize );
+    assert( bytes >= (size_t) writeSize );
     bytes -= writeSize;
     offset += writeSize;
     buf = (void*)((char*)buf + writeSize);
@@ -288,22 +185,11 @@ bool RawFileIO::write( const IORequest &req )
   {
     LOG(ERROR) << "Write error: wrote " << (req.dataLen-bytes) 
       << " bytes of " << req.dataLen << ", max retries reached";
-    knownSize = false;
-    return false;
-  } else
-  {
-    if(knownSize)
-    {
-      off_t last = req.offset + req.dataLen;
-      if(last > fileSize)
-        fileSize = last;
-    }
-
-    return true;
+    throw std::system_error( EIO, errno_category() );
   }
 }
 
-int RawFileIO::truncate( fs_off_t size )
+void RawFileIO::truncate( fs_off_t size )
 {
   int res;
 
@@ -313,29 +199,38 @@ int RawFileIO::truncate( fs_off_t size )
 #ifdef linux
     ::fdatasync( fd );
 #endif
-  } else
-    res = ::truncate( name.c_str(), size );
+  } else res = ::truncate( name.c_str(), size );
 
   if(res < 0)
   {
     int eno = errno;
     LOG(INFO) << "truncate failed for " << name 
       << " (" << fd << ") size " << size << ", error " << strerror(eno);
-    res = -eno;
-    knownSize = false;
-  } else
-  {
-    res = 0;
-    fileSize = size;
-    knownSize = true;
+    throw std::system_error( eno, errno_category() );
   }
-
-  return res;
 }
 
 bool RawFileIO::isWritable() const
 {
+  if(fd < 0) throw std::runtime_error( "file not open!" );
   return canWrite;
+}
+
+void RawFileIO::sync(bool datasync) const
+{
+  int res = -EIO;
+#ifdef linux
+  if(datasync)
+    res = fdatasync( fd );
+  else
+    res = fsync( fd );
+#else
+  (void) datasync;
+  // no fdatasync support
+  // TODO: use autoconfig to check for it..
+  res = fsync(fd);
+#endif
+  if(res < 0) throw std::system_error( errno, errno_category() );
 }
 
 }  // namespace encfs

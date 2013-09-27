@@ -22,15 +22,7 @@
 // of sys/stat.h or other system headers (to be safe)
 #include "fs/encfs.h"
 
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <unistd.h>
-#ifdef linux
-#include <sys/fsuid.h>
-#endif
-
+#include <cerrno>
 #include <cstring>
 
 #include "base/config.h"
@@ -59,7 +51,11 @@ namespace encfs {
    There is no reason why simultainous reads cannot be satisfied, or why one
    read has to wait for the decoding of the previous read before it can be
    sent to the IO subsystem!
+
+   -> a "Read-Write" Lock can increase parallelism.
 */
+
+#define SSIZET_MAX ((ssize_t) (~((uintmax_t) 0) >> ((sizeof(uintmax_t) * 8) - (sizeof(ssize_t) * 8 - 1))))
 
 FileNode::FileNode(DirNode *parent_, const FSConfigPtr &cfg,
     const char *plaintextName_, const char *cipherName_)
@@ -71,14 +67,6 @@ FileNode::FileNode(DirNode *parent_, const FSConfigPtr &cfg,
   this->parent = parent_;
 
   this->fsConfig = cfg;
-
-  // chain RawFileIO & CipherFileIO
-  auto rawfile =
-    cfg->opts->fs_io->openfile( cfg->opts->fs_io->pathFromString( _cname ) );
-  io = shared_ptr<FileIO>( new CipherFileIO( rawfile.take_ptr(), fsConfig ));
-
-  if(cfg->config->block_mac_bytes() || cfg->config->block_mac_rand_bytes())
-    io = shared_ptr<FileIO>(new MACFileIO(io, fsConfig));
 }
 
 FileNode::~FileNode()
@@ -105,11 +93,22 @@ string FileNode::plaintextParent() const
   return parentDirectory( this->fsConfig->opts->fs_io, _pname );
 }
 
-static bool setIV(const shared_ptr<FileIO> &io, uint64_t iv)
+static bool setIV(const shared_ptr<FileIO> &io,
+                  const shared_ptr<CipherFileIO> &cipher_io,
+                  uint64_t iv)
 {
-  FsFileAttrs attrs;
-  if((io->getAttr(attrs) < 0) || attrs.type == FsFileType::REGULAR)
-    return io->setIV( iv );
+  bool do_set_iv = false;
+  try
+  {
+    FsFileAttrs attrs = io->get_attrs();
+    do_set_iv = attrs.type == FsFileType::REGULAR;
+  } catch ( const Error &err )
+  {
+    do_set_iv = true;
+  }
+
+  if(do_set_iv)
+    return cipher_io->setIV( iv );
   else
     return true;
 }
@@ -121,17 +120,14 @@ bool FileNode::setName( const char *plaintextName_, const char *cipherName_,
   VLOG(1) << "calling setIV on " << cipherName_;
   if(setIVFirst)
   {
-    if(fsConfig->config->external_iv() && !setIV(io, iv))
+    if(fsConfig->config->external_iv() && !setIV(io, cipher_io, iv))
       return false;
 
     // now change the name..
     if(plaintextName_)
       this->_pname = plaintextName_;
     if(cipherName_)
-    {
       this->_cname = cipherName_;
-      io->setFileName( cipherName_ );
-    }
   } else
   {
     std::string oldPName = _pname;
@@ -140,12 +136,9 @@ bool FileNode::setName( const char *plaintextName_, const char *cipherName_,
     if(plaintextName_)
       this->_pname = plaintextName_;
     if(cipherName_)
-    {
       this->_cname = cipherName_;
-      io->setFileName( cipherName_ );
-    }
 
-    if(fsConfig->config->external_iv() && !setIV(io, iv))
+    if(fsConfig->config->external_iv() && !setIV(io, cipher_io, iv))
     {
       _pname = oldPName;
       _cname = oldCName;
@@ -156,93 +149,92 @@ bool FileNode::setName( const char *plaintextName_, const char *cipherName_,
   return true;
 }
 
-int FileNode::mknod(mode_t mode, dev_t rdev, uid_t uid, gid_t gid)
+int FileNode::open(bool requestWrite, bool create)
 {
+  // This method will re-open the file for writing
+  // if it was opened previously without write access
+
   Lock _lock( mutex );
 
-  int res;
-  int olduid = -1;
-  int oldgid = -1;
-  if(uid != 0)
-  {
-    olduid = setfsuid( uid );
-    if(olduid == -1)
-    {
-      LOG(INFO) << "setfsuid error: " << strerror(errno);
-      return -EPERM;
-    }
-  }
-  if(gid != 0)
-  {
-    oldgid = setfsgid( gid );
-    if(oldgid == -1)
-    {
-      LOG(INFO) << "setfsgid error: " << strerror(errno);
-      return -EPERM;
-    }
-  }
+  // if we've already opened the file in the right
+  // access mode
+  if(io && (io->isWritable() || !requestWrite)) return 0;
 
-  /*
-   * cf. xmp_mknod() in fusexmp.c
-   * The regular file stuff could be stripped off if there
-   * were a create method (advised to have)
-   */
-  if (S_ISREG( mode )) {
-    res = ::open( _cname.c_str(), O_CREAT | O_EXCL | O_WRONLY, mode );
-    if (res >= 0)
-      res = ::close( res );
-  } else if (S_ISFIFO( mode ))
-    res = ::mkfifo( _cname.c_str(), mode );
-  else
-    res = ::mknod( _cname.c_str(), mode, rdev );
+  // NB: it would be great to check that _cname matches the
+  //     file name of the currently opened file from the kernel's POV.
+  //     unfortunately there doesn't seem to exist a method of
+  //     converting a file descriptor to a file name
 
-  if(olduid >= 0)
-    setfsuid( olduid );
-  if(oldgid >= 0)
-    setfsgid( oldgid );
+  auto fs_io = fsConfig->opts->fs_io;
+  opt::optional<File> rawfile;
+  const int res = withExceptionCatcher( (int) std::errc::io_error,
+                                        bindMethod( fs_io, &FsIO::openfile ),
+                                        &rawfile,
+                                        fs_io->pathFromString( _cname ),
+                                        requestWrite, create );
+  if(res < 0) return res;
 
-  if(res == -1)
+  assert( rawfile );
+
+  if(cipher_io)
   {
-    int eno = errno;
-    VLOG(1) << "mknod error: " << strerror(eno);
-    res = -eno;
+    // the file was already opened, just reset the base of cipher_io
+    cipher_io->setBase( rawfile->take_ptr() );
+  } else
+  {
+    // chain RawFileIO & CipherFileIO
+    io = cipher_io = std::make_shared<CipherFileIO>( rawfile->take_ptr(), fsConfig );
+
+    if(fsConfig->config->block_mac_bytes() || fsConfig->config->block_mac_rand_bytes())
+      io = shared_ptr<FileIO>( new MACFileIO( io, fsConfig ) );
   }
 
-  return res;
+  return 0;
 }
 
-int FileNode::open(int flags) const
+int FileNode::getAttr(FsFileAttrs &stbuf)
 {
+  /* ensure file is open since this can be called even
+     if the file hasn't been opened */
+  const bool requestWrite = false;
+  const bool createFile = false;
+  int ret = open( requestWrite, createFile );
+  if (ret) return ret;
+
   Lock _lock( mutex );
 
-  int res = io->open( flags );
-  return res;
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( io, &FileIO::get_attrs ),
+                               &stbuf );
 }
 
-int FileNode::getAttr(FsFileAttrs &stbuf) const
+fs_off_t FileNode::getSize()
 {
-  Lock _lock( mutex );
-
-  return io->getAttr( stbuf );
-}
-
-fs_off_t FileNode::getSize() const
-{
-  Lock _lock( mutex );
-
-  return io->getSize();;
+  FsFileAttrs toret;
+  int res = getAttr( toret );
+  if(res < 0) return res;
+  return toret.size;
 }
 
 ssize_t FileNode::read( fs_off_t offset, byte *data, size_t size ) const
 {
+  /* handle invalid input */
+  if (size > (size_t) SSIZET_MAX) return -EDOM;
+
   IORequest req;
   req.offset = offset;
   req.dataLen = size;
   req.data = data;
 
   Lock _lock( mutex );
+  size_t amount_read = 0;
+  const int res = withExceptionCatcher( (int) std::errc::io_error,
+                                        bindMethod( io, &FileIO::read ),
+                                        &amount_read, req );
+  if(res < 0) return res;
 
-  return io->read( req );
+  assert( amount_read < SSIZET_MAX );
+  return (ssize_t) amount_read;
 }
 
 bool FileNode::write(fs_off_t offset, byte *data, size_t size)
@@ -257,42 +249,39 @@ bool FileNode::write(fs_off_t offset, byte *data, size_t size)
 
   Lock _lock( mutex );
 
-  return io->write( req );
+  const int res = withExceptionCatcher( (int) std::errc::io_error,
+                                        bindMethod( io, &FileIO::write ),
+                                        req );
+  return !res;
 }
 
 int FileNode::truncate( off_t size )
 {
+  /* ensure file is open since this can be called even
+     if the file hasn't been opened */
+  const bool requestWrite = true;
+  const bool createFile = false;
+  int ret = open( requestWrite, createFile );
+  if (ret) return ret;
+
   Lock _lock( mutex );
 
-  return io->truncate( size );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( io, &FileIO::truncate ),
+                               size );
 }
 
 int FileNode::sync(bool datasync)
 {
   Lock _lock( mutex );
 
-  int fh = io->open( O_RDONLY );
-  if(fh >= 0)
-  {
-    int res = -EIO;
-#ifdef linux
-    if(datasync)
-      res = fdatasync( fh );
-    else
-      res = fsync( fh );
-#else
-    (void) datasync;
-    // no fdatasync support
-    // TODO: use autoconfig to check for it..
-    res = fsync(fh);
-#endif
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( io, &FileIO::sync ),
+                               datasync );
+}
 
-    if(res == -1)
-      res = -errno;
-
-    return res;
-  } else
-    return fh;
+// no-op for now (should close a dup'd FD)
+void FileNode::flush() {
 }
 
 }  // namespace encfs
