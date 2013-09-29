@@ -41,11 +41,14 @@ class FsDirEnt
 {
 public:
     std::string name;
+    fs_file_id_t file_id;
     opt::optional<FsFileType> type;
 
     explicit FsDirEnt(std::string name_,
+                      fs_file_id_t file_id_,
                       opt::optional<FsFileType> type_ = opt::nullopt)
     : name( std::move( name_ ) )
+    , file_id( std::move( file_id_ ) )
     , type( std::move( type_ ) )
     {}
 };

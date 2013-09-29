@@ -33,8 +33,10 @@
 #include "base/Error.h"
 #include "base/Mutex.h"
 #include "base/optional.h"
+#include "fs/CipherFileIO.h"
 #include "fs/Context.h"
 #include "fs/FileUtils.h"
+#include "fs/MACFileIO.h"
 #include "fs/fsconfig.pb.h"
 
 #include "fs/DirNode.h"
@@ -70,11 +72,13 @@ DirTraverse& DirTraverse::operator=(DirTraverse && other)
   return *this;
 }
 
-std::string DirTraverse::nextPlaintextName(FsFileType */*fileType*/)
+std::string DirTraverse::nextPlaintextName(FsFileType *fileType, fs_file_id_t *inode)
 {
   opt::optional<FsDirEnt> dirent;
   while((dirent = dir_io->readdir()))
   {
+    if (fileType && dirent->type) *fileType = *dirent->type;
+    if (inode) *inode = dirent->file_id;
     try
     {
       uint64_t localIv = iv;
@@ -356,10 +360,10 @@ string DirNode::relativeCipherPath(const char *plaintextPath)
 {
   try
   {
-    if(plaintextPath[0] != '/')
+    if(plaintextPath[0] == '/')
     {
       // mark with '+' to indicate special decoding..
-      return string("+") + naming->encodeName(plaintextPath+1, 
+      return string("+") + naming->encodeName(plaintextPath+1,
           strlen(plaintextPath+1));
     } else
     {
@@ -751,6 +755,27 @@ int DirNode::unlink( const char *plaintextName )
     res = withExceptionCatcher( (int) std::errc::io_error,
                                 bindMethod( fs_io, &FsIO::unlink ),
                                 fullName );
+  }
+
+  return res;
+}
+
+int DirNode::get_attrs(FsFileAttrs *attrs, const char *plaintextName)
+{
+  auto cyName = appendToRoot( naming->encodePath( plaintextName ) );
+  VLOG(1) << "unlink " << cyName;
+
+  int res = withExceptionCatcher( (int) std::errc::io_error,
+                                  bindMethod( fs_io, &FsIO::get_attrs ),
+                                  attrs, cyName );
+
+  // TODO: make sure this wrap code is similar to how FileIO is created
+  // in FileNode
+  *attrs = CipherFileIO::wrapAttrs( fsConfig, std::move( *attrs ) );
+
+  if(fsConfig->config->block_mac_bytes() || fsConfig->config->block_mac_rand_bytes())
+  {
+    *attrs = MACFileIO::wrapAttrs( fsConfig, std::move( *attrs ) );
   }
 
   return res;

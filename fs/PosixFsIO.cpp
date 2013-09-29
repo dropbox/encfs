@@ -164,7 +164,18 @@ opt::optional<FsDirEnt> PosixDirectoryIO::readdir()
       continue;
     }
 
-    return FsDirEnt( de->d_name );
+    auto toret = FsDirEnt( de->d_name, de->d_ino );
+    switch(de->d_type)
+    {
+    case DT_REG:
+      toret.type = FsFileType::REGULAR;
+      break;
+    case DT_DIR:
+      toret.type = FsFileType::DIRECTORY;
+      break;
+    }
+
+    return toret;
   }
 
   return opt::nullopt;
@@ -183,13 +194,15 @@ static bool endswith(const std::string &haystack,
 Path PosixFsIO::pathFromString(const std::string &path)
 {
   /* TODO: throw exception if path is not a UTF-8 posix path */
-  if (path[0] != '/') {
-    throw std::runtime_error("Not absolute path");
+  if(path[0] != '/')
+  {
+    throw std::runtime_error( "Not absolute path: \"" + path + "\"" );
   }
 
   std::string newpath = path;
-  while (endswith(newpath, "/")) {
-    newpath = path.substr(0, path.length() - 1);
+  while(endswith( newpath, "/" ))
+  {
+    newpath = path.substr( 0, path.length() - 1 );
   }
 
   return std::make_shared<PosixPath>( std::move( newpath ) );
@@ -208,8 +221,7 @@ File PosixFsIO::openfile(const Path &path,
                          bool create)
 {
   auto file_ = std::unique_ptr<RawFileIO>( new RawFileIO( path ) );
-  int flags = O_RDONLY
-    | (open_for_write ? O_WRONLY : 0)
+  int flags = (open_for_write ? O_RDWR : O_RDONLY)
     | (create ? O_CREAT : 0);
   const int ret_open = file_->open( flags, 0777 );
   if(ret_open < 0) current_fs_error( -ret_open );
@@ -272,7 +284,7 @@ void PosixFsIO::rmdir(const Path &path)
 FsFileAttrs PosixFsIO::get_attrs(const Path &path)
 {
   struct stat st;
-  const int res_stat = ::stat( path.c_str(), &st );
+  const int res_stat = ::lstat( path.c_str(), &st );
   if (res_stat < 0) current_fs_error();
 
   const FsFileType type = (S_ISDIR(st.st_mode) ? FsFileType::DIRECTORY :

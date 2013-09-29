@@ -113,7 +113,7 @@ bool fileExists( const shared_ptr<FsIO> &fs_io, const char * fileName )
   {
     fs_io->get_attrs( fs_io->pathFromString( fileName ) );
     return true;
-  } catch ( const Error &err )
+  } catch ( ... )
   {
     return false;
   }
@@ -124,15 +124,15 @@ bool isDirectory( const shared_ptr<FsIO> &fs_io, const char *fileName )
   try
   {
     return fs_io->get_attrs( fs_io->pathFromString( fileName ) ).type == FsFileType::DIRECTORY;
-  } catch ( const Error &err )
+  } catch ( ... )
   {
     return false;
   }
 }
 
-const char *lastPathElement( const shared_ptr<FsIO> &fs_io, const char *name )
+std::string lastPathElement( const shared_ptr<FsIO> &fs_io, std::string name )
 {
-  return fs_io->pathFromString( name ).basename().c_str();
+  return fs_io->pathFromString( name ).basename();
 }
 
 std::string parentDirectory( const shared_ptr<FsIO> &fs_io, const std::string &path )
@@ -175,7 +175,7 @@ bool userAllowMkdir( const shared_ptr<FsIO> &fs_io, int promptno, const char *pa
       // TODO: propagate mode in a X-platform way
       // posix_mkdir()?
       fs_io->mkdir( fs_io->pathFromString( path ) );
-    } catch ( const Error & err )
+    } catch ( const std::exception &err )
     {
       cerr <<  _("Unable to create directory: ") << err.what() << "\n";
       return false;

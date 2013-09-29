@@ -60,6 +60,8 @@ public:
 
     virtual void sync(bool datasync) const override;
 
+    static FsFileAttrs wrapAttrs(const FSConfigPtr &, FsFileAttrs);
+    static FsFileAttrs wrapAttrs(int headerLen, FsFileAttrs attrs);
 
 private:
     virtual ssize_t readOneBlock( const IORequest &req ) const override;

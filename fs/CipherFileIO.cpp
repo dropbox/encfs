@@ -100,8 +100,7 @@ bool CipherFileIO::setIV( uint64_t iv )
       return false;
     }
 
-    if(fileIV == 0)
-      initHeader();
+    if(fileIV == 0) initHeader();
 
     uint64_t oldIV = externalIV;
     externalIV = iv;
@@ -124,25 +123,28 @@ void CipherFileIO::setBase( const shared_ptr<FileIO> &base_ )
   fileIV = 0;
 }
 
-fs_off_t CipherFileIO::adjustedSize(fs_off_t rawSize) const
+FsFileAttrs CipherFileIO::wrapAttrs(int headerLen, FsFileAttrs attrs)
 {
-  fs_off_t size = rawSize;
+  // adjust size if we have a file header
+  if(attrs.type == FsFileType::REGULAR &&
+     attrs.size >= headerLen) attrs.size -= headerLen;
 
-  if (rawSize >= headerLen) 
-    size -= headerLen;
+  return std::move( attrs );
+}
 
-  return size;
+FsFileAttrs CipherFileIO::wrapAttrs(const FSConfigPtr &cfg,
+                                    FsFileAttrs attrs)
+{
+  const fs_off_t headerLen = cfg->config->unique_iv()
+    ? sizeof(uint64_t)
+    : 0;
+
+  return wrapAttrs(headerLen, std::move( attrs ));
 }
 
 FsFileAttrs CipherFileIO::get_attrs() const
 {
-  auto res = base->get_attrs();
-
-  // adjust size if we have a file header
-  if(res.type == FsFileType::REGULAR)
-    res.size = adjustedSize(res.size);
-
-  return res;
+  return wrapAttrs( headerLen, base->get_attrs() );
 }
 
 /* TODO: this should really return an error or throw an exception

@@ -106,7 +106,7 @@ int withExceptionCatcher(int defaultRes, F fn, Args... args)
 template<typename R, typename... Args, typename std::enable_if<!std::is_void<R>::value, int>::type = 0>
 std::function<int(R *, Args...)> wrapWithExceptionCatcher(int defaultRes, std::function<R(Args...)> fn)
 {
-  return [=] (Args... args, R *res) {
+  return [=] (R *res, Args... args) {
     return withExceptionCatcher( defaultRes, fn, res, args... );
   };
 }

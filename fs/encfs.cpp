@@ -101,7 +101,7 @@ static EncFS_Context * context()
 */
 
 template<typename T, typename R, typename... Args>
-std::function<int(const std::string &, Args..., R *)> fsMethodToCStyleFn(const shared_ptr<T> &obj,
+std::function<int(R *, const std::string &, Args...)> fsMethodToCStyleFn(const shared_ptr<T> &obj,
                                                                          R (T::*fn)(const Path &, Args...))
 {
   std::function<R(const std::string &, Args...)> string_fn = [=] (const std::string &p, Args... args) {
@@ -148,22 +148,24 @@ static int withCipherPath( const char *opName, T op,
 }
 
 template<typename T, typename R, typename... Args>
-std::function<int(const char *, Args..., R *)> defaultFsWrap(const char *requestor,
+std::function<int(R *, const char *, Args...)> defaultFsWrap(const char *requestor,
                                                              const shared_ptr<T> &obj,
                                                              R (T::*fn)(const Path &, Args...))
 {
-  return [=] (const char *path, R *ret, Args... args) {
+  return [=] (R *ret, const char *path, Args... args) {
     auto c_mknod_ = fsMethodToCStyleFn( obj, fn );
     // curry in the ret argument
-    auto c_mknod = [=] (const char *path, Args... args) { return c_mknod_( ret, path, args... ); };
+    auto c_mknod = [=] (const string &path, Args... args) {
+      return c_mknod_( ret, path , args... );
+    };
     return withCipherPath( requestor, c_mknod, path, args... );
   };
 }
 
 template<typename T, typename... Args>
 std::function<int(const char *, Args...)> defaultFsWrap(const char *requestor,
-                                                             const shared_ptr<T> &obj,
-                                                             void (T::*fn)(const Path &, Args...))
+                                                        const shared_ptr<T> &obj,
+                                                        void (T::*fn)(const Path &, Args...))
 {
   auto c_mknod = fsMethodToCStyleFn( obj, fn );
   return [=] (const char *path, Args... args) {
@@ -240,12 +242,11 @@ static void fill_stbuf_from_file_attrs(struct stat *stbuf, FsFileAttrs *attrs)
   stbuf->st_mtime = attrs->mtime;
 }
 
-int _do_getattr(FileNode *fnode, struct stat *stbuf)
+int _do_fgetattr(FileNode *fnode, struct stat *stbuf)
 {
   FsFileAttrs attrs;
   int res = fnode->getAttr(attrs);
-  if(res == ESUCCESS)
-    fill_stbuf_from_file_attrs(stbuf, &attrs);
+  if(res == ESUCCESS) fill_stbuf_from_file_attrs(stbuf, &attrs);
   if(res == ESUCCESS && S_ISLNK( stbuf->st_mode ))
   {
     EncFS_Context *ctx = context();
@@ -275,17 +276,24 @@ int _do_getattr(FileNode *fnode, struct stat *stbuf)
 
 int encfs_getattr(const char *path, struct stat *stbuf)
 {
-  // TODO: use FS getattr
-  // for now transparently taken care of by FileNode
-  // (but this is really bad since the FileNode uses fstat, not lstat like
-  //  getattr expects)
-  return withFileNode( "getattr", path, NULL, _do_getattr, stbuf );
+  EncFS_Context *ctx = context();
+  int res = -EIO;
+  shared_ptr<DirNode> FSRoot = ctx->getRoot( &res );
+  if(!FSRoot) return res;
+
+  FsFileAttrs attrs;
+  res = FSRoot->get_attrs( &attrs, path );
+  if (res < 0) return res;
+
+  fill_stbuf_from_file_attrs( stbuf, &attrs );
+
+  return ESUCCESS;
 }
 
 int encfs_fgetattr(const char *path, struct stat *stbuf,
     struct fuse_file_info *fi)
 {
-  return withFileNode( "fgetattr", path, fi, _do_getattr, stbuf );
+  return withFileNode( "fgetattr", path, fi, _do_fgetattr, stbuf );
 }
 
 int encfs_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
@@ -307,18 +315,20 @@ int encfs_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
     if(dt.valid())
     {
       FsFileType fileType = FsFileType::UNKNOWN;
-      ino_t inode = 0;
 
-      std::string name = dt.nextPlaintextName( &fileType );
+      // TODO: fileType is not good enough, it doesn't support all posix types
+      // (implement dt.nextPosixName()) or something like that
+      fs_file_id_t inode_i = 0;
+      std::string name = dt.nextPlaintextName( &fileType, &inode_i );
       while( !name.empty() )
       {
-        res = filler( h, name.c_str(), encfs_file_type_to_dirent_type(fileType), (ino_t) inode );
+        res = filler( h, name.c_str(), encfs_file_type_to_dirent_type(fileType), (ino_t) inode_i );
 
         if(res != ESUCCESS)
           break;
 
-        name = dt.nextPlaintextName( &fileType );
-      } 
+        name = dt.nextPlaintextName( &fileType, &inode_i );
+      }
     } else
     {
       LOG(INFO) << "getdir request invalid, path: '" << path << "'";
@@ -636,11 +646,19 @@ int _do_chmod(const string &cipherPath, mode_t mode)
 {
   // TODO: wtf?!? fix this
   int res;
+
 #ifdef HAVE_LCHMOD
   res = lchmod( cipherPath.c_str(), mode );
 #else
-  res = chmod( cipherPath.c_str(), mode );
+  res = -1;
+  errno = ENOSYS;
 #endif
+
+  if(res == -1 && errno == ENOSYS)
+  {
+    res = chmod( cipherPath.c_str(), mode );
+  }
+
   return (res == -1) ? -errno : ESUCCESS;
 }
 

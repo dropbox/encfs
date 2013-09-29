@@ -30,6 +30,7 @@ namespace encfs {
 typedef uintptr_t fs_dir_handle_t;
 typedef intmax_t fs_time_t;
 typedef intmax_t fs_off_t;
+typedef intmax_t fs_file_id_t;
 
 enum
 {

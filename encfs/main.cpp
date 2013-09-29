@@ -189,6 +189,23 @@ string slashTerminate( const string &src )
   return result;
 }
 
+static std::string makeAbsolute(std::string a)
+{
+  if(a[0] == '/') return a;
+  char buf[PATH_MAX];
+  std::string cwd = getcwd( buf, sizeof(buf) );
+  return cwd + '/' + a;
+}
+
+static char *strdup_x(const char *x)
+{
+  size_t len = strlen(x);
+  char *toret = (char *) malloc(len + 1);
+  memcpy(toret, x, len);
+  toret[len] = '\0';
+  return toret;
+}
+
 static 
 bool processArgs(int argc, char *argv[],
                  const shared_ptr<EncFS_Args> &out)
@@ -210,7 +227,7 @@ bool processArgs(int argc, char *argv[],
   bool useDefaultFlags = true;
 
   // pass executable name through
-  out->fuseArgv[0] = lastPathElement(out->opts->fs_io, argv[0]);
+  out->fuseArgv[0] = strdup_x( lastPathElement( out->opts->fs_io, makeAbsolute( argv[0] ) ).c_str() );
   ++out->fuseArgc;
 
   // leave a space for mount point, as FUSE expects the mount point before

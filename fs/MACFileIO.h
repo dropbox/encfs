@@ -49,6 +49,10 @@ public:
 
     virtual void sync(bool datasync) const override;
 
+    static FsFileAttrs wrapAttrs(int blockSize, int macBytes,
+                                 int randBytes, FsFileAttrs attrs);
+    static FsFileAttrs wrapAttrs(const FSConfigPtr &cfg, FsFileAttrs attrs);
+
 private:
     virtual ssize_t readOneBlock( const IORequest &req ) const override;
     virtual bool writeOneBlock( const IORequest &req );

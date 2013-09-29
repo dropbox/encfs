@@ -21,6 +21,8 @@
 #ifndef _FileUtils_incl_
 #define _FileUtils_incl_
 
+#include <string>
+
 #include "base/Interface.h"
 #include "cipher/CipherKey.h"
 #include "fs/encfs.h"
@@ -36,10 +38,8 @@ bool isDirectory( const std::shared_ptr<FsIO> &fs_io, const char *fileName );
 // true if the path points to an existing node (of any type)
 bool fileExists( const std::shared_ptr<FsIO> &fs_io, const char *fileName );
 
-// true if starts with '/'
-bool isAbsolutePath( const std::shared_ptr<FsIO> &fs_io, const char *fileName );
 // pointer to just after the last '/'
-const char *lastPathElement( const std::shared_ptr<FsIO> &fs_io, const char *name );
+std::string lastPathElement( const std::shared_ptr<FsIO> &fs_io, std::string );
 
 std::string parentDirectory( const std::shared_ptr<FsIO> &fs_io, const std::string &path );
 

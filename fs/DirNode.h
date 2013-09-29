@@ -66,7 +66,7 @@ public:
     // return next plaintext filename
     // If fileType is not 0, then it is used to return the filetype
     // (or 0 if unknown)
-    std::string nextPlaintextName(FsFileType *fileType=0);
+    std::string nextPlaintextName(FsFileType *fileType=0, fs_file_id_t *inode = 0);
 
     // Return cipher name of next undecodable filename..
     // The opposite of nextPlaintextName(), as that skips undecodable names..
@@ -139,6 +139,8 @@ public:
     int idleSeconds();
 
     std::shared_ptr<FsIO> get_fs() { return fs_io; }
+
+    int get_attrs(FsFileAttrs *attrs, const char *plaintextName);
 
 protected:
 

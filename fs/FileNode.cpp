@@ -185,7 +185,9 @@ int FileNode::open(bool requestWrite, bool create)
     io = cipher_io = std::make_shared<CipherFileIO>( rawfile->take_ptr(), fsConfig );
 
     if(fsConfig->config->block_mac_bytes() || fsConfig->config->block_mac_rand_bytes())
-      io = shared_ptr<FileIO>( new MACFileIO( io, fsConfig ) );
+    {
+      io = std::make_shared<MACFileIO>( io, fsConfig );
+    }
   }
 
   return 0;
@@ -193,13 +195,6 @@ int FileNode::open(bool requestWrite, bool create)
 
 int FileNode::getAttr(FsFileAttrs &stbuf)
 {
-  /* ensure file is open since this can be called even
-     if the file hasn't been opened */
-  const bool requestWrite = false;
-  const bool createFile = false;
-  int ret = open( requestWrite, createFile );
-  if (ret) return ret;
-
   Lock _lock( mutex );
 
   return withExceptionCatcher( (int) std::errc::io_error,

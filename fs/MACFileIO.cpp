@@ -119,19 +119,32 @@ static off_t locWithoutHeader( off_t offset, int blockSize, int headerSize )
   return offset - blockNum * headerSize;
 }
 
-FsFileAttrs MACFileIO::get_attrs() const
+FsFileAttrs MACFileIO::wrapAttrs(int blockSize, int macBytes,
+                                 int randBytes, FsFileAttrs attrs)
 {
-  FsFileAttrs res = base->get_attrs();
 
-  if(res.type == FsFileType::REGULAR)
+  if(attrs.type == FsFileType::REGULAR)
   {
     // have to adjust size field..
     int headerSize = macBytes + randBytes;
-    int bs = blockSize() + headerSize;
-    res.size = locWithoutHeader( res.size, bs, headerSize );
+    int bs = blockSize + headerSize;
+    attrs.size = locWithoutHeader( attrs.size, bs, headerSize );
   }
 
-  return res;
+  return std::move( attrs );
+}
+
+FsFileAttrs MACFileIO::wrapAttrs(const FSConfigPtr &cfg, FsFileAttrs attrs)
+{
+  return wrapAttrs( dataBlockSize( cfg ),
+                    cfg->config->block_mac_bytes(),
+                    cfg->config->block_mac_rand_bytes(),
+                    std::move( attrs ) );
+}
+
+FsFileAttrs MACFileIO::get_attrs() const
+{
+  return wrapAttrs( blockSize(), macBytes, randBytes, base->get_attrs() );
 }
 
 ssize_t MACFileIO::readOneBlock( const IORequest &req ) const
