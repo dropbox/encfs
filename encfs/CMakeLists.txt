@@ -11,6 +11,7 @@ link_directories (${Encfs_BINARY_DIR}/fs)
 include_directories (${CMAKE_BINARY_DIR}/base)
 
 add_executable (encfs
+    EncFSFuseContext.cpp
     main.cpp)
 target_link_libraries (encfs
     encfs-fs

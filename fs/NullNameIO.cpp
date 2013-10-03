@@ -32,7 +32,7 @@ namespace encfs {
 static shared_ptr<NameIO> NewNNIO( const Interface &, 
     const shared_ptr<CipherV1> & )
 {
-  return shared_ptr<NameIO>( new NullNameIO() );
+  return std::make_shared<NullNameIO>();
 }
 
 static Interface NNIOIface = makeInterface("nameio/null", 1, 0, 0);

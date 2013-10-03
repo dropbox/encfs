@@ -289,14 +289,13 @@ bool runTests(const shared_ptr<CipherV1> &cipher, bool verbose)
   if(verbose)
     cerr << "Testing name encode/decode (stream coding w/ IV chaining)\n";
   {
-    fsCfg->opts->idleTracking = false;
     fsCfg->config->set_unique_iv(false);
 
     fsCfg->nameCoding.reset( new StreamNameIO(
           StreamNameIO::CurrentInterface(), cipher) );
     fsCfg->nameCoding->setChainedNameIV( true );
 
-    DirNode dirNode( NULL, TEST_ROOTDIR, fsCfg );
+    DirNode dirNode( nullptr, TEST_ROOTDIR, fsCfg );
 
     if(!testNameCoding( dirNode, verbose ))
       return false;
@@ -305,13 +304,12 @@ bool runTests(const shared_ptr<CipherV1> &cipher, bool verbose)
   if(verbose)
     cerr << "Testing name encode/decode (block coding w/ IV chaining)\n";
   {
-    fsCfg->opts->idleTracking = false;
     fsCfg->config->set_unique_iv(false);
     fsCfg->nameCoding.reset( new BlockNameIO(
           BlockNameIO::CurrentInterface(), cipher) );
     fsCfg->nameCoding->setChainedNameIV( true );
 
-    DirNode dirNode( NULL, TEST_ROOTDIR, fsCfg );
+    DirNode dirNode( nullptr, TEST_ROOTDIR, fsCfg );
 
     if(!testNameCoding( dirNode, verbose ))
       return false;
@@ -320,13 +318,12 @@ bool runTests(const shared_ptr<CipherV1> &cipher, bool verbose)
   if(verbose)
     cerr << "Testing name encode/decode (block coding w/ IV chaining, base32)\n";
   {
-    fsCfg->opts->idleTracking = false;
     fsCfg->config->set_unique_iv(false);
     fsCfg->nameCoding.reset( new BlockNameIO(
           BlockNameIO::CurrentInterface(), cipher) );
     fsCfg->nameCoding->setChainedNameIV( true );
 
-    DirNode dirNode( NULL, TEST_ROOTDIR, fsCfg );
+    DirNode dirNode( nullptr, TEST_ROOTDIR, fsCfg );
 
     if(!testNameCoding( dirNode, verbose ))
       return false;
@@ -341,7 +338,7 @@ bool runTests(const shared_ptr<CipherV1> &cipher, bool verbose)
               StreamNameIO::CurrentInterface(), cipher) );
       fsCfg->nameCoding->setChainedNameIV( false );
 
-      DirNode dirNode( NULL, TEST_ROOTDIR, fsCfg );
+      DirNode dirNode( nullptr, TEST_ROOTDIR, fsCfg );
 
       if(!testNameCoding( dirNode, verbose ))
         return false;
@@ -353,7 +350,7 @@ bool runTests(const shared_ptr<CipherV1> &cipher, bool verbose)
             BlockNameIO::CurrentInterface(), cipher) );
       fsCfg->nameCoding->setChainedNameIV( false );
 
-      DirNode dirNode( NULL, TEST_ROOTDIR, fsCfg );
+      DirNode dirNode( nullptr, TEST_ROOTDIR, fsCfg );
 
       if(!testNameCoding( dirNode, verbose ))
         return false;

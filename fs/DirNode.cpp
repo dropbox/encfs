@@ -28,8 +28,6 @@
 
 #include <glog/logging.h>
 
-#include "fs/encfs.h"
-
 #include "base/Error.h"
 #include "base/Mutex.h"
 #include "base/optional.h"
@@ -213,7 +211,7 @@ bool RenameOp::apply()
 
       if(preserve_mtime)
       {
-        dn->fs_io->set_mtime( newCNamePath, old_mtime );
+        dn->fs_io->set_times( newCNamePath, opt::nullopt, old_mtime );
       }
 
       ++last;
@@ -276,7 +274,7 @@ void RenameOp::undo()
   LOG(WARNING) << "Undo rename count: " << undoCount;
 }
 
-DirNode::DirNode(EncFS_Context *_ctx,
+DirNode::DirNode(std::shared_ptr<EncFS_Context> _ctx,
                  const string &sourceDir,
                  const FSConfigPtr &_config)
   : mutex()
@@ -354,6 +352,12 @@ string DirNode::plainPath(const char *cipherPath_)
     LOG(ERROR) << "decode err: " << err.what();
     return string();
   }
+}
+
+PosixSymlinkData DirNode::decryptLinkPath(PosixSymlinkData in)
+{
+  auto buf = plainPath( in.c_str() );
+  return PosixSymlinkData( std::move( buf ) );
 }
 
 string DirNode::relativeCipherPath(const char *plaintextPath)
@@ -534,18 +538,18 @@ DirNode::newRenameOp(const char *fromP, const char *toP)
     LOG(WARNING) << "Error during generation of recursive rename list";
     return shared_ptr<RenameOp>();
   } else
-    return shared_ptr<RenameOp>( new RenameOp(this, renameList) );
+    return std::make_shared<RenameOp>( this, renameList );
 }
 
-int DirNode::mkdir(const char *plaintextPath)
+int DirNode::posix_mkdir(const char *plaintextPath, fs_posix_mode_t mode)
 {
   auto cyName = appendToRoot( naming->encodePath( plaintextPath ) );
 
   VLOG(1) << "mkdir on " << cyName;
 
   return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::mkdir ),
-                               std::move( cyName ) );
+                               bindMethod( fs_io, &FsIO::posix_mkdir ),
+                               std::move( cyName ), mode );
 }
 
 int
@@ -604,8 +608,8 @@ DirNode::rename(const char *fromPlaintext, const char *toPlaintext)
         renameOp->undo();
     } else if(preserve_mtime)
     {
-      withExceptionCatcher(1, bindMethod( fs_io, &FsIO::set_mtime ),
-                           toCName, old_mtime );
+      withExceptionCatcher(1, bindMethod( fs_io, &FsIO::set_times ),
+                           toCName, opt::nullopt, old_mtime );
     }
   } catch( Error &err )
   {
@@ -617,7 +621,7 @@ DirNode::rename(const char *fromPlaintext, const char *toPlaintext)
   return res;
 }
 
-int DirNode::link(const char *from, const char *to)
+int DirNode::posix_link(const char *from, const char *to)
 {
   Lock _lock( mutex );
 
@@ -634,7 +638,7 @@ int DirNode::link(const char *from, const char *to)
   } else
   {
     res = withExceptionCatcher( (int) std::errc::io_error,
-                                bindMethod( fs_io, &FsIO::link ),
+                                bindMethod( fs_io, &FsIO::posix_link ),
                                 fromCName, toCName );
   }
 
@@ -688,9 +692,9 @@ shared_ptr<FileNode> DirNode::findOrCreate(const char *plainName)
   {
     uint64_t iv = 0;
     string cipherName = naming->encodePath( plainName, &iv );
-    node.reset( new FileNode( this, fsConfig,
-          plainName, 
-          appendToRoot( cipherName ).c_str()) );
+    node = std::make_shared<FileNode>( this, fsConfig,
+                                       plainName,
+                                       appendToRoot( cipherName ).c_str() );
 
     if(fsConfig->config->external_iv())
       node->setName(0, 0, iv);
@@ -712,6 +716,19 @@ DirNode::lookupNode( const char *plainName, const char * requestor )
   return node;
 }
 
+shared_ptr<FileNode>
+DirNode::_openNode( const char *plainName, const char */*requestor*/,
+                    bool requestWrite, bool createFile, int *result )
+{
+  shared_ptr<FileNode> node = findOrCreate( plainName );
+  if(node) *result = node->open( requestWrite, createFile );
+  else *result = -(int) std::errc::io_error;
+
+  if(*result < 0) node = nullptr;
+
+  return node;
+}
+
 /*
     Similar to lookupNode, except that we also call open() and only return a
     node on sucess..  This is done in one step to avoid any race conditions
@@ -725,12 +742,7 @@ DirNode::openNode( const char *plainName, const char * requestor,
   rAssert( result != NULL );
   Lock _lock( mutex );
 
-  shared_ptr<FileNode> node = findOrCreate( plainName );
-
-  if(node && (*result = node->open( requestWrite, createFile )) >= 0)
-    return node;
-  else
-    return shared_ptr<FileNode>();
+  return _openNode( plainName, requestor, requestWrite, createFile, result );
 }
 
 int DirNode::unlink( const char *plaintextName )
@@ -760,14 +772,25 @@ int DirNode::unlink( const char *plaintextName )
   return res;
 }
 
+int DirNode::mkdir( const char *plaintextName )
+{
+  Lock _lock( mutex );
+  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::mkdir ), fullName );
+}
+
 int DirNode::get_attrs(FsFileAttrs *attrs, const char *plaintextName)
 {
+  Lock _lock( mutex );
+
   auto cyName = appendToRoot( naming->encodePath( plaintextName ) );
   VLOG(1) << "unlink " << cyName;
 
   int res = withExceptionCatcher( (int) std::errc::io_error,
                                   bindMethod( fs_io, &FsIO::get_attrs ),
                                   attrs, cyName );
+  if(res < 0) return res;
 
   // TODO: make sure this wrap code is similar to how FileIO is created
   // in FileNode
@@ -778,8 +801,197 @@ int DirNode::get_attrs(FsFileAttrs *attrs, const char *plaintextName)
     *attrs = MACFileIO::wrapAttrs( fsConfig, std::move( *attrs ) );
   }
 
+  if(attrs->type == FsFileType::POSIX_LINK)
+  {
+    opt::optional<PosixSymlinkData> buf;
+    res = withExceptionCatcher( (int) std::errc::io_error,
+                                bindMethod( this, &DirNode::_posix_readlink ),
+                                &buf, cyName );
+    if(res < 0) return res;
+    assert( buf );
+    attrs->size = buf->size();
+  }
+
   return res;
 }
+
+PosixSymlinkData DirNode::_posix_readlink(const std::string &cyPath)
+{
+  auto link_buf = fs_io->posix_readlink( fs_io->pathFromString( cyPath ) );
+  // decrypt link buf
+  return decryptLinkPath( std::move( link_buf ) );
+}
+
+int DirNode::posix_readlink(PosixSymlinkData *buf, const char *plaintextName)
+{
+  Lock _lock( mutex );
+
+  auto cyName = appendToRoot( naming->encodePath( plaintextName ) );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( this, &DirNode::_posix_readlink ),
+                               buf, cyName );
+}
+
+int DirNode::posix_symlink(const char *path, const char *data)
+{
+  // allow fully qualified names in symbolic links.
+  string toCName = cipherPath( path );
+  string fromCName = relativeCipherPath( data );
+
+  VLOG(1) << "symlink " << fromCName << " -> " << toCName;
+
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::posix_symlink ),
+                               fs_io->pathFromString( toCName ),
+                               PosixSymlinkData( std::move( toCName ) ) );
+}
+
+Path DirNode::pathFromString(const std::string &string)
+{
+  return fs_io->pathFromString( string );
+}
+
+int DirNode::posix_create( shared_ptr<FileNode> *fnode,
+                           const char *plainName, fs_posix_mode_t mode )
+{
+  rAssert( fnode );
+  Lock _lock( mutex );
+
+  // first call posix_create to clear node and whatever else
+  auto cyName = appendToRoot( naming->encodePath( plainName ) );
+  int ret = withExceptionCatcher( (int) std::errc::io_error,
+                                  bindMethod( fs_io, &FsIO::posix_create ),
+                                  cyName, mode );
+  if(ret < 0) return ret;
+
+  // then open node as usual, this is fine since the fs is locked during this
+  const bool requestWrite = true;
+  const bool createFile = true;
+  *fnode = _openNode( plainName, "posix_create", requestWrite, createFile, &ret );
+  if (!*fnode) return ret;
+  return 0;
+}
+
+int DirNode::posix_mknod(const char *plaintextName,
+                         fs_posix_mode_t mode, fs_posix_dev_t dev)
+{
+  Lock _lock( mutex );
+
+  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::posix_mknod ),
+                               fullName, mode, dev );
+}
+
+int DirNode::posix_setfsgid( fs_posix_gid_t *oldgid, fs_posix_gid_t newgid)
+{
+  Lock _lock( mutex );
+
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::posix_setfsgid ),
+                               oldgid, newgid );
+
+}
+
+int DirNode::posix_setfsuid( fs_posix_uid_t *olduid, fs_posix_uid_t newuid)
+{
+  Lock _lock( mutex );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::posix_setfsuid ),
+                               olduid, newuid );
+}
+
+int DirNode::rmdir( const char *plaintextName )
+{
+  Lock _lock( mutex );
+  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::rmdir ),
+                               fullName );
+}
+
+int DirNode::set_times( const char *plaintextName,
+                        opt::optional<fs_time_t> atime,
+                        opt::optional<fs_time_t> mtime )
+{
+  Lock _lock( mutex );
+  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::set_times ),
+                               fullName, std::move( atime ), std::move( mtime ) );
+
+}
+
+int DirNode::posix_chmod( const char *plaintextName, fs_posix_mode_t mode )
+{
+  Lock _lock( mutex );
+
+  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::posix_chmod ),
+                               fullName, mode );
+
+}
+
+int DirNode::posix_chown( const char *plaintextName, fs_posix_uid_t uid, fs_posix_gid_t gid )
+{
+  Lock _lock( mutex );
+
+  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::posix_chown ),
+                               fullName, uid, gid );
+
+}
+
+int DirNode::posix_setxattr( const char *plaintextName, bool follow, std::string name,
+                             size_t offset, std::vector<byte> buf, PosixSetxattrFlags flags )
+{
+  Lock _lock( mutex );
+
+  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::posix_setxattr ),
+                               std::move( fullName ), follow, std::move( name ),
+                               offset, std::move( buf ), std::move( flags ) );
+}
+
+int DirNode::posix_getxattr( opt::optional<std::vector<byte>> *ret,
+                             const char *plaintextName, bool follow, std::string name,
+                             size_t offset, size_t amt )
+{
+  Lock _lock( mutex );
+
+  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::posix_getxattr ),
+                               ret,
+                               std::move( fullName ), follow, std::move( name ),
+                               offset, amt );
+}
+
+int DirNode::posix_listxattr( opt::optional<PosixXattrList> *ret,
+                              const char *plaintextName, bool follow )
+{
+  Lock _lock( mutex );
+
+  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::posix_listxattr ),
+                               ret,
+                               std::move( fullName ), follow );
+}
+
+int DirNode::posix_removexattr( const char *plaintextName, bool follow, std::string name )
+{
+  Lock _lock( mutex );
+
+  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               bindMethod( fs_io, &FsIO::posix_removexattr ),
+                               std::move( fullName ), follow, std::move( name ) );
+}
+
 
 }  // namespace encfs
 

@@ -23,6 +23,7 @@ add_library (encfs-fs
     ProgramPasswordReader.cpp
     PromptPasswordReader.cpp
     StdinPasswordReader.cpp
+    EncfsFsIO.cpp
     ${PROTO_SRCS}
     ${PROTO_HDRS}
 )

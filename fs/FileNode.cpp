@@ -193,7 +193,7 @@ int FileNode::open(bool requestWrite, bool create)
   return 0;
 }
 
-int FileNode::getAttr(FsFileAttrs &stbuf)
+int FileNode::getAttr(FsFileAttrs &stbuf) const
 {
   Lock _lock( mutex );
 
@@ -202,7 +202,7 @@ int FileNode::getAttr(FsFileAttrs &stbuf)
                                &stbuf );
 }
 
-fs_off_t FileNode::getSize()
+fs_off_t FileNode::getSize() const
 {
   FsFileAttrs toret;
   int res = getAttr( toret );
@@ -249,7 +249,7 @@ bool FileNode::write(fs_off_t offset, byte *data, size_t size)
   return !res;
 }
 
-int FileNode::truncate( off_t size )
+int FileNode::truncate( fs_off_t size )
 {
   /* ensure file is open since this can be called even
      if the file hasn't been opened */

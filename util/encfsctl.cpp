@@ -325,7 +325,7 @@ static RootPtr initRootInfo(int &argc, char ** &argv)
     ++argv;
 
     if(checkDir( opts->rootDir ))
-      result = initFS( NULL, opts );
+      result = initFS( nullptr, opts );
 
     if(!result)
       cerr << _("Unable to initialize encrypted filesystem - check path.\n");
@@ -345,7 +345,7 @@ static RootPtr initRootInfo(const char* crootDir)
     opts->rootDir = rootDir;
     opts->createIfNotFound = false;
     opts->checkKey = false;
-    result = initFS( NULL, opts );
+    result = initFS( nullptr, opts );
   }
 
   if(!result)
@@ -576,10 +576,8 @@ static int copyContents(const shared_ptr<EncFS_Root> &rootInfo,
     if(node->getAttr(attrs) != 0)
       return EXIT_FAILURE;
 
-    PosixFsExtraFileAttrs *extra = NULL;
-    if(attrs.extra &&
-       (extra = dynamic_cast<PosixFsExtraFileAttrs *>(attrs.extra.get())) &&
-       S_ISLNK( extra->mode ))
+    if(attrs.posix &&
+       S_ISLNK( attrs.posix->mode ))
     {
       string d = rootInfo->root->cipherPath(encfsName);
       char linkContents[PATH_MAX+2];
@@ -593,8 +591,8 @@ static int copyContents(const shared_ptr<EncFS_Root> &rootInfo,
           targetName);
     } else
     {
-      mode_t mode = extra
-        ? extra->mode
+      mode_t mode = attrs.posix
+        ? attrs.posix->mode
         : attrs.type == FsFileType::DIRECTORY ? 0777 : 0666;
       int outfd = creat(targetName, mode);
 
@@ -630,10 +628,8 @@ static int traverseDirs(const shared_ptr<EncFS_Root> &rootInfo,
     if(dirNode->getAttr(attrs))
       return EXIT_FAILURE;
 
-    PosixFsExtraFileAttrs *extra = NULL;
-    mode_t mode = (attrs.extra &&
-                   (extra = dynamic_cast<PosixFsExtraFileAttrs *>(attrs.extra.get())))
-      ? extra->mode
+    mode_t mode = attrs.posix
+      ? attrs.posix->mode
       : 0777;
     mkdir(destDir.c_str(), mode);
   }
@@ -879,7 +875,7 @@ static int chpasswdAutomaticly( int argc, char **argv )
 int main(int argc, char **argv)
 {
   /* TODO: make this X-Platform */
-  g_fs_io = shared_ptr<FsIO>(new PosixFsIO());
+  g_fs_io = std::make_shared<PosixFsIO>();
 
   FLAGS_logtostderr = 1;
   FLAGS_minloglevel = 1;

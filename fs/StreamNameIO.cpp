@@ -35,7 +35,7 @@ namespace encfs {
 static shared_ptr<NameIO> NewStreamNameIO( const Interface &iface,
     const shared_ptr<CipherV1> &cipher )
 {
-  return shared_ptr<NameIO>( new StreamNameIO( iface, cipher ) );
+  return std::make_shared<StreamNameIO>( iface, cipher );
 }
 
 static bool StreamIO_registered = NameIO::Register("Stream",

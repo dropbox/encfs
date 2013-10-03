@@ -21,17 +21,21 @@
 #ifndef _encfs_incl_
 #define _encfs_incl_
 
+#include "base/config.h"
+
 #include <unistd.h>
 
 #include <fuse.h>
 
-#include "base/config.h"
+#include "encfs/EncFSFuseContext.h"
 
 #if defined(HAVE_SYS_XATTR_H) | defined(HAVE_ATTR_XATTR_H)
 #define HAVE_XATTR
 #endif
 
 namespace encfs {
+
+EncFSFuseContext *get_global_encfs_fuse_context();
 
 int encfs_getattr(const char *path, struct stat *stbuf);
 int encfs_fgetattr(const char *path, struct stat *stbuf, 
@@ -61,23 +65,21 @@ int encfs_statfs(const char *, struct statvfs *fst);
 int encfs_flush(const char *, struct fuse_file_info *info);
 int encfs_fsync(const char *path, int flags, struct fuse_file_info *info);
 
-#ifdef HAVE_XATTR
-
-#  ifdef XATTR_ADD_OPT
+// the same define used in fuse.h
+#ifdef __APPLE__
 int encfs_setxattr( const char *path, const char *name, const char *value, 
 	            size_t size, int flags, uint32_t position);
 int encfs_getxattr( const char *path, const char *name, char *value, 
 	            size_t size, uint32_t position );
-#  else
+#else
 int encfs_setxattr( const char *path, const char *name, const char *value, 
 	            size_t size, int flags);
 int encfs_getxattr( const char *path, const char *name, char *value, 
 	            size_t size );
-#  endif
+#endif
 
 int encfs_listxattr( const char *path, char *list, size_t size );
 int encfs_removexattr( const char *path, const char *name );
-#endif
 
 int encfs_utimens( const char *path, const struct timespec ts[2] );
 

@@ -29,7 +29,6 @@
 
 #include "cipher/CipherKey.h"
 
-#include "fs/encfs.h"
 #include "fs/CipherFileIO.h"
 #include "fs/FileUtils.h"
 
@@ -65,14 +64,14 @@ public:
     void flush();
 
     // getAttr returns 0 on success, -errno on failure
-    int getAttr(FsFileAttrs &stbuf);
-    fs_off_t getSize();
+    int getAttr(FsFileAttrs &stbuf) const;
+    fs_off_t getSize() const;
 
     ssize_t read(fs_off_t offset, byte *data, size_t size) const;
     bool write(fs_off_t offset, byte *data, size_t size);
 
     // truncate the file to a particular size
-    int truncate( off_t size );
+    int truncate( fs_off_t size );
 
     // datasync or full sync
     int sync(bool dataSync);

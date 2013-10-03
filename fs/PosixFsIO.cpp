@@ -18,6 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
 #ifdef linux
 #include <sys/fsuid.h>
 #endif
@@ -25,7 +26,10 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
+#include "encfs/xattr.h"
+
 #include <dirent.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -42,8 +46,34 @@
 
 #include "base/optional.h"
 
-#include "fs/PosixFsIO.h"
+#include "fs/FsIO.h"
 #include "fs/RawFileIO.h"
+
+#include "fs/PosixFsIO.h"
+
+// TODO: check for existence of functions at build configuration time
+//       don't do it conditionally on linux
+#ifndef linux
+int setfsuid(uid_t uid)
+{
+    uid_t olduid = geteuid();
+
+    int res = seteuid(uid);
+    if(res == -1) return res;
+
+    return olduid;
+}
+
+int setfsgid(gid_t gid)
+{
+    gid_t oldgid = getegid();
+
+    int res = setegid(gid);
+    if(res == -1) return res;
+
+    return oldgid;
+}
+#endif
 
 using std::shared_ptr;
 
@@ -121,7 +151,7 @@ class PosixDirectoryIO final : public DirectoryIO
 {
 private:
     DIR *_dirp;
-    // Only FsIO can instantiate this class
+    // Only PosixFsIO can instantiate this class
     PosixDirectoryIO(DIR *dirp) noexcept : _dirp(dirp)  {}
 
 public:
@@ -228,44 +258,14 @@ File PosixFsIO::openfile(const Path &path,
   return std::move( file_ );
 }
 
-void PosixFsIO::mkdir(const Path &path,
-                      mode_t mode, uid_t uid, gid_t gid)
-{
-  // if uid or gid are set, then that should be the directory owner
-  int olduid = -1;
-  int oldgid = -1;
-
-  if(uid != 0)
-    olduid = setfsuid( uid );
-  if(gid != 0)
-    oldgid = setfsgid( gid );
-
-  const int res = ::mkdir( path.c_str(), mode );
-  const int save_errno = errno;
-
-  /* NB: the following should really not fail */
-  if(olduid >= 0)
-    setfsuid( olduid );
-  if(oldgid >= 0)
-    setfsgid( oldgid );
-
-  if(res < 0) current_fs_error( save_errno );
-}
-
 void PosixFsIO::mkdir(const Path &path)
 {
-  mkdir( path, 0777, 0, 0 );
+  posix_mkdir( path, 0777 );
 }
 
 void PosixFsIO::rename(const Path &path_src, const Path &path_dst)
 {
   const int res = ::rename( path_src.c_str(), path_dst.c_str() );
-  if(res < 0) current_fs_error();
-}
-
-void PosixFsIO::link(const Path &path_src, const Path &path_dst)
-{
-  const int res = ::link( path_src.c_str(), path_dst.c_str() );
   if(res < 0) current_fs_error();
 }
 
@@ -294,59 +294,204 @@ FsFileAttrs PosixFsIO::get_attrs(const Path &path)
   assert( st.st_mtime <= FS_TIME_MAX );
   const fs_time_t mtime = (fs_time_t) st.st_mtime;
   const fs_off_t size = (fs_off_t) st.st_size;
-  std::unique_ptr<PosixFsExtraFileAttrs> extra ( new PosixFsExtraFileAttrs() );
-  extra->gid = st.st_gid;
-  extra->uid = st.st_uid;
-  extra->mode = st.st_mode;
-
-  return { .type = type, .mtime = mtime, .size = size, .extra = std::move( extra ) };
-}
-
-void PosixFsIO::set_mtime(const Path &path, fs_time_t mtime)
-{
-  struct timeval new_times[2] = {
-    {0, 0},
-    {mtime, 0},
+  const FsPosixAttrs posix = {
+    .gid = st.st_gid,
+    .uid = st.st_uid,
+    .mode = st.st_mode,
   };
 
-  const int res_gettimeofday = ::gettimeofday( &new_times[0], NULL );
-  if (res_gettimeofday < 0) current_fs_error();
+  return { .type = type, .mtime = mtime, .size = size, .posix = std::move( posix ) };
+}
+
+void PosixFsIO::set_times(const Path &path,
+                          const opt::optional<fs_time_t> &atime,
+                          const opt::optional<fs_time_t> &mtime)
+{
+  struct timeval now;
+  struct timeval new_times[2];
+
+  if(!atime || !mtime)
+  {
+    const int res_gettimeofday = ::gettimeofday( &now, nullptr );
+    if(res_gettimeofday < 0) current_fs_error();
+  }
+
+  new_times[0] = atime
+    ? (struct timeval) {*atime, 0}
+    : now;
+
+  new_times[1] = mtime
+    ? (struct timeval) {*mtime, 0}
+    : now;
 
   const int res_utimes = ::utimes( path.c_str(), new_times );
   if (res_utimes < 0) current_fs_error();
 }
 
-void PosixFsIO::mknod(const Path &path,
-                      mode_t mode, dev_t rdev, uid_t uid, gid_t gid)
+fs_posix_uid_t PosixFsIO::posix_setfsuid(fs_posix_uid_t uid)
 {
-  int olduid = -1;
-  int oldgid = -1;
+  const int res = ::setfsuid( uid );
+  if(res < 0) current_fs_error();
+  return res;
+}
 
-  if(uid != 0)
-  {
-    olduid = setfsuid( uid );
-    if(olduid < 0) current_fs_error();
-  }
-  if(gid != 0)
-  {
-    oldgid = setfsgid( gid );
-    if(oldgid < 0) current_fs_error();
-  }
+fs_posix_gid_t PosixFsIO::posix_setfsgid(fs_posix_gid_t gid)
+{
+  const int res = ::setfsgid( gid );
+  if(res < 0) current_fs_error();
+  return res;
+}
 
-  /*
-   * cf. xmp_mknod() in fusexmp.c
-   * The regular file stuff could be stripped off if there
-   * were a create method (advised to have)
-   */
+File PosixFsIO::posix_create(const Path &path, fs_posix_mode_t mode)
+{
+  auto file_ = std::unique_ptr<RawFileIO>( new RawFileIO( path ) );
+  int flags = O_CREAT | O_TRUNC | O_WRONLY;
+  const int ret_open = file_->open( flags, mode );
+  if(ret_open < 0) current_fs_error( -ret_open );
+  return std::move( file_ );
+}
+
+void PosixFsIO::posix_mkdir(const Path &path, fs_posix_mode_t mode)
+{
+  const int res = ::mkdir( path.c_str(), mode );
+  if(res < 0) current_fs_error();
+}
+
+void PosixFsIO::posix_mknod(const Path &path,
+                            fs_posix_mode_t mode, fs_posix_dev_t rdev)
+{
   int res = ::mknod( path.c_str(), mode, rdev );
-
-  if(olduid >= 0)
-    setfsuid( olduid );
-  if(oldgid >= 0)
-    setfsgid( oldgid );
-
   if(res == -1) current_fs_error();
 }
 
+void PosixFsIO::posix_link(const Path &path_src, const Path &path_dst)
+{
+  const int res = ::link( path_src.c_str(), path_dst.c_str() );
+  if(res < 0) current_fs_error();
+}
+
+void PosixFsIO::posix_symlink(const Path &path, PosixSymlinkData link_data)
+{
+  const int res = ::symlink( link_data.c_str(), path.c_str() );
+  if(res < 0) current_fs_error();
+}
+
+PosixSymlinkData PosixFsIO::posix_readlink(const Path &path) const
+{
+  // TODO: could this be allocated dynamically?
+  char buf[PATH_MAX];
+  const ssize_t res = ::readlink( path.c_str(), buf, sizeof( buf ) );
+  if(res < 0) current_fs_error();
+
+  // make sure nothing returned from readlink has a null byte
+  assert( std::all_of( buf, buf + sizeof( buf ), [](decltype(buf[0]) elt) { return elt; } ) );
+
+  return PosixSymlinkData( buf, (size_t) res );
+}
+
+void PosixFsIO::posix_chmod(const Path &path, fs_posix_mode_t mode)
+{
+  const int res = ::chmod( path.c_str(), mode );
+  if(res < 0) current_fs_error();
+}
+
+void PosixFsIO::posix_chown(const Path &path, fs_posix_uid_t uid, fs_posix_gid_t gid)
+{
+  const int res = ::chown( path.c_str(), uid, gid );
+  if(res < 0) current_fs_error();
+}
+
+#ifdef HAVE_XATTR
+
+void PosixFsIO::posix_setxattr(const Path &path, bool follow,
+                               std::string name, size_t offset,
+                               std::vector<byte> buf, PosixSetxattrFlags flags)
+{
+  int options =
+    (flags.replace ? XATTR_REPLACE : 0) |
+    (flags.create ? XATTR_CREATE : 0);
+
+#ifdef XATTR_ADD_OPT
+  if (!follow) options |= XATTR_NOFOLLOW;
+  const int res = ::setxattr( path.c_str(), name.c_str(), (void *) buf.data(),
+                              buf.size(), (u_int32_t) offset, options );
+#else
+  // we don't support offset writes on linux yet
+  if (offset) throw std::runtime_error( "not supported" );
+
+  const auto fn = follow ? &::setxattr : &::lsetxattr;
+  const int res = fn( path.c_str(), name.c_str(), (void *) buf.data(),
+                      buf.size(), options );
+#endif
+
+  if(res < 0) current_fs_error();
+}
+
+std::vector<byte> PosixFsIO::posix_getxattr(const Path &path, bool follow,
+                                            std::string name, size_t offset, size_t amt) const
+{
+#ifdef XATTR_ADD_OPT
+  int options = follow ? 0 : XATTR_NOFOLLOW;
+  std::vector<byte> data( amt );
+  int res = ::getxattr( path.c_str(), name.c_str(), data.data(), data.size(), offset, options );
+#else
+  // we don't support offset reads on linux yet
+  if (offset) throw std::runtime_error( "not supported" );
+
+  const auto fn = follow ? &::getxattr : &::lgetxattr;
+  std::vector<byte> data( amt );
+  int res = fn( path.c_str(), name.c_str(), data.data(), data.size() );
+#endif
+
+  if(res < 0) current_fs_error();
+
+  return std::move( data );
+
+}
+
+PosixXattrList PosixFsIO::posix_listxattr(const Path &path, bool follow) const
+{
+  using namespace std::placeholders;
+
+#ifdef XATTR_ADD_OPT
+  int options = follow ? 0 : XATTR_NOFOLLOW;
+  const auto fn = std::bind( &::listxattr, path.c_str(), _1, _2, options );
+#else
+  const auto fn = std::bind( follow ? &::listxattr : &::llistxattr, path.c_str(), _1, _2 );
+#endif
+
+  ssize_t ret = fn( nullptr, 0 );
+  if(ret < 0) current_fs_error();
+
+  std::unique_ptr<char[]> buf( new char[ret] );
+
+  ret = fn( buf.get(), ret );
+  if(ret < 0) current_fs_error();
+
+  PosixXattrList toret;
+  char *searchp = buf.get();
+  while (searchp < (buf.get() + ret))
+  {
+    toret.emplace_back(searchp);
+    searchp = strchr( searchp, '\0' ) + 1;
+  }
+
+  return std::move( toret );
+}
+
+void PosixFsIO::posix_removexattr(const Path &path, bool follow, std::string name)
+{
+#ifdef XATTR_ADD_OPT
+  int options = follow ? 0 : XATTR_NOFOLLOW;
+  const int ret = ::removexattr( path.c_str(), name.c_str(), options );
+#else
+  const auto fn = follow ? &::removexattr : &::lremovexattr;
+  const int ret = fn( path.c_str(), name.c_str() );
+#endif
+
+  if(ret < 0) current_fs_error();
+}
+
+#endif
 
 }  // namespace encfs

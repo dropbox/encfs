@@ -17,27 +17,15 @@
 
 #include "base/config.h"
 
-#include <unistd.h>
-#include <fcntl.h>
 #include <dirent.h>
+
+#include "encfs/xattr.h"
+
 #include <cerrno>
-#include <sys/statvfs.h>
-#include <sys/time.h>
-
-#include <sys/types.h>
-#ifdef linux
-#include <sys/fsuid.h>
-#endif
-
-#ifdef HAVE_ATTR_XATTR_H
-#include <attr/xattr.h>
-#elif defined(HAVE_SYS_XATTR_H)
-#include <sys/xattr.h>
-#endif
-
 #include <cstdio>
 #include <cstring>
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <memory>
@@ -62,10 +50,7 @@ using std::tuple;
 
 #include "cipher/MemoryPool.h"
 
-#include "fs/Context.h"
-#include "fs/DirNode.h"
-#include "fs/FileUtils.h"
-#include "fs/PosixFsIO.h"
+#include "fs/FsIO.h"
 
 #include "fs/encfs.h"
 
@@ -76,17 +61,38 @@ using std::shared_ptr;
 
 namespace encfs {
 
-#ifndef MIN
-#define MIN(a,b) (((a)<(b)) ? (a): (b))
-#endif
+enum {
+  ESUCCESS=0,
+};
 
-#define ESUCCESS 0
-
-#define GET_FN(ctx, finfo) ctx->getNode((void*)(uintptr_t)finfo->fh)
-
-static EncFS_Context * context()
+EncFSFuseContext *get_global_encfs_fuse_context()
 {
-    return (EncFS_Context*)fuse_get_context()->private_data;
+  return (EncFSFuseContext *) fuse_get_context()->private_data;
+}
+
+static FsIO &gGetFS()
+{
+  return *get_global_encfs_fuse_context()->getFS();
+}
+
+static bool gIsPublic()
+{
+  return get_global_encfs_fuse_context()->isPublic();
+}
+
+static void gSaveFile(struct fuse_file_info *fi, File f)
+{
+  return get_global_encfs_fuse_context()->saveFile( fi, std::move( f ) );
+}
+
+static File &gGetFile(const char *path, struct fuse_file_info *fi)
+{
+  return get_global_encfs_fuse_context()->getFile( path, fi );
+}
+
+static File gReleaseFile(const char *path, struct fuse_file_info *fi)
+{
+  return get_global_encfs_fuse_context()->releaseFile( path, fi );
 }
 
 /*
@@ -99,114 +105,6 @@ static EncFS_Context * context()
     to the internal interfaces.  Any marshaling of arguments and return types
     can be done here.
 */
-
-template<typename T, typename R, typename... Args>
-std::function<int(R *, const std::string &, Args...)> fsMethodToCStyleFn(const shared_ptr<T> &obj,
-                                                                         R (T::*fn)(const Path &, Args...))
-{
-  std::function<R(const std::string &, Args...)> string_fn = [=] (const std::string &p, Args... args) {
-    return (obj.get()->*fn)( obj->pathFromString( p ), args... );
-  };
-  return wrapWithExceptionCatcher( EIO, std::move( string_fn ) );
-}
-
-template<typename T, typename... Args>
-std::function<int(const std::string &, Args...)> fsMethodToCStyleFn(const shared_ptr<T> &obj,
-                                                                    void (T::*fn)(const Path &, Args...))
-{
-  std::function<void(const std::string &, Args...)> string_fn = [=] (const std::string &p, Args... args) {
-    return (obj.get()->*fn)( obj->pathFromString( p ), args... );
-  };
-  return wrapWithExceptionCatcher( EIO, std::move( string_fn ) );
-}
-
-// helper function -- apply a functor to a cipher path, given the plain path
-template<typename T, typename... Args>
-static int withCipherPath( const char *opName, T op,
-                           const char *path, Args... args )
-{
-  EncFS_Context *ctx = context();
-
-  int res = -EIO;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  try
-  {
-    string cyName = FSRoot->cipherPath( path );
-    VLOG(1) << opName << " " << cyName.c_str();
-
-    res = op( cyName, args... );
-    if(res < 0) LOG(INFO) << opName << " error: " << strerror(-res);
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in " << opName <<
-      ":" << err.what();
-  }
-  return res;
-}
-
-template<typename T, typename R, typename... Args>
-std::function<int(R *, const char *, Args...)> defaultFsWrap(const char *requestor,
-                                                             const shared_ptr<T> &obj,
-                                                             R (T::*fn)(const Path &, Args...))
-{
-  return [=] (R *ret, const char *path, Args... args) {
-    auto c_mknod_ = fsMethodToCStyleFn( obj, fn );
-    // curry in the ret argument
-    auto c_mknod = [=] (const string &path, Args... args) {
-      return c_mknod_( ret, path , args... );
-    };
-    return withCipherPath( requestor, c_mknod, path, args... );
-  };
-}
-
-template<typename T, typename... Args>
-std::function<int(const char *, Args...)> defaultFsWrap(const char *requestor,
-                                                        const shared_ptr<T> &obj,
-                                                        void (T::*fn)(const Path &, Args...))
-{
-  auto c_mknod = fsMethodToCStyleFn( obj, fn );
-  return [=] (const char *path, Args... args) {
-    return withCipherPath(requestor, c_mknod, path, args...);
-  };
-}
-
-// helper function -- apply a functor to a node
-template<typename T>
-static int withFileNode( const char *opName,
-    const char *path, struct fuse_file_info *fi, 
-    int (*op)(FileNode *, T data ), T data )
-{
-  EncFS_Context *ctx = context();
-
-  int res = -EIO;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  try
-  {
-    shared_ptr<FileNode> fnode;
-
-    if(fi != NULL)
-      fnode = GET_FN(ctx, fi);
-    else
-      fnode = FSRoot->lookupNode( path, opName );
-
-    rAssert((bool) fnode);
-    VLOG(1) << opName << " " << fnode->cipherName();
-    res = op( fnode.get(), data );
-
-    LOG_IF(INFO, res < 0) << opName << " error: " << strerror(-res);
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in " << opName << 
-      ":" << err.what();
-  }
-  return res;
-}
 
 static int encfs_file_type_to_dirent_type(FsFileType ft) {
   static std::map<FsFileType, int> theMapper = {
@@ -230,547 +128,297 @@ static int encfs_file_type_to_stat_type(FsFileType ft) {
 static void fill_stbuf_from_file_attrs(struct stat *stbuf, FsFileAttrs *attrs)
 {
   stbuf->st_size = attrs->size;
-  PosixFsExtraFileAttrs *extra = NULL;
-  if (attrs->extra &&
-      (extra = dynamic_cast<PosixFsExtraFileAttrs *>(attrs->extra.get())))
+  if (attrs->posix)
   {
-    stbuf->st_mode = extra->mode;
-    stbuf->st_gid = extra->gid;
-    stbuf->st_uid = extra->uid;
-  } else
-    stbuf->st_mode = encfs_file_type_to_stat_type( attrs->type ) | 0777;
+    stbuf->st_gid = attrs->posix->gid;
+    stbuf->st_uid = attrs->posix->uid;
+    stbuf->st_mode = attrs->posix->mode;
+  } else stbuf->st_mode = encfs_file_type_to_stat_type(attrs->type) | 0777;
   stbuf->st_mtime = attrs->mtime;
 }
 
-int _do_fgetattr(FileNode *fnode, struct stat *stbuf)
+int encfs_getattr(const char *cpath, struct stat *stbuf)
 {
+  auto &fs_io = gGetFS();
+  auto path = fs_io.pathFromString( cpath );
+
   FsFileAttrs attrs;
-  int res = fnode->getAttr(attrs);
-  if(res == ESUCCESS) fill_stbuf_from_file_attrs(stbuf, &attrs);
-  if(res == ESUCCESS && S_ISLNK( stbuf->st_mode ))
+  int ret = withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::get_attrs ),
+                                  &attrs, path );
+  if(ret < 0) return ret;
+
+  fill_stbuf_from_file_attrs( stbuf, &attrs );
+
+  return ret;
+}
+
+int encfs_fgetattr(const char *path, struct stat *stbuf,
+                   struct fuse_file_info *fi)
+{
+  auto &fref = gGetFile( path, fi );
+
+  FsFileAttrs attrs;
+  int ret = withExceptionCatcher( EIO, bindMethod( fref, &File::get_attrs ),
+                                  &attrs );
+  if(ret < 0) return ret;
+
+  fill_stbuf_from_file_attrs( stbuf, &attrs );
+
+  return ret;
+}
+
+int encfs_getdir(const char *cpath, fuse_dirh_t h, fuse_dirfil_t filler)
+{
+  auto &fs_io = gGetFS();
+  auto path = fs_io.pathFromString( cpath );
+
+  opt::optional<Directory> dir;
+  int ret = withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::opendir ),
+                                  &dir, path );
+  if(ret < 0) return ret;
+
+  assert( dir );
+
+  opt::optional<FsDirEnt> dirent;
+  while ((dirent = dir->readdir()))
   {
-    EncFS_Context *ctx = context();
-    shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-    if(FSRoot)
-    {
-      // determine plaintext link size..  Easiest to read and decrypt..
-      vector<char> buf(stbuf->st_size+1, 0);
+    int dtype = DT_UNKNOWN;
+    if (dirent->type) dtype = encfs_file_type_to_dirent_type( *dirent->type );
 
-      res = ::readlink( fnode->cipherName(), &buf[0], stbuf->st_size );
-      if(res >= 0)
-      {
-        // other functions expect c-strings to be null-terminated, which
-        // readlink doesn't provide
-        buf[res] = '\0';
+    ret = filler( h, dirent->name.c_str(), dtype, (ino_t) dirent->file_id );
 
-        stbuf->st_size = FSRoot->plainPath( &buf[0] ).length();
+    if(ret != ESUCCESS) break;
+  }
 
-        res = ESUCCESS;
-      } else
-        res = -errno;
-    }
+  return ret;
+}
+
+template<typename F, class... Args>
+static int _do_mk_preserve(F f, const char *cpath, Args... args)
+{
+  auto &fs_io = gGetFS();
+  auto path = fs_io.pathFromString( cpath );
+
+  fs_posix_uid_t olduid = 0;
+  fs_posix_gid_t oldgid = 0;
+
+  if(gIsPublic())
+  {
+    auto fctx = fuse_get_context();
+    // TODO: no exception
+    olduid = fs_io.posix_setfsuid( fctx->uid );
+    oldgid = fs_io.posix_setfsgid( fctx->gid );
+  }
+
+  int res = withExceptionCatcher(EIO, f, fs_io, path, args... );
+
+  // Is this error due to access problems?
+  if(gIsPublic() && -res == EACCES)
+  {
+    // try again using the parent dir's group
+    auto parent = path.dirname();
+    LOG(INFO) << "attempting public filesystem workaround for " 
+              << parent.c_str();
+
+    // TODO: no exception
+    auto attrs = fs_io.get_attrs( parent );
+    if(attrs.posix) fs_io.posix_setfsgid( attrs.posix->gid );
+    res = withExceptionCatcher(EIO, f, fs_io, path, args... );
+  }
+
+  if (gIsPublic())
+  {
+    // TODO: no exception
+    fs_io.posix_setfsuid( olduid );
+    fs_io.posix_setfsgid( oldgid );
   }
 
   return res;
 }
 
-int encfs_getattr(const char *path, struct stat *stbuf)
+static void _smart_mknod(FsIO &fs_io, const Path &path,
+                         mode_t mode, dev_t rdev)
 {
-  EncFS_Context *ctx = context();
-  int res = -EIO;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot( &res );
-  if(!FSRoot) return res;
+  if(S_ISREG( mode ))
+  {
+    fs_io.posix_create( path, mode );
+  } else if(S_ISFIFO( mode ))
+  {
+    fs_io.posix_mkfifo( path, mode );
+  } else
+  {
+    fs_io.posix_mknod( path, mode, rdev );
+  }
+}
 
-  FsFileAttrs attrs;
-  res = FSRoot->get_attrs( &attrs, path );
-  if (res < 0) return res;
+int encfs_mknod(const char *cpath, mode_t mode, dev_t rdev)
+{
+  return _do_mk_preserve( _smart_mknod, cpath, mode, rdev );
+}
 
-  fill_stbuf_from_file_attrs( stbuf, &attrs );
+int encfs_mkdir(const char *cpath, mode_t mode)
+{
+  auto to_call = [=] (FsIO &fs_io, const Path &p, mode_t mode) {
+    return fs_io.posix_mkdir( p, mode );
+  };
+  return _do_mk_preserve( to_call, cpath, mode );
+}
+
+template<typename U, typename... Args>
+static int _do_one_path(U m, const char *cpath, Args... args)
+{
+  auto &fs_io = gGetFS();
+  auto path = fs_io.pathFromString( cpath );
+
+  return withExceptionCatcher( EIO, bindMethod( fs_io, m ),
+                               std::move( path ), args... );
+}
+
+template<typename U, typename... Args>
+static int _do_two_path(U m, const char *from, const char *to, Args... args)
+{
+  auto &fs_io = gGetFS();
+  auto from_path = fs_io.pathFromString( from );
+  auto to_path = fs_io.pathFromString( to );
+
+  return withExceptionCatcher( EIO, bindMethod( fs_io, m ),
+                               std::move( from_path ), std::move( to_path ), args... );
+}
+
+int encfs_unlink(const char *cpath)
+{
+  return _do_one_path( &FsIO::unlink, cpath );
+}
+
+int encfs_rmdir(const char *cpath)
+{
+  return _do_one_path( &FsIO::rmdir, cpath );
+}
+
+int encfs_readlink(const char *cpath, char *buf, size_t size)
+{
+  auto &fs_io = gGetFS();
+  auto path = fs_io.pathFromString( cpath );
+
+  opt::optional<PosixSymlinkData> link_data;
+  int res = withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::posix_readlink ),
+                                  &link_data, path );
+  if(res < 0) return res;
+
+  assert( link_data );
+
+  size_t amt_to_copy = std::min( size, link_data->size() ) - 1;
+  memmove( buf, link_data->data(), amt_to_copy );
+  buf[amt_to_copy] = '\0';
 
   return ESUCCESS;
 }
 
-int encfs_fgetattr(const char *path, struct stat *stbuf,
-    struct fuse_file_info *fi)
-{
-  return withFileNode( "fgetattr", path, fi, _do_fgetattr, stbuf );
-}
-
-int encfs_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
-{
-  EncFS_Context *ctx = context();
-
-  int res = ESUCCESS;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  try
-  {
-
-    DirTraverse dt = FSRoot->openDir( path );
-
-    VLOG(1) << "getdir on " << FSRoot->cipherPath(path);
-
-    if(dt.valid())
-    {
-      FsFileType fileType = FsFileType::UNKNOWN;
-
-      // TODO: fileType is not good enough, it doesn't support all posix types
-      // (implement dt.nextPosixName()) or something like that
-      fs_file_id_t inode_i = 0;
-      std::string name = dt.nextPlaintextName( &fileType, &inode_i );
-      while( !name.empty() )
-      {
-        res = filler( h, name.c_str(), encfs_file_type_to_dirent_type(fileType), (ino_t) inode_i );
-
-        if(res != ESUCCESS)
-          break;
-
-        name = dt.nextPlaintextName( &fileType, &inode_i );
-      }
-    } else
-    {
-      LOG(INFO) << "getdir request invalid, path: '" << path << "'";
-    }
-
-    return res;
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in getdir: " << err.what();
-    return -EIO;
-  }
-}
-
-int _do_mknod(const string &cyName, mode_t mode, dev_t rdev, uid_t uid, gid_t gid)
-{
-  EncFS_Context *ctx = context();
-
-  int res = -1;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  assert( !S_ISREG( mode ) );
-  if (S_ISFIFO( mode ))
-  {
-    res = ::mkfifo( cyName.c_str(), mode );
-    if (res < 0) res = -errno;
-  }
-  else
-  {
-    auto posix_fs = std::dynamic_pointer_cast<PosixFsIO>( FSRoot->get_fs() );
-    if(posix_fs)
-    {
-      auto c_mknod = fsMethodToCStyleFn( posix_fs, &PosixFsIO::mknod );
-      res = c_mknod( cyName, mode, rdev, uid, gid );
-    }
-  }
-
-  return res;
-}
-
-int encfs_mknod(const char *path, mode_t mode, dev_t rdev)
-{
-  fuse_context *fctx = fuse_get_context();
-  EncFS_Context *ctx = context();
-
-  int res = -EIO;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  auto posix_fs = std::dynamic_pointer_cast<PosixFsIO>( FSRoot->get_fs() );
-  if(!posix_fs)
-    return res;
-
-  using namespace std::placeholders;
-  std::function<int(uid_t, gid_t)> mknod_fn;
-  if(S_ISREG( mode ))
-  {
-    const bool requestWrite = false;
-    const bool createFile = true;
-    mknod_fn = [=] (uid_t /*uid*/, gid_t /*gid*/) {
-      // TODO: use uid, gid
-      int res;
-      FSRoot->openNode(path, "mknod", requestWrite, createFile, &res);
-      return res;
-    };
-  } else
-  {
-    mknod_fn = std::bind(withCipherPath<decltype(_do_mknod), mode_t, dev_t, uid_t, gid_t>,
-                         "mknod", _do_mknod,
-                         path, mode, rdev, _1, _2);
-  }
-
-  try
-  {
-    uid_t uid = 0;
-    gid_t gid = 0;
-    if(ctx->publicFilesystem)
-    {
-      uid = fctx->uid;
-      gid = fctx->gid;
-    }
-
-    res = mknod_fn( uid, gid );
-
-    // Is this error due to access problems?
-    if(ctx->publicFilesystem && res == EACCES)
-    {
-      // try again using the parent dir's group
-      string parent = FSRoot->plaintextParent( path );
-      LOG(INFO) << "attempting public filesystem workaround for " 
-                << parent.c_str();
-      shared_ptr<FileNode> dnode = 
-        FSRoot->lookupNode( parent.c_str(), "mknod" );
-
-      FsFileAttrs attrs;
-      PosixFsExtraFileAttrs *posix_attrs;
-      if(dnode->getAttr( attrs ) == 0 &&
-         attrs.extra &&
-         (posix_attrs = dynamic_cast<PosixFsExtraFileAttrs *>(attrs.extra.get())))
-        res = mknod_fn( uid, posix_attrs->gid );
-    }
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in mknod: " << err.what();
-  }
-  return res;
-}
-
-int encfs_mkdir(const char *path, mode_t mode)
-{
-  fuse_context *fctx = fuse_get_context();
-  EncFS_Context *ctx = context();
-
-  int res = -EIO;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  auto posix_fs = std::dynamic_pointer_cast<PosixFsIO>( FSRoot->get_fs() );
-  if(!posix_fs)
-    return res;
-
-  auto mkdir_fn = defaultFsWrap( "mkdir", posix_fs,
-                                 // pick the posix form of mkdir
-                                 (void (PosixFsIO::*)(const Path &, mode_t, uid_t, gid_t)) &PosixFsIO::mkdir );
-
-  try
-  {
-    uid_t uid = 0;
-    gid_t gid = 0;
-    if(ctx->publicFilesystem)
-    {
-      uid = fctx->uid;
-      gid = fctx->gid;
-    }
-    res = mkdir_fn( path, mode, uid, gid );
-    // Is this error due to access problems?
-    if(ctx->publicFilesystem && -res == EACCES)
-    {
-      // try again using the parent dir's group
-      string parent = FSRoot->plaintextParent( path );
-      shared_ptr<FileNode> dnode = 
-        FSRoot->lookupNode( parent.c_str(), "mkdir" );
-
-      FsFileAttrs attrs;
-      PosixFsExtraFileAttrs *posix_attrs;
-      if(dnode->getAttr( attrs ) == 0 &&
-         attrs.extra &&
-         (posix_attrs = dynamic_cast<PosixFsExtraFileAttrs *>(attrs.extra.get())))
-        res = mkdir_fn( path, mode, uid, posix_attrs->gid );
-    }
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in mkdir: " << err.what();
-  }
-  return res;
-}
-
-int encfs_unlink(const char *path)
-{
-  EncFS_Context *ctx = context();
-
-  int res = -EIO;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  try
-  {
-    // let DirNode handle it atomically so that it can handle race
-    // conditions
-    res = FSRoot->unlink( path );
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in unlink: " << err.what();
-  }
-  return res;
-}
-
-
-int _do_rmdir(const string &cipherPath)
-{
-  const int res = rmdir( cipherPath.c_str() );
-  return (res == -1) ? -errno : ESUCCESS;
-}
-
-int encfs_rmdir(const char *path)
-{
-  return withCipherPath( "rmdir", _do_rmdir, path );
-}
-
-int _do_readlink(const string &cyName, char *buf, size_t size)
-{
-  EncFS_Context *ctx = context();
-  int res = ESUCCESS;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  res = ::readlink( cyName.c_str(), buf, size-1 );
-
-  if(res == -1)
-    return -errno;
-
-  buf[res] = '\0'; // ensure null termination
-  string decodedName;
-  try
-  {
-    decodedName = FSRoot->plainPath( buf );
-  } catch(...) { }
-
-  if(!decodedName.empty())
-  {
-    strncpy(buf, decodedName.c_str(), size-1);
-    buf[size-1] = '\0';
-
-    return ESUCCESS;
-  } else
-  {
-    LOG(WARNING) << "Error decoding link";
-    return -EIO;
-  }
-}
-
-int encfs_readlink(const char *path, char *buf, size_t size)
-{
-  return withCipherPath( "readlink", _do_readlink, path, buf, size );
-}
-
 int encfs_symlink(const char *from, const char *to)
 {
-  EncFS_Context *ctx = context();
+  auto &fs_io = gGetFS();
+  auto link_data = PosixSymlinkData( from );
+  auto to_path = fs_io.pathFromString( to );
 
-  int res = -EIO;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  try
-  {
-    // allow fully qualified names in symbolic links.
-    string fromCName = FSRoot->relativeCipherPath( from );
-    string toCName = FSRoot->cipherPath( to );
-
-    VLOG(1) << "symlink " << fromCName << " -> " << toCName;
-
-    // use setfsuid / setfsgid so that the new link will be owned by the
-    // uid/gid provided by the fuse_context.
-    int olduid = -1;
-    int oldgid = -1;
-    if(ctx->publicFilesystem)
-    {
-      fuse_context *context = fuse_get_context();
-      olduid = setfsuid( context->uid );
-      oldgid = setfsgid( context->gid );
-    }
-    res = ::symlink( fromCName.c_str(), toCName.c_str() );
-    if(olduid >= 0)
-      setfsuid( olduid );
-    if(oldgid >= 0)
-      setfsgid( oldgid );
-
-    if(res == -1)
-      res = -errno;
-    else
-      res = ESUCCESS;
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in symlink: " << err.what();
-  }
-  return res;
+  // TODO: make sure link will be owned by client uid if public
+  return withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::posix_symlink ),
+                               std::move( to_path ), std::move( link_data ) );
 }
 
 int encfs_link(const char *from, const char *to)
 {
-  EncFS_Context *ctx = context();
-
-  int res = -EIO;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  try
-  {
-    res = FSRoot->link( from, to );
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in link: " << err.what();
-  }
-  return res;
+  // TODO: make sure link will be owned by client uid if public
+  return _do_two_path( &FsIO::posix_link, from, to );
 }
 
 int encfs_rename(const char *from, const char *to)
 {
-  EncFS_Context *ctx = context();
-
-  int res = -EIO;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  try
-  {
-    res = FSRoot->rename( from, to );
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in rename: " << err.what();
-  }
-  return res;
+  return _do_two_path( &FsIO::rename, from, to );
 }
 
-int _do_chmod(const string &cipherPath, mode_t mode)
+int encfs_chmod(const char *cpath, mode_t mode)
 {
-  // TODO: wtf?!? fix this
-  int res;
-
-#ifdef HAVE_LCHMOD
-  res = lchmod( cipherPath.c_str(), mode );
-#else
-  res = -1;
-  errno = ENOSYS;
-#endif
-
-  if(res == -1 && errno == ENOSYS)
-  {
-    res = chmod( cipherPath.c_str(), mode );
-  }
-
-  return (res == -1) ? -errno : ESUCCESS;
+  return _do_one_path( &FsIO::posix_chmod, cpath, mode );
 }
 
-int encfs_chmod(const char *path, mode_t mode)
+int encfs_chown(const char *cpath, uid_t uid, gid_t gid)
 {
-  return withCipherPath( "chmod", _do_chmod, path, mode );
+  return _do_one_path( &FsIO::posix_chown, cpath, uid, gid );
 }
 
-int _do_chown(const string &cyName, uid_t uid, gid_t gid)
+int encfs_truncate(const char *cpath, off_t size)
 {
-  int res = lchown( cyName.c_str(), uid, gid );
-  return (res == -1) ? -errno : ESUCCESS;
-}
+  auto &fs_io = gGetFS();
+  auto path = fs_io.pathFromString( cpath );
 
-int encfs_chown(const char *path, uid_t uid, gid_t gid)
-{
-  return withCipherPath( "chown", _do_chown, path, uid, gid);
-}
+  opt::optional<File> maybeFile;
+  const bool open_for_write = true;
+  const bool create_file = false;
+  const int ret = withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::openfile ),
+                                        &maybeFile, path, open_for_write, create_file );
+  if(ret < 0) return ret;
 
-int _do_truncate( FileNode *fnode, off_t size )
-{
-  return fnode->truncate( size );
-}
+  assert( maybeFile );
 
-int encfs_truncate(const char *path, off_t size)
-{
-  /* TODO: use FsIO truncate, this is currently hacked in FileNode.cpp */
-  return withFileNode( "truncate", path, NULL, _do_truncate, size );
+  // NB: there is a slight race between opening the file and truncating it here
+  // but the ambiguity is allowed from the client's perspective
+  // i.e. we still avoid TOCTTOU bugs
+
+  return withExceptionCatcher( EIO, bindMethod( *maybeFile, &File::truncate ),
+                               size );
 }
 
 int encfs_ftruncate(const char *path, off_t size, struct fuse_file_info *fi)
 {
-  return withFileNode( "ftruncate", path, fi, _do_truncate, size );
+  auto &fref = gGetFile( path, fi );
+  return withExceptionCatcher( EIO, bindMethod( fref, &File::truncate ),
+                               size );
 }
 
-int _do_utime(const string &cyName, struct utimbuf *buf)
+int encfs_utimens(const char *cpath, const struct timespec ts[2])
 {
-  int res = utime( cyName.c_str(), buf);
-  return (res == -1) ? -errno : ESUCCESS;
+  auto &fs_io = gGetFS();
+  auto path = fs_io.pathFromString( cpath );
+
+  // NB: we don't support nanosecond resolution
+
+  return withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::set_times ),
+                               path, ts[0].tv_sec, ts[1].tv_sec );
 }
 
-int encfs_utime(const char *path, struct utimbuf *buf)
+int encfs_open(const char *cpath, struct fuse_file_info *fi)
 {
-  return withCipherPath( "utime", _do_utime, path, buf );
-}
+  auto &fs_io = gGetFS();
+  auto path = fs_io.pathFromString( cpath );
 
-int _do_utimens(const string &cyName, const struct timespec ts[2])
-{
-  struct timeval tv[2];
-  tv[0].tv_sec = ts[0].tv_sec;
-  tv[0].tv_usec = ts[0].tv_nsec / 1000;
-  tv[1].tv_sec = ts[1].tv_sec;
-  tv[1].tv_usec = ts[1].tv_nsec / 1000;
+  bool requestWrite = ((fi->flags & O_RDWR) ||
+                       (fi->flags & O_WRONLY));
+  bool createFile = false;
+  opt::optional<File> maybeFile;
+  int ret = withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::openfile ),
+                                  &maybeFile, path, requestWrite, createFile );
+  if(ret < 0) return ret;
 
-  int res = lutimes( cyName.c_str(), tv);
-  return (res == -1) ? -errno : ESUCCESS;
-}
+  assert( maybeFile );
 
-int encfs_utimens(const char *path, const struct timespec ts[2])
-{
-  return withCipherPath( "utimens", _do_utimens, path, ts );
-}
+  // save the file reference
+  gSaveFile( fi, std::move( *maybeFile ) );
 
-int encfs_open(const char *path, struct fuse_file_info *file)
-{
-  EncFS_Context *ctx = context();
-
-  int res = -EIO;
-  shared_ptr<DirNode> FSRoot = ctx->getRoot(&res);
-  if(!FSRoot)
-    return res;
-
-  try
-  {
-    bool requestWrite = ((file->flags & O_RDWR) ||
-                         (file->flags & O_WRONLY));
-
-    bool createFile = false;
-    shared_ptr<FileNode> fnode =
-      FSRoot->openNode( path, "open", requestWrite, createFile, &res );
-
-    if(fnode)
-    {
-      VLOG(1) << "encfs_open for " << fnode->cipherName()
-              << ", flags " << file->flags;
-
-      if( res >= 0 )
-      {
-        file->fh = (uintptr_t)ctx->putNode(path, fnode);
-        res = ESUCCESS;
-      }
-    }
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in open: " << err.what();
-  }
-
-  return res;
-}
-
-int _do_flush(FileNode *fnode, int )
-{
-  /* Flush can be called multiple times for an open file, so it doesn't
-     close the file.  However it is important to call close() for some
-     underlying filesystems (like NFS).
-   */
-  return withExceptionCatcher( EIO, bindMethod( fnode, &FileNode::flush ) );
+  return 0;
 }
 
 int encfs_flush(const char *path, struct fuse_file_info *fi)
 {
-  return withFileNode( "flush", path, fi, _do_flush, 0 );
+  /* Flush can be called multiple times for an open file, so it doesn't
+     close the file.  However it is important to call close() for some
+     underlying filesystems (like NFS).
+
+     NB: we now call FileIO::sync to fill the same purpose
+     (NFS does the same thing during fsync(2) as close(2))
+   */
+  auto &fref = gGetFile( path, fi );
+  return withExceptionCatcher( EIO, bindMethod( fref, &File::sync ),
+                               false );
 }
 
 /*
@@ -778,187 +426,155 @@ Note: This is advisory -- it might benefit us to keep file nodes around for a
 bit after they are released just in case they are reopened soon.  But that
 requires a cache layer.
  */
-int encfs_release(const char *path, struct fuse_file_info *finfo)
+int encfs_release(const char *path, struct fuse_file_info *fi)
 {
-  EncFS_Context *ctx = context();
-
-  try
-  {
-    ctx->eraseNode( path, (void*)(uintptr_t)finfo->fh );
-    return ESUCCESS;
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in release: " << err.what();
-    return -EIO;
-  }
-}
-
-int _do_read(FileNode *fnode, tuple<unsigned char *, size_t, off_t> data)
-{
-  return fnode->read( get<2>(data), get<0>(data), get<1>(data));
+  gReleaseFile( path, fi );
+  /* NB: return value is ignored */
+  return 0;
 }
 
 int encfs_read(const char *path, char *buf, size_t size, off_t offset,
-    struct fuse_file_info *file)
+    struct fuse_file_info *fi)
 {
-  return withFileNode( "read", path, file, _do_read,
-      make_tuple((unsigned char *)buf, size, offset));
-}
+  auto &fref = gGetFile( path, fi );
 
-int _do_fsync(FileNode *fnode, int dataSync)
-{
-  return fnode->sync( dataSync != 0 );
+  size_t amt_read;
+  int ret = withExceptionCatcher( EIO, bindMethod( fref, (size_t (File::*)(fs_off_t, byte *, size_t) const) &File::read ),
+                                  &amt_read, (fs_off_t) offset, (byte *) buf, size );
+  if(ret < 0) return ret;
+
+  assert( amt_read <= INT_MAX );
+  return amt_read;
 }
 
 int encfs_fsync(const char *path, int dataSync,
-    struct fuse_file_info *file)
+    struct fuse_file_info *fi)
 {
-  return withFileNode( "fsync", path, file, _do_fsync, dataSync );
-}
-
-int _do_write(FileNode *fnode, tuple<const char *, size_t, off_t> data)
-{
-  size_t size = get<1>(data);
-  if(fnode->write( get<2>(data), (unsigned char *)get<0>(data), size ))
-    return size;
-  else
-    return -EIO;
+  auto &fref = gGetFile( path, fi );
+  return withExceptionCatcher( EIO, bindMethod( fref, &File::sync ),
+                               dataSync );
 }
 
 int encfs_write(const char *path, const char *buf, size_t size,
-                off_t offset, struct fuse_file_info *file)
+                off_t offset, struct fuse_file_info *fi)
 {
-  return withFileNode("write", path, file, _do_write,
-      make_tuple(buf, size, offset));
+  auto &fref = gGetFile( path, fi );
+
+  int ret = withExceptionCatcher( EIO, bindMethod( fref, (void (File::*)(fs_off_t, const byte *, size_t)) &File::write ),
+                                  (fs_off_t) offset, (byte *) buf, size );
+  if(ret < 0) return ret;
+
+  assert( size <= INT_MAX );
+  return size;
 }
 
 // statfs works even if encfs is detached..
-int encfs_statfs(const char *path, struct statvfs *st)
+int encfs_statfs(const char */*path*/, struct statvfs */*st*/)
 {
-  EncFS_Context *ctx = context();
-
-  int res = -EIO;
-  try
-  {
-    (void)path; // path should always be '/' for now..
-    rAssert( st != NULL );
-    string cyName = ctx->rootCipherDir;
-
-    VLOG(1) << "doing statfs of " << cyName;
+  /*
     res = statvfs( cyName.c_str(), st );
     if(!res) 
     {
       // adjust maximum name length..
       st->f_namemax = 6 * (st->f_namemax - 2) / 8; // approx..
     }
-    if(res == -1)
-      res = -errno;
-  } catch( Error &err )
-  {
-    LOG(ERROR) << "error caught in statfs: " << err.what();
-  }
-  return res;
+  */
+  return -ENOSYS;
 }
 
-#ifdef HAVE_XATTR
-
-
-#ifdef XATTR_ADD_OPT
-int _do_setxattr(const string &cyName,
-    const char *name, const char *value, size_t size, uint32_t position)
+// the same define used in fuse.h
+#ifdef __APPLE__
+int encfs_setxattr( const char *cpath, const char *cname,
+    const char *value, size_t size, int flags_, uint32_t position )
 {
-  const int options = XATTR_NOFOLLOW;
-  int res = ::setxattr( cyName.c_str(), name, value, size, position, options );
-  return (res == -1) ? -errno : ESUCCESS;
-}
-int encfs_setxattr( const char *path, const char *name,
-    const char *value, size_t size, int flags, uint32_t position )
-{
-  (void)flags;
-  return withCipherPath( "setxattr", _do_setxattr,
-                         path, name, value, size, position);
-}
+  bool follow = (flags_ & XATTR_NOFOLLOW);
+
 #else
-int _do_setxattr(const string &cyName,
-                 const char *name, const char *value, size_t size, int flags)
+int encfs_setxattr( const char *cpath, const char *cname,
+    const char *value, size_t size, int flags_ )
 {
-  int res = ::setxattr( cyName.c_str(), name, value, size, flags );
-  return (res == -1) ? -errno : ESUCCESS;
-}
-int encfs_setxattr( const char *path, const char *name,
-    const char *value, size_t size, int flags )
-{
-  return withCipherPath( "setxattr", _do_setxattr,
-                         path, name, value, size, flags );
-}
+  bool follow = false;
+  uint32_t position = 0;
+
 #endif
 
+  PosixSetxattrFlags flags( flags_ & XATTR_CREATE,
+                            flags_ & XATTR_REPLACE );
 
-#ifdef XATTR_ADD_OPT
-int _do_getxattr(const string &cyName,
-                 const char *name, void *value, size_t size, uint32_t position)
-{
-  int options = 0;
-  int res = ::getxattr( cyName.c_str(), name, value, size, position, options );
-  return (res == -1) ? -errno : res;
+  auto name = string( cname );
+  auto buf = vector<byte>( size );
+  copy((byte *) value, (byte *) value + size, buf.begin());
+
+  /* NB: it would be nice if a smart compiler optimized these
+     all to moves automatically (since they are auto variables
+     and will no longer be used */
+  return _do_one_path( &FsIO::posix_setxattr,
+                       cpath, std::move( follow ), std::move( name ),
+                       (size_t) position, std::move( buf ), std::move( flags ) );
 }
-int encfs_getxattr( const char *path, const char *name,
-    char *value, size_t size, uint32_t position )
+
+#ifdef __APPLE__
+int encfs_getxattr( const char *cpath, const char *cname,
+                    char *value, size_t size, uint32_t position )
 {
-  return withCipherPath( "getxattr", _do_getxattr,
-                         path, name, (void *) value, size, position );
-}
 #else
-int _do_getxattr(const string &cyName,
-                 const char *name, void *value, size_t size)
-{
-  int res = ::getxattr( cyName.c_str(), name, value, size );
-  return (res == -1) ? -errno : res;
-}
-int encfs_getxattr( const char *path, const char *name,
+int encfs_getxattr( const char *path, const char *cname,
                     char *value, size_t size )
 {
-  return withCipherPath( "getxattr", _do_getxattr,
-                          path, name, (void *) value, size );
-}
+  uint32_t position = 0;
 #endif
 
+  auto &fs_io = gGetFS();
+  auto path = fs_io.pathFromString( cpath );
+  auto name = string( cname );
 
-int _do_listxattr(const string &cyName,
-                  char *list, size_t size)
-{
-#ifdef XATTR_ADD_OPT
-  int options = 0;
-  int res = ::listxattr( cyName.c_str(), list, size, options);
-#else
-  int res = ::listxattr( cyName.c_str(), list, size );
-#endif
-  return (res == -1) ? -errno : res;
+  bool follow = true;
+  opt::optional<std::vector<byte>> buf;
+  int ret = withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::posix_getxattr ),
+                                  &buf, path, follow, name, (size_t) position, size );
+  if(ret < 0) return ret;
+
+  assert( buf );
+  assert( buf->size() <= size );
+
+  memcpy( value, buf->data(), buf->size() );
+
+  return buf->size();
 }
 
-int encfs_listxattr( const char *path, char *list, size_t size )
+int encfs_listxattr( const char *cpath, char *list, size_t size )
 {
-  return withCipherPath( "listxattr", _do_listxattr, path,
-                         list, size );
+  auto &fs_io = gGetFS();
+  auto path = fs_io.pathFromString( cpath );
+
+  bool follow = true;
+
+  opt::optional<PosixXattrList> maybeList;
+  int ret = withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::posix_listxattr ),
+                                  &maybeList, path, follow );
+  if(ret < 0) return ret;
+
+  assert( maybeList );
+
+  size_t list_bytes_consumed = 0;
+  for (const auto &xattr_name : *maybeList )
+  {
+    if(list_bytes_consumed + xattr_name.size() + 1 <= size && list)
+    {
+      memcpy(list, xattr_name.c_str(), xattr_name.size() + 1);
+    }
+
+    list_bytes_consumed += xattr_name.size() + 1;
+  }
+
+  return list_bytes_consumed;
 }
 
-int _do_removexattr(const string &cyName, const char *name)
+int encfs_removexattr( const char *cpath, const char *name )
 {
-#ifdef XATTR_ADD_OPT
-  int options = 0;
-  int res = ::removexattr( cyName.c_str(), name, options );
-#else
-  int res = ::removexattr( cyName.c_str(), name );
-#endif
-  return (res == -1) ? -errno : ESUCCESS;
-}
-
-int encfs_removexattr( const char *path, const char *name )
-{
-  return withCipherPath( "removexattr", _do_removexattr, path, name );
+  bool follow = true;
+  return _do_one_path( &FsIO::posix_removexattr,
+                       cpath, follow, string( name ) );
 }
 
 }  // namespace encfs
-
-#endif // HAVE_XATTR
-

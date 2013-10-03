@@ -25,7 +25,6 @@
 
 #include "base/Interface.h"
 #include "cipher/CipherKey.h"
-#include "fs/encfs.h"
 #include "fs/FSConfig.h"
 #include "fs/FsIO.h"
 #include "fs/PasswordReader.h"
@@ -74,15 +73,11 @@ struct EncFS_Opts
 {
   std::string rootDir;
   bool createIfNotFound;  // create filesystem if not found
-  bool idleTracking; // turn on idle monitoring of filesystem
-  bool mountOnDemand; // mounting on-demand
 
   bool checkKey;  // check crypto key decoding
   bool forceDecode; // force decode on MAC block failures
 
   bool annotate;
-
-  bool ownerCreate; // set owner of new files to caller
 
   bool reverseEncryption; // Reverse encryption
 
@@ -93,12 +88,9 @@ struct EncFS_Opts
 
   EncFS_Opts()
   : createIfNotFound(true)
-  , idleTracking(false)
-  , mountOnDemand(false)
   , checkKey(true)
   , forceDecode(false)
   , annotate(false)
-  , ownerCreate(false)
   , reverseEncryption(false)
   , configMode(ConfigMode::Prompt)
   {
@@ -108,7 +100,9 @@ struct EncFS_Opts
 /*
     Read existing config file.  Looks for any supported configuration version.
  */
-ConfigType readConfig( const std::shared_ptr<FsIO> &fs_io, const std::string &rootDir, EncfsConfig &config ); 
+ConfigType readConfig( const std::shared_ptr<FsIO> &fs_io,
+                       const std::string &rootDir,
+                       EncfsConfig &config ); 
 
 /*
     Save the configuration.  Saves back as the same configuration type as was
@@ -118,7 +112,9 @@ bool saveConfig( const std::shared_ptr<FsIO> &fs_io, const std::string &rootdir,
 
 class EncFS_Context;
 
-RootPtr initFS( EncFS_Context *ctx, const std::shared_ptr<EncFS_Opts> &opts );
+RootPtr initFS( const std::shared_ptr<EncFS_Context> &ctx,
+                const std::shared_ptr<EncFS_Opts> &opts,
+                opt::optional<EncfsConfig> oCfg = opt::nullopt );
 
 RootPtr createConfig( EncFS_Context *ctx, 
     const std::shared_ptr<EncFS_Opts> &opts );

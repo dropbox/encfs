@@ -26,7 +26,7 @@
 #include <new>
 #include <stdexcept>
 
-#include "base/config.h"
+//#include "base/config.h"
 
 #ifdef HAVE_OPTIONAL
 #include <optional>
@@ -145,7 +145,7 @@ public:
 
   constexpr const T &operator *() const
   {
-    static_assert( _engaged, "bad optional access" );
+    //    static_assert( _engaged, "bad optional access");
     return _val;
   }
 
@@ -157,7 +157,7 @@ public:
 
   constexpr const T *operator ->() const
   {
-    static_assert( _engaged, "bad optional access" );
+    //    static_assert( _engaged, "bad optional access");
     return &_val;
   }
 

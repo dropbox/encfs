@@ -23,7 +23,10 @@
 
 #include <cstdint>
 
+#include <vector>
 #include <memory>
+
+#include "base/optional.h"
 
 namespace encfs {
 
@@ -31,6 +34,10 @@ typedef uintptr_t fs_dir_handle_t;
 typedef intmax_t fs_time_t;
 typedef intmax_t fs_off_t;
 typedef intmax_t fs_file_id_t;
+typedef uintmax_t fs_posix_uid_t;
+typedef uintmax_t fs_posix_gid_t;
+typedef uintmax_t fs_posix_mode_t;
+typedef uintmax_t fs_posix_dev_t;
 
 enum
 {
@@ -43,21 +50,38 @@ enum class FsFileType
   UNKNOWN,
   DIRECTORY,
   REGULAR,
+  POSIX_LINK,
 };
 
-class FsExtraFileAttrs {
-public:
-  virtual ~FsExtraFileAttrs() {};
+struct FsPosixAttrs {
+  fs_posix_gid_t gid;
+  fs_posix_uid_t uid;
+  fs_posix_mode_t mode;
 };
 
-class FsFileAttrs
+struct FsFileAttrs
 {
-public:
   FsFileType type;
   fs_time_t mtime;
   fs_off_t size;
-  std::unique_ptr<FsExtraFileAttrs> extra;
+  opt::optional<FsPosixAttrs> posix;
 };
+
+// posix symlink data is just arbitrary 0-terminated data
+typedef std::string PosixSymlinkData;
+
+struct PosixSetxattrFlags
+{
+  bool create : 1;
+  bool replace : 1;
+
+  PosixSetxattrFlags(bool create_ = false, bool replace_ = false)
+  : create( create_ )
+  , replace( replace_ )
+  {}
+};
+
+typedef std::vector<std::string> PosixXattrList;
 
 }  // namespace encfs
 

@@ -25,7 +25,6 @@
 
 #include "base/Interface.h"
 #include "cipher/CipherKey.h"
-#include "fs/encfs.h"
 #include "fs/fsconfig.pb.h"
 #include "fs/PasswordReader.h"
 
@@ -73,12 +72,9 @@ struct FSConfig
     bool forceDecode; // force decode on MAC block failures
     bool reverseEncryption; // reverse encryption operation
 
-    bool idleTracking; // turn on idle monitoring of filesystem
-
     FSConfig() 
       : forceDecode(false),
-        reverseEncryption(false),
-        idleTracking(false) { }
+        reverseEncryption(false) { }
 };
 
 typedef std::shared_ptr<FSConfig> FSConfigPtr;

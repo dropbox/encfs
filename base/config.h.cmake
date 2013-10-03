@@ -26,4 +26,3 @@
 
 /* TODO: add other thread library support. */
 #cmakedefine CMAKE_USE_PTHREADS_INIT
-

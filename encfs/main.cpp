@@ -16,8 +16,8 @@
  *
  */
 
-#include <unistd.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include <cassert>
 #include <cerrno>
@@ -28,6 +28,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <thread>
 
 #include <getopt.h>
 
@@ -42,27 +43,19 @@
 
 #include "cipher/CipherV1.h"
 
+#include "encfs/EncFS_Args.h"
+#include "fs/EncfsFsIO.h"
 #include "fs/EncfsPasswordReader.h"
 #include "fs/FileUtils.h"
 #include "fs/FsIO.h"
-#include "fs/DirNode.h"
-#include "fs/Context.h"
-#include "fs/PosixFsIO.h"
 #include "fs/PasswordReader.h"
-
+#include "fs/PosixFsIO.h"
 #include "fs/encfs.h"
 
 // Fuse version >= 26 requires another argument to fuse_unmount, which we
 // don't have.  So use the backward compatible call instead..
 extern "C" void fuse_unmount_compat22(const char *mountpoint);
 #define fuse_unmount fuse_unmount_compat22
-
-#ifndef MAX
-inline static int MAX(int a, int b)
-{
-  return (a > b) ? a : b;
-}
-#endif
 
 using gnu::autosprintf;
 using std::cerr;
@@ -74,53 +67,6 @@ using std::string;
 using namespace encfs;
 
 namespace encfs {
-
-// Maximum number of arguments that we're going to pass on to fuse.  Doesn't
-// affect how many arguments we can handle, just how many we can pass on..
-const int MaxFuseArgs = 32;
-struct EncFS_Args
-{
-  string mountPoint; // where to make filesystem visible
-  bool isDaemon; // true == spawn in background, log to syslog
-  bool isThreaded; // true == threaded
-  bool isVerbose; // false == only enable warning/error messages
-  int idleTimeout; // 0 == idle time in minutes to trigger unmount
-  bool useStdin; // true == accept password from stdin
-  string passwordProgram; // program to execute to get filesystem password
-  const char *fuseArgv[MaxFuseArgs];
-  int fuseArgc;
-
-  shared_ptr<EncFS_Opts> opts;
-
-  // for debugging
-  // In case someone sends me a log dump, I want to know how what options are
-  // in effect.  Not internationalized, since it is something that is mostly
-  // useful for me!
-  string toString()
-  {
-    ostringstream ss;
-    ss << (isDaemon ? "(daemon) " : "(fg) ");
-    ss << (isThreaded ? "(threaded) " : "(UP) ");
-    if(idleTimeout > 0)
-      ss << "(timeout " << idleTimeout << ") ";
-    if(opts->checkKey) ss << "(keyCheck) ";
-    if(opts->forceDecode) ss << "(forceDecode) ";
-    if(opts->ownerCreate) ss << "(ownerCreate) ";
-    if(useStdin) ss << "(useStdin) ";
-    if(opts->annotate) ss << "(annotate) ";
-    if(opts->reverseEncryption) ss << "(reverseEncryption) ";
-    if(opts->mountOnDemand) ss << "(mountOnDemand) ";
-    for(int i=0; i<fuseArgc; ++i)
-      ss << fuseArgv[i] << ' ';
-
-    return ss.str();
-  }
-
-  EncFS_Args()
-    : opts( new EncFS_Opts() )
-  {
-  }
-};
 
 static int oldStderr = STDERR_FILENO;
 
@@ -216,10 +162,9 @@ bool processArgs(int argc, char *argv[],
   out->isVerbose = false;
   out->idleTimeout = 0;
   out->fuseArgc = 0;
-  out->opts->idleTracking = false;
   out->opts->checkKey = true;
   out->opts->forceDecode = false;
-  out->opts->ownerCreate = false;
+  out->isPublic = false;
   out->useStdin = false;
   out->opts->annotate = false;
   out->opts->reverseEncryption = false;
@@ -306,7 +251,6 @@ bool processArgs(int argc, char *argv[],
       break;
     case 'i':
       out->idleTimeout = strtol( optarg, (char**)NULL, 10);
-      out->opts->idleTracking = true;
       break;
     case 'k':
       out->opts->checkKey = false;
@@ -318,7 +262,7 @@ bool processArgs(int argc, char *argv[],
       out->opts->reverseEncryption = true;	    
       break;
     case 'm':
-      out->opts->mountOnDemand = true;
+      out->mountOnDemand = true;
       break;
     case 'N':
       useDefaultFlags = false;
@@ -335,7 +279,7 @@ bool processArgs(int argc, char *argv[],
         LOG(WARNING) << "option '--public' ignored for non-root user";
       else
       {
-        out->opts->ownerCreate = true;
+        out->isPublic = true;
         // add 'allow_other' option
         // add 'default_permissions' option (default)
         PUSHARG("-o");
@@ -435,7 +379,7 @@ bool processArgs(int argc, char *argv[],
     }
   }
 
-  if(out->opts->mountOnDemand && out->passwordProgram.empty())
+  if(out->mountOnDemand && out->passwordProgram.empty())
   {
     cerr << 
       // xgroup(usage)
@@ -466,58 +410,53 @@ bool processArgs(int argc, char *argv[],
   return true;
 }
 
-static void * idleMonitor(void *);
+static void idleMonitor(EncFSFuseContext *);
 
 void *encfs_init(fuse_conn_info *conn)
 {
-  EncFS_Context *ctx = (EncFS_Context*)fuse_get_context()->private_data;
+  auto ctx = get_global_encfs_fuse_context();
 
   // set fuse connection options
   conn->async_read = true;
 
   // if an idle timeout is specified, then setup a thread to monitor the
   // filesystem.
-  if(ctx->args->idleTimeout > 0)
+  if(ctx->getArgs()->idleTimeout > 0)
   {
     VLOG(1) << "starting idle monitoring thread";
-    ctx->running = true;
+    ctx->setRunning( true );
 
-    int res = pthread_create( &ctx->monitorThread, 0, idleMonitor, 
-        (void*)ctx );
-    if(res != 0)
+    try
     {
-      LOG(ERROR) << "error starting idle monitor thread, "
-          "res = " << res << ", errno = " << errno;
+      ctx->monitorThread = std::make_shared<std::thread>( idleMonitor, ctx );
+    } catch ( ... )
+    {
+      LOG(ERROR) << "error starting idle monitor thread";
     }
   }
 
-  if(ctx->args->isDaemon && oldStderr >= 0)
+  if(ctx->getArgs()->isDaemon && oldStderr >= 0)
   {
     VLOG(1) << "Closing stderr";
     close(oldStderr);
     oldStderr = -1;
   }
 
-  return (void*)ctx;
+  return (void*) ctx;
 }
- 
+
 void encfs_destroy( void *_ctx )
 {
-  EncFS_Context *ctx = (EncFS_Context*)_ctx;
-  if(ctx->args->idleTimeout > 0)
+  auto ctx = (EncFSFuseContext *) _ctx;
+  if(ctx->getArgs()->idleTimeout > 0)
   {
-    ctx->running = false;
+    ctx->setRunning( false );
 
-#ifdef CMAKE_USE_PTHREADS_INIT
-    // wake up the thread if it is waiting..
     VLOG(1) << "waking up monitoring thread";
-    ctx->wakeupMutex.lock();
-    pthread_cond_signal( &ctx->wakeupCond );
-    ctx->wakeupMutex.unlock();
+    ctx->wakeupCond.notify_one();
     VLOG(1) << "joining with idle monitoring thread";
-    pthread_join( ctx->monitorThread , 0 );
+    ctx->monitorThread->join();
     VLOG(1) << "join done";
-#endif
   }
 }
 
@@ -582,7 +521,6 @@ int main(int argc, char *argv[])
   encfs_oper.chmod = encfs_chmod;
   encfs_oper.chown = encfs_chown;
   encfs_oper.truncate = encfs_truncate;
-  encfs_oper.utime = encfs_utime; // deprecated for utimens
   encfs_oper.open = encfs_open;
   encfs_oper.read = encfs_read;
   encfs_oper.write = encfs_write;
@@ -590,12 +528,10 @@ int main(int argc, char *argv[])
   encfs_oper.flush = encfs_flush;
   encfs_oper.release = encfs_release;
   encfs_oper.fsync = encfs_fsync;
-#ifdef HAVE_XATTR
   encfs_oper.setxattr = encfs_setxattr;
   encfs_oper.getxattr = encfs_getxattr;
   encfs_oper.listxattr = encfs_listxattr;
   encfs_oper.removexattr = encfs_removexattr;
-#endif // HAVE_XATTR
   //encfs_oper.opendir = encfs_opendir;
   //encfs_oper.readdir = encfs_readdir;
   //encfs_oper.releasedir = encfs_releasedir;
@@ -624,20 +560,20 @@ int main(int argc, char *argv[])
 
   CipherV1::init( encfsArgs->isThreaded );
 
-  // context is not a smart pointer because it will live for the life of
-  // the filesystem.
-  EncFS_Context *ctx = new EncFS_Context;
-  ctx->publicFilesystem = encfsArgs->opts->ownerCreate;
-  RootPtr rootInfo = initFS( ctx, encfsArgs->opts );
-
   int returnCode = EXIT_FAILURE;
-
-  if( rootInfo )
+  try
   {
-    // set the globally visible root directory node
-    ctx->setRoot( rootInfo->root );
-    ctx->args = encfsArgs;
-    ctx->opts = encfsArgs->opts;
+    auto encryptedFS = std::make_shared<EncfsFsIO>();
+
+    // TODO: separate fuse args from encrypted fs opts
+    encryptedFS->initFS( encfsArgs->opts, opt::nullopt );
+
+    // resources will get freed after block is exited
+    // TODO: separate fuse args from encrypted fs opts
+    // TODO: because the fuse layer can delete and recreate backend file systems
+    //       but is still file system agnostic, we should pass a FsIO "Factory"
+    //       object to it
+    EncFSFuseContext ctx( std::move( encfsArgs ), encfsArgs->opts, std::move( encryptedFS ) );
 
     if(encfsArgs->isThreaded == false && encfsArgs->idleTimeout > 0)
     {
@@ -663,7 +599,6 @@ int main(int argc, char *argv[])
       oldStderr = dup( STDERR_FILENO );
     }
 
-    try
     {
       time_t startTime, endTime;
 
@@ -678,15 +613,14 @@ int main(int argc, char *argv[])
       // fuse_main returns an error code in newer versions of fuse..
       int res = fuse_main( encfsArgs->fuseArgc, 
           const_cast<char**>(encfsArgs->fuseArgv), 
-          &encfs_oper, (void*)ctx);
+          &encfs_oper, (void*)&ctx);
 
       time( &endTime );
 
       if (encfsArgs->opts->annotate)
         cerr << "$STATUS$ fuse_main_end" << endl;
 
-      if(res == 0)
-        returnCode = EXIT_SUCCESS;
+      if(res == 0) returnCode = EXIT_SUCCESS;
 
       if(res != 0 && encfsArgs->isDaemon && (oldStderr >= 0)
           && (endTime - startTime <= 1) )
@@ -700,19 +634,15 @@ int main(int argc, char *argv[])
               " - invalid options -- see usage message\n"));
         fclose(out);
       }
-    } catch(std::exception &ex)
-    {
-      LOG(ERROR) << "Internal error: Caught exception from main loop: "
-        << ex.what();
-    } catch(...)
-    {
-      LOG(ERROR) << "Internal error: Caught unexpected exception";
     }
+  } catch(std::exception &ex)
+  {
+    LOG(ERROR) << "Internal error: Caught exception from main loop: "
+               << ex.what();
+  } catch(...)
+  {
+    LOG(ERROR) << "Internal error: Caught unexpected exception";
   }
-
-  // cleanup so that we can check for leaked resources..
-  rootInfo.reset();
-  ctx->setRoot( shared_ptr<DirNode>() );
 
   CipherV1::shutdown( encfsArgs->isThreaded );
 
@@ -727,37 +657,46 @@ int main(int argc, char *argv[])
     having the filesystem unmounted from underneath open files!
 */
 const int ActivityCheckInterval = 10;
-static bool unmountFS(EncFS_Context *ctx);
 
-static
-void * idleMonitor(void *_arg)
+bool unmountFS(EncFSFuseContext *ctx)
 {
-  EncFS_Context *ctx = (EncFS_Context*)_arg;
-  shared_ptr<EncFS_Args> arg = ctx->args;
+  auto arg = ctx->getArgs();
+  LOG(INFO) << "Detaching filesystem " << arg->mountPoint 
+    << " due to inactivity";
+
+  if( arg->mountOnDemand )
+  {
+    ctx->unmountFS();
+    return false;
+  } else
+  {
+    fuse_unmount( arg->mountPoint.c_str() );
+    return true;
+  }
+}
+
+static void idleMonitor(EncFSFuseContext *ctx)
+{
+  auto arg = ctx->getArgs();
 
   const int timeoutCycles = 60 * arg->idleTimeout / ActivityCheckInterval;
   int idleCycles = 0;
 
-  ctx->wakeupMutex.lock();
+  std::unique_lock<std::mutex> lock( ctx->wakeupMutex );
 
-  while(ctx->running)
+  while(ctx->isRunning())
   {
     int usage = ctx->getAndResetUsageCounter();
 
-    if(usage == 0 && ctx->isMounted())
-      ++idleCycles;
-    else
-      idleCycles = 0;
+    if(usage == 0 && ctx->isMounted()) idleCycles += 1;
+    else idleCycles = 0;
 
     if(idleCycles >= timeoutCycles)
     {
       int openCount = ctx->openFileCount();
-      if( openCount == 0 && unmountFS( ctx ) )
+      if( openCount == 0 && unmountFS(ctx) )
       {
-#ifdef CMAKE_USE_PTHREADS_INIT
-        // wait for main thread to wake us up
-        pthread_cond_wait( &ctx->wakeupCond, &ctx->wakeupMutex._mutex );
-#endif
+        ctx->wakeupCond.wait( lock );
         break;
       }
 
@@ -767,38 +706,8 @@ void * idleMonitor(void *_arg)
     VLOG(1) << "idle cycle count: " << idleCycles 
       << ", timeout after " << timeoutCycles;
 
-    struct timeval currentTime;
-    gettimeofday( &currentTime, 0 );
-    struct timespec wakeupTime;
-    wakeupTime.tv_sec = currentTime.tv_sec + ActivityCheckInterval;
-    wakeupTime.tv_nsec = currentTime.tv_usec * 1000;
-#ifdef CMAKE_USE_PTHREADS_INIT
-    pthread_cond_timedwait( &ctx->wakeupCond, 
-        &ctx->wakeupMutex._mutex, &wakeupTime );
-#endif
+    ctx->wakeupCond.wait_for( lock, std::chrono::seconds( ActivityCheckInterval ) );
   }
-
-  ctx->wakeupMutex.unlock();
 
   VLOG(1) << "Idle monitoring thread exiting";
-
-  return 0;
 }
-
-static bool unmountFS(EncFS_Context *ctx)
-{
-  shared_ptr<EncFS_Args> arg = ctx->args;
-  LOG(INFO) << "Detaching filesystem " << arg->mountPoint 
-    << " due to inactivity";
-
-  if( arg->opts->mountOnDemand )
-  {
-    ctx->setRoot( shared_ptr<DirNode>() );
-    return false;
-  } else
-  {
-    fuse_unmount( arg->mountPoint.c_str() );
-    return true;
-  }
-}
-

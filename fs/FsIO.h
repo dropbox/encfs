@@ -26,9 +26,8 @@
 #include <cassert>
 #include <cstdint>
 
-#include <iostream>
-#include <map>
 #include <memory>
+#include <vector>
 
 #include "base/optional.h"
 
@@ -194,6 +193,11 @@ public:
       return _impl->write( req );
     }
 
+    void write( fs_off_t offset, const byte *data, size_t dataLen )
+    {
+      return write( IORequest( offset, (byte *) data, dataLen ) );
+    }
+
     void truncate( off_t size )
     {
       return _impl->truncate( size );
@@ -202,6 +206,11 @@ public:
     bool isWritable() const
     {
       return _impl->isWritable();
+    }
+
+    void sync(bool datasync)
+    {
+      return _impl->sync( datasync );
     }
 };
 
@@ -221,14 +230,34 @@ public:
 
     virtual void rename(const Path &pathSrc, const Path &pathDst) =0;
 
-    virtual void link(const Path &pathSrc, const Path &pathDst) =0;
-
     virtual void unlink(const Path &path) =0;
     virtual void rmdir(const Path &path) =0;
 
-    virtual void set_mtime(const Path &path, fs_time_t mtime) =0;
+    virtual void set_times(const Path &path,
+                           const opt::optional<fs_time_t> &atime,
+                           const opt::optional<fs_time_t> &mtime) =0;
 
     virtual FsFileAttrs get_attrs(const Path &path) =0;
+
+    // optional methods to support full file system emulation on posix
+    virtual fs_posix_uid_t posix_setfsuid(fs_posix_uid_t uid);
+    virtual fs_posix_gid_t posix_setfsgid(fs_posix_gid_t gid);
+    virtual File posix_create(const Path &pathSrc, fs_posix_mode_t mode);
+    virtual void posix_mkdir(const Path &path, fs_posix_mode_t mode);
+    virtual void posix_mknod(const Path &path, fs_posix_mode_t mode, fs_posix_dev_t dev);
+    virtual void posix_mkfifo(const Path &path, fs_posix_mode_t mode);
+    virtual void posix_link(const Path &pathSrc, const Path &pathDst);
+    virtual void posix_symlink(const Path &path, PosixSymlinkData link_data);
+    virtual PosixSymlinkData posix_readlink(const Path &path) const;
+    virtual void posix_chmod(const Path &pathSrc, fs_posix_mode_t mode);
+    virtual void posix_chown(const Path &pathSrc, fs_posix_uid_t uid, fs_posix_gid_t gid);
+    virtual void posix_setxattr(const Path &path, bool follow,
+                                std::string name, size_t offset,
+                                std::vector<byte> buf, PosixSetxattrFlags flags);
+    virtual std::vector<byte> posix_getxattr(const Path &path, bool follow,
+                                             std::string name, size_t offset, size_t amt) const;
+    virtual PosixXattrList posix_listxattr(const Path &path, bool follow) const;
+    virtual void posix_removexattr(const Path &path, bool follow, std::string name);
 };
 
 }  // namespace encfs

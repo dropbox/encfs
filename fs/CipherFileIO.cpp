@@ -433,7 +433,7 @@ bool CipherFileIO::isWritable() const
   return base->isWritable();
 }
 
-void CipherFileIO::sync(bool a) const
+void CipherFileIO::sync(bool a)
 {
   return base->sync( a );
 }

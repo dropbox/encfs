@@ -27,12 +27,14 @@
 #include "base/Interface.h"
 #include "base/types.h"
 
-#include "fs/encfs.h"
 #include "fs/fstypes.h"
 
 namespace encfs {
 
 const std::error_category &errno_category() noexcept;
+
+std::system_error create_errno_system_error(std::errc e);
+std::system_error create_errno_system_error(int e);
 
 static inline int get_errno_or_default(const std::system_error &err, int nomatch)
 {
@@ -46,37 +48,79 @@ static inline int get_errno_or_abort(const std::system_error &err)
   throw err;
 }
 
-template<typename T, typename R, typename... Args>
-std::function<R(Args...)> bindMethod(const std::shared_ptr<T> &obj, R (T::*fn)(Args...))
+template<typename T, typename U, typename R, typename... Args,
+         typename std::enable_if<std::is_convertible<T *, U *>::value && !std::is_const<T>::value>::type * = nullptr>
+std::function<R(Args...)> bindMethod(const std::shared_ptr<T> &obj, R (U::*fn)(Args...))
 {
-  return [=](Args... args) {
-    return (obj.get()->*fn)( args... );
+  return [=, &obj](Args &&... args) {
+    return (((U *) obj.get())->*fn)( std::forward<Args>( args )... );
   };
 }
 
-template<typename T, typename R, typename... Args>
-std::function<R(Args...)> bindMethod(const std::shared_ptr<T> &obj, R (T::*fn)(Args...) const)
+// need to have this template because there is no auto casting from T => const T for
+// shared_ptr
+template<typename T, typename U, typename R, typename... Args,
+         typename std::enable_if<std::is_convertible<T *, U *>::value>::type * = nullptr>
+std::function<R(Args...)> bindMethod(const std::shared_ptr<T> &obj, R (U::*fn)(Args...) const)
 {
-  return [=](Args... args) {
-    return (obj.get()->*fn)( args... );
+  return [=, &obj](Args &&... args) {
+    return (((U *) obj.get())->*fn)( std::forward<Args>( args )... );
   };
 }
 
-template<typename T, typename R, typename... Args>
-std::function<R(Args...)> bindMethod(T *obj, R (T::*fn)(Args...))
+template<typename T, typename U, typename R, typename... Args,
+         typename std::enable_if<std::is_convertible<T *, U *>::value>::type * = nullptr>
+std::function<R(Args...)> bindMethod(const std::shared_ptr<const T> &obj, R (U::*fn)(Args...) const)
 {
-  return [=](Args... args) {
-    return (obj->*fn)( args... );
+  return [=, &obj](Args &&... args) {
+    return (((U *) obj.get())->*fn)( std::forward<Args>( args )... );
   };
 }
 
-template<typename R, typename F, typename... Args, typename std::enable_if<!std::is_void<R>::value, int>::type = 0>
-int withExceptionCatcher(int defaultRes, F fn, R *res, Args... args)
+template<typename T, typename U, typename R, typename... Args,
+         typename std::enable_if<std::is_convertible<T *, U *>::value>::type * = nullptr>
+std::function<R(Args...)> bindMethod(T *obj, R (U::*fn)(Args...))
+{
+  return [=](Args &&... args) {
+    return (((U *) obj)->*fn)( std::forward<Args>( args )... );
+  };
+}
+
+template<typename T, typename U, typename R, typename... Args,
+         typename std::enable_if<std::is_convertible<T *, U *>::value>::type * = nullptr>
+std::function<R(Args...)> bindMethod(const T *obj, R (U::*fn)(Args...) const)
+{
+  return [=](Args &&... args) {
+    return (((U *) obj)->*fn)( std::forward<Args>( args )... );
+  };
+}
+
+template<typename T, typename U, typename R, typename... Args,
+         typename std::enable_if<std::is_convertible<T *, U *>::value>::type * = nullptr>
+std::function<R(Args...)> bindMethod(T &obj, R (U::*fn)(Args...))
+{
+  return [=, &obj](Args &&... args) {
+    return (((U *) &obj)->*fn)( std::forward<Args>( args )... );
+  };
+}
+
+template<typename T, typename U, typename R, typename... Args,
+         typename std::enable_if<std::is_convertible<T *, U *>::value>::type * = nullptr>
+std::function<R(Args...)> bindMethod(const T &obj, R (U::*fn)(Args...) const)
+{
+  return [=, &obj](Args &&... args) {
+    return (((U *) &obj)->*fn)( std::forward<Args>( args )... );
+  };
+}
+
+template<typename R, typename F, typename... Args,
+         typename std::enable_if<std::is_convertible<F, std::function<R(Args...)>>::value && !std::is_void<R>::value, int>::type * = nullptr>
+int withExceptionCatcher(int defaultRes, F fn, R *res, Args &&... args)
 {
   try
   {
-    if (res) *res = fn( args... );
-    else fn( args... );
+    if (res) *res = fn( std::forward<Args>( args )... );
+    else fn( std::forward<Args>( args )... );
     return 0;
   } catch( const std::system_error &err )
   {
@@ -88,11 +132,11 @@ int withExceptionCatcher(int defaultRes, F fn, R *res, Args... args)
 }
 
 template<typename F, typename... Args>
-int withExceptionCatcher(int defaultRes, F fn, Args... args)
+int withExceptionCatcher(int defaultRes, F fn, Args &&... args)
 {
   try
   {
-    fn( args... );
+    fn( std::forward<Args>( args )... );
     return 0;
   } catch( const std::system_error &err )
   {
@@ -106,24 +150,16 @@ int withExceptionCatcher(int defaultRes, F fn, Args... args)
 template<typename R, typename... Args, typename std::enable_if<!std::is_void<R>::value, int>::type = 0>
 std::function<int(R *, Args...)> wrapWithExceptionCatcher(int defaultRes, std::function<R(Args...)> fn)
 {
-  return [=] (R *res, Args... args) {
-    return withExceptionCatcher( defaultRes, fn, res, args... );
+  return [=] (R *res, Args &&... args) {
+    return withExceptionCatcher( defaultRes, fn, res, std::forward<Args>( args )... );
   };
 }
 
 template<typename... Args>
 std::function<int(Args...)> wrapWithExceptionCatcher(int defaultRes, std::function<void(Args...)> fn)
 {
-  return [=] (Args... args) {
-    return withExceptionCatcher( defaultRes, fn, args... );
-  };
-}
-
-template<typename F, typename R, typename... Args>
-std::function<int(R *, Args...)> wrapWithExceptionCatcher(int defaultRes, F fn)
-{
-  return [=] (Args... args, R *res) {
-    return withExceptionCatcher( defaultRes, fn, args..., res );
+  return [=] (Args &&... args) {
+    return withExceptionCatcher( defaultRes, fn, std::forward<Args>( args )... );
   };
 }
 
@@ -161,7 +197,7 @@ public:
 
     virtual bool isWritable() const =0;
 
-    virtual void sync(bool datasync) const =0;
+    virtual void sync(bool datasync) =0;
 };
 
 }  // namespace encfs

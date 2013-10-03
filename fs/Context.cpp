@@ -18,6 +18,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// TODO: merge with root DirNode
+
 #include "fs/Context.h"
 
 #include "base/Error.h"
@@ -31,55 +33,22 @@ namespace encfs {
 
 EncFS_Context::EncFS_Context()
 { 
-#ifdef CMAKE_USE_PTHREADS_INIT
-  pthread_cond_init( &wakeupCond, 0 );
-#endif
-
-  usageCount = 0;
 }
 
 EncFS_Context::~EncFS_Context()
 {
-#ifdef CMAKE_USE_PTHREADS_INIT
-  pthread_cond_destroy( &wakeupCond );
-#endif
-
   // release all entries from map
   openFiles.clear();
 }
 
-shared_ptr<DirNode> EncFS_Context::getRoot(int *errCode)
+shared_ptr<DirNode> EncFS_Context::getRoot()
 {
-  shared_ptr<DirNode> ret;
-  do
-  {
-    {
-      Lock lock( contextMutex );
-      ret = root;
-      ++usageCount;
-    }
-
-    if(!ret)
-    {
-      int res = remountFS( this );
-      if(res != 0)
-      {
-        *errCode = res;
-        break;
-      }
-    }
-  } while(!ret);
-
-  return ret;
+  return root;
 }
 
 void EncFS_Context::setRoot(const shared_ptr<DirNode> &r)
 {
-  Lock lock( contextMutex );
-
   root = r;
-  if(r)
-    rootCipherDir = r->rootDirectory();
 }
 
 bool EncFS_Context::isMounted()
@@ -87,27 +56,13 @@ bool EncFS_Context::isMounted()
   return (bool) root;
 }
 
-int EncFS_Context::getAndResetUsageCounter()
-{
-  Lock lock( contextMutex );
-
-  int count = usageCount;
-  usageCount = 0;
-
-  return count;
-}
-
 int EncFS_Context::openFileCount() const
 {
-  Lock lock( contextMutex );
-
   return openFiles.size();
 }
 
 shared_ptr<FileNode> EncFS_Context::lookupNode(const char *path)
 {
-  Lock lock( contextMutex );
-
   FileMap::iterator it = openFiles.find( std::string(path) );
   if(it != openFiles.end())
   {
@@ -122,8 +77,6 @@ shared_ptr<FileNode> EncFS_Context::lookupNode(const char *path)
 
 void EncFS_Context::renameNode(const char *from, const char *to)
 {
-  Lock lock( contextMutex );
-
   FileMap::iterator it = openFiles.find( std::string(from) );
   if(it != openFiles.end())
   {
@@ -142,7 +95,6 @@ shared_ptr<FileNode> EncFS_Context::getNode(void *pl)
 void *EncFS_Context::putNode(const char *path, 
     const shared_ptr<FileNode> &node)
 {
-  Lock lock( contextMutex );
   Placeholder *pl = new Placeholder( node );
   openFiles[ std::string(path) ].insert(pl);
 
@@ -151,8 +103,6 @@ void *EncFS_Context::putNode(const char *path,
 
 void EncFS_Context::eraseNode(const char *path, void *pl)
 {
-  Lock lock( contextMutex );
-
   Placeholder *ph = (Placeholder *)pl;
 
   FileMap::iterator it = openFiles.find( std::string(path) );

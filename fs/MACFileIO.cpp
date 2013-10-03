@@ -287,7 +287,7 @@ bool MACFileIO::isWritable() const
   return base->isWritable();
 }
 
-void MACFileIO::sync(bool datasync) const
+void MACFileIO::sync(bool datasync)
 {
   return base->sync( datasync );
 }

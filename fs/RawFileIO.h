@@ -38,7 +38,7 @@ public:
 
     int open( int flags, mode_t mode );
 
-    virtual ~RawFileIO();
+    virtual ~RawFileIO() override;
 
     virtual Interface interface() const override;
 
@@ -51,7 +51,7 @@ public:
 
     virtual bool isWritable() const override;
 
-    virtual void sync(bool datasync) const override;
+    virtual void sync(bool datasync) override;
 
 protected:
     std::string name;

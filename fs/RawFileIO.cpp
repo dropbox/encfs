@@ -216,7 +216,7 @@ bool RawFileIO::isWritable() const
   return canWrite;
 }
 
-void RawFileIO::sync(bool datasync) const
+void RawFileIO::sync(bool datasync)
 {
   int res = -EIO;
 #ifdef linux

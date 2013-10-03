@@ -46,6 +46,16 @@ const std::error_category &errno_category() noexcept
   return errno_category_instance;
 }
 
+std::system_error create_errno_system_error(int e)
+{
+  return std::system_error( e, errno_category() );
+}
+
+std::system_error create_errno_system_error(std::errc e)
+{
+  return create_errno_system_error( (int) e );
+}
+
 FileIO::~FileIO()
 {}
 

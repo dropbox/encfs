@@ -58,7 +58,7 @@ public:
 
     virtual bool isWritable() const override;
 
-    virtual void sync(bool datasync) const override;
+    virtual void sync(bool datasync) override;
 
     static FsFileAttrs wrapAttrs(const FSConfigPtr &, FsFileAttrs);
     static FsFileAttrs wrapAttrs(int headerLen, FsFileAttrs attrs);

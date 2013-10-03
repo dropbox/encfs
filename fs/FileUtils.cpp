@@ -32,7 +32,6 @@
 #include <google/protobuf/text_format.h>
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 
-#include "fs/encfs.h"
 #include "fs/fsconfig.pb.h"
 
 #include "base/autosprintf.h"
@@ -897,17 +896,16 @@ bool selectZeroBlockPassThrough()
         "This avoids writing encrypted blocks when file holes are created."));
 }
 
-RootPtr createConfig( EncFS_Context *ctx,
+RootPtr createConfig( const shared_ptr<EncFS_Context> &ctx,
     const shared_ptr<EncFS_Opts> &opts )
 {
   const std::string rootDir = opts->rootDir;
   bool annotate = opts->annotate;
-  bool enableIdleTracking = opts->idleTracking;
   bool forceDecode = opts->forceDecode;
   bool reverseEncryption = opts->reverseEncryption;
   ConfigMode configMode = opts->configMode;
 
-  RootPtr rootInfo;
+  std::shared_ptr<EncFS_Root> rootInfo;
 
   // creating new volume key.. should check that is what the user is
   // expecting...
@@ -1143,21 +1141,19 @@ RootPtr createConfig( EncFS_Context *ctx,
   nameCoder->setChainedNameIV( config.chained_iv() );
   nameCoder->setReverseEncryption( reverseEncryption );
 
-  FSConfigPtr fsConfig (new FSConfig);
+  auto fsConfig = std::make_shared<FSConfig>();
   fsConfig->cipher = cipher;
   fsConfig->key = volumeKey;
   fsConfig->nameCoding = nameCoder;
-  fsConfig->config = shared_ptr<EncfsConfig>(new EncfsConfig(config));
+  fsConfig->config = std::make_shared<EncfsConfig>( config );
   fsConfig->forceDecode = forceDecode;
   fsConfig->reverseEncryption = reverseEncryption;
-  fsConfig->idleTracking = enableIdleTracking;
   fsConfig->opts = opts;
 
-  rootInfo = RootPtr( new EncFS_Root );
+  rootInfo = std::make_shared<EncFS_Root>();
   rootInfo->cipher = cipher;
   rootInfo->volumeKey = volumeKey;
-  rootInfo->root = shared_ptr<DirNode>( 
-      new DirNode( ctx, rootDir, fsConfig ));
+  rootInfo->root = std::make_shared<DirNode>( ctx, rootDir, fsConfig );
 
   return rootInfo;
 }
@@ -1377,13 +1373,25 @@ CipherKey getNewUserKey(EncfsConfig &config, shared_ptr<PasswordReader> password
   return result;
 }
 
-RootPtr initFS( EncFS_Context *ctx, const shared_ptr<EncFS_Opts> &opts )
+RootPtr initFS( const shared_ptr<EncFS_Context> &ctx,
+                const shared_ptr<EncFS_Opts> &opts,
+                opt::optional<EncfsConfig> maybeConfig )
 {
-  RootPtr rootInfo;
-  EncfsConfig config;
+  std::shared_ptr<EncFS_Root> rootInfo;
 
-  if(readConfig( opts->fs_io, opts->rootDir, config ) != Config_None)
+  // if no config was passed in, read it from the base file system
+  if(!maybeConfig)
   {
+    EncfsConfig config;
+    if(readConfig( opts->fs_io, opts->rootDir, config ) != Config_None)
+    {
+      maybeConfig = std::move( config );
+    }
+  }
+
+  if(maybeConfig)
+  {
+    EncfsConfig &config = *maybeConfig;
     if(opts->reverseEncryption)
     {
       if (config.block_mac_bytes() != 0 || config.block_mac_rand_bytes() != 0
@@ -1410,10 +1418,9 @@ RootPtr initFS( EncFS_Context *ctx, const shared_ptr<EncFS_Opts> &opts )
 
     // get user key
     CipherKey userKey = getUserKey( config, opts->passwordReader );
-    if(!userKey.valid())
-      return rootInfo;
+    if(!userKey.valid()) return rootInfo;
 
-    cipher->setKey(userKey); 
+    cipher->setKey(userKey);
 
     VLOG(1) << "cipher encoded key size = " << cipher->encodedKeySize();
     // decode volume key..
@@ -1446,45 +1453,26 @@ RootPtr initFS( EncFS_Context *ctx, const shared_ptr<EncFS_Opts> &opts )
     nameCoder->setChainedNameIV( config.chained_iv() );
     nameCoder->setReverseEncryption( opts->reverseEncryption );
 
-    FSConfigPtr fsConfig( new FSConfig );
+    auto fsConfig = std::make_shared<FSConfig>();
     fsConfig->cipher = cipher;
     fsConfig->key = volumeKey;
     fsConfig->nameCoding = nameCoder;
-    fsConfig->config = shared_ptr<EncfsConfig>(new EncfsConfig(config));
+    fsConfig->config = std::make_shared<EncfsConfig>( config );
     fsConfig->forceDecode = opts->forceDecode;
     fsConfig->reverseEncryption = opts->reverseEncryption;
     fsConfig->opts = opts;
 
-    rootInfo = RootPtr( new EncFS_Root );
+    rootInfo = std::make_shared<EncFS_Root>();
     rootInfo->cipher = cipher;
     rootInfo->volumeKey = volumeKey;
     rootInfo->root = std::make_shared<DirNode>( ctx, opts->rootDir, fsConfig );
-  } else
+  } else if(opts->createIfNotFound)
   {
-    if(opts->createIfNotFound)
-    {
-      // creating a new encrypted filesystem
-      rootInfo = createConfig( ctx, opts );
-    }
+    // creating a new encrypted filesystem
+    rootInfo = createConfig( ctx, opts );
   }
 
   return rootInfo;
-}
-
-int remountFS(EncFS_Context *ctx)
-{
-  VLOG(1) << "Attempting to reinitialize filesystem";
-
-  RootPtr rootInfo = initFS( ctx, ctx->opts );
-  if(rootInfo)
-  {
-    ctx->setRoot(rootInfo->root);
-    return 0;
-  } else
-  {
-    LOG(WARNING) << "Remount failed";
-    return -EACCES;
-  }
 }
 
 }  // namespace encfs

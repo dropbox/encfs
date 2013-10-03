@@ -26,7 +26,6 @@
 #include <map>
 #include <memory>
 #include <list>
-#include <vector>
 #include <string>
 
 #include "base/Mutex.h"
@@ -84,7 +83,7 @@ class DirNode
 {
 public:
     // sourceDir points to where raw files are stored
-    DirNode(EncFS_Context *ctx,
+    DirNode(std::shared_ptr<EncFS_Context> ctx,
             const std::string &sourceDir,
             const FSConfigPtr &config );
     ~DirNode();
@@ -107,13 +106,13 @@ public:
 
     std::string cipherPath( const char *plaintextPath );
     std::string cipherPathWithoutRoot( const char *plaintextPath );
-    std::string plainPath( const char *cipherPath );
     std::string plaintextParent(const std::string &path);
 
     // relative cipherPath is the same as cipherPath except that it doesn't
     // prepent the mount point.  That it, it doesn't return a fully qualified
     // name, just a relative path within the encrypted filesystem.
     std::string relativeCipherPath( const char *plaintextPath );
+    std::string plainPath( const char *cipherPath );
 
     /*
 	Returns true if file names are dependent on the parent directory name.
@@ -122,28 +121,40 @@ public:
     */
     bool hasDirectoryNameDependency() const;
 
-    // unlink the specified file
-    int unlink( const char *plaintextName );
+    // FS wrappers
 
-    // traverse directory
+    Path pathFromString(const std::string &string);
+
     DirTraverse openDir( const char *plainDirName );
-
-    // uid and gid are used as the directory owner, only if not zero
-    int mkdir( const char *plaintextPath );
-
-    int rename( const char *fromPlaintext, const char *toPlaintext );
-
-    int link( const char *from, const char *to );
-
-    // returns idle time of filesystem in seconds
-    int idleSeconds();
-
-    std::shared_ptr<FsIO> get_fs() { return fs_io; }
-
     int get_attrs(FsFileAttrs *attrs, const char *plaintextName);
+    int rename( const char *fromPlaintext, const char *toPlaintext );
+    int unlink( const char *plaintextName );
+    int mkdir( const char *plaintextName );
+    int rmdir( const char *plaintextName );
+    int set_times( const char *plaintextName,
+                   opt::optional<fs_time_t> atime,
+                   opt::optional<fs_time_t> mtime );
+
+    int posix_link( const char *from, const char *to );
+    int posix_mkdir( const char *plaintextPath, fs_posix_mode_t mode );
+    int posix_mknod( const char *plaintextPath, fs_posix_mode_t mode, fs_posix_dev_t dev );
+    int posix_readlink( PosixSymlinkData *buf, const char *plaintextName );
+    int posix_symlink( const char *path, const char *data );
+    int posix_create( std::shared_ptr<FileNode> *fnode, const char *plainName, fs_posix_mode_t mode );
+    int posix_setfsgid( fs_posix_gid_t *oldgid, fs_posix_gid_t newgid );
+    int posix_setfsuid( fs_posix_uid_t *olduid, fs_posix_uid_t newuid );
+    int posix_chmod( const char *path, fs_posix_mode_t mode );
+    int posix_chown( const char *path, fs_posix_uid_t uid, fs_posix_gid_t gid );
+    int posix_setxattr( const char *path, bool follow, std::string name,
+                        size_t offset, std::vector<byte> buf, PosixSetxattrFlags flags );
+    int posix_getxattr( opt::optional<std::vector<byte>> *ret,
+                        const char *path, bool follow, std::string name,
+                        size_t offset, size_t amt );
+    int posix_listxattr( opt::optional<PosixXattrList> *ret,
+                         const char *path, bool follow );
+    int posix_removexattr( const char *path, bool follow, std::string name );
 
 protected:
-
     /*
 	notify that a file is being renamed. 
 	This renames the internal node, if any.  If the file is not open, then
@@ -163,20 +174,23 @@ protected:
     std::shared_ptr<RenameOp> newRenameOp( const char *from, const char *to );
 
 private:
-
     friend class RenameOp;
     friend class DirTraverse;
 
     bool genRenameList( std::list<RenameEl> &list, const char *fromP,
                         const char *toP );
-    
+
     std::shared_ptr<FileNode> findOrCreate( const char *plainName);
 
     Path appendToRoot(const std::string &path);
+    PosixSymlinkData decryptLinkPath(PosixSymlinkData in);
+    PosixSymlinkData _posix_readlink(const std::string &cyPath);
+    std::shared_ptr<FileNode> _openNode( const char *plainName, const char * requestor,
+                                         bool requestWrite, bool createFile, int *result );
 
     Mutex mutex;
 
-    EncFS_Context *ctx;
+    std::shared_ptr<EncFS_Context> ctx;
 
     // passed in as configuration
     FSConfigPtr fsConfig;

@@ -52,7 +52,6 @@ class EncFS_Context
   std::shared_ptr<FileNode> getNode(void *ptr);
   std::shared_ptr<FileNode> lookupNode(const char *path);
 
-  int getAndResetUsageCounter();
   int openFileCount() const;
 
   void *putNode(const char *path, const std::shared_ptr<FileNode> &node);
@@ -62,24 +61,8 @@ class EncFS_Context
   void renameNode(const char *oldName, const char *newName);
 
   void setRoot(const std::shared_ptr<DirNode> &root);
-  std::shared_ptr<DirNode> getRoot(int *err);
+  std::shared_ptr<DirNode> getRoot();
   bool isMounted();
-
-  std::shared_ptr<EncFS_Args> args;
-  std::shared_ptr<EncFS_Opts> opts;
-  bool publicFilesystem;
-
-  // root path to cipher dir
-  std::string rootCipherDir;
-
-  // for idle monitor
-  bool running;
-
-#ifdef CMAKE_USE_PTHREADS_INIT
-  pthread_t monitorThread;
-  pthread_cond_t wakeupCond;
-  Mutex wakeupMutex;
-#endif
 
  private:
   /* This placeholder is what is referenced in FUSE context (passed to
@@ -107,11 +90,8 @@ class EncFS_Context
 
   FileMap openFiles;
 
-  int usageCount;
   std::shared_ptr<DirNode> root;
 };
-
-int remountFS( EncFS_Context *ctx );
 
 }  // namespace encfs
 
