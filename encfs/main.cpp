@@ -576,7 +576,7 @@ int main(int argc, char *argv[])
     // TODO: because the fuse layer can delete and recreate backend file systems
     //       but is still file system agnostic, we should pass a FsIO "Factory"
     //       object to it
-    EncFSFuseContext ctx( std::move( encfsArgs ), encfsArgs->opts, std::move( encryptedFS ) );
+    EncFSFuseContext ctx( encfsArgs, encfsArgs->opts, std::move( encryptedFS ) );
 
     if(encfsArgs->isThreaded == false && encfsArgs->idleTimeout > 0)
     {

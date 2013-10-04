@@ -307,7 +307,7 @@ int encfs_readlink(const char *cpath, char *buf, size_t size)
 
   assert( link_data );
 
-  size_t amt_to_copy = std::min( size, link_data->size() ) - 1;
+  size_t amt_to_copy = std::min( size - 1, link_data->size() );
   memmove( buf, link_data->data(), amt_to_copy );
   buf[amt_to_copy] = '\0';
 
@@ -513,6 +513,7 @@ int encfs_setxattr( const char *cpath, const char *cname,
                        (size_t) position, std::move( buf ), std::move( flags ) );
 }
 
+// the same define used in fuse.h
 #ifdef __APPLE__
 int encfs_getxattr( const char *cpath, const char *cname,
                     char *value, size_t size, uint32_t position )

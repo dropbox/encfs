@@ -384,7 +384,7 @@ PosixSymlinkData PosixFsIO::posix_readlink(const Path &path) const
   if(res < 0) current_fs_error();
 
   // make sure nothing returned from readlink has a null byte
-  assert( std::all_of( buf, buf + sizeof( buf ), [](decltype(buf[0]) elt) { return elt; } ) );
+  assert( std::all_of( buf, buf + res, [](decltype(buf[0]) elt) { return elt; } ) );
 
   return PosixSymlinkData( buf, (size_t) res );
 }

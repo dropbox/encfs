@@ -842,8 +842,8 @@ int DirNode::posix_symlink(const char *path, const char *data)
 
   return withExceptionCatcher( (int) std::errc::io_error,
                                bindMethod( fs_io, &FsIO::posix_symlink ),
-                               fs_io->pathFromString( toCName ),
-                               PosixSymlinkData( std::move( toCName ) ) );
+                               fs_io->pathFromString( std::move( toCName ) ),
+                               PosixSymlinkData( std::move( fromCName ) ) );
 }
 
 Path DirNode::pathFromString(const std::string &string)
