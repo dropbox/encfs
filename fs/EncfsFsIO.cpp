@@ -127,14 +127,14 @@ size_t EncfsFileIO::read(const IORequest &req) const
 
 void EncfsFileIO::write(const IORequest &req)
 {
-  if (!isWritable()) throw create_errno_system_error( -std::errc::bad_file_descriptor );
+  if (!isWritable()) throw create_errno_system_error( std::errc::bad_file_descriptor );
   bool res = _fnode->write( req.offset, req.data, req.dataLen );
   if(!res) throw create_errno_system_error( std::errc::io_error );
 }
 
 void EncfsFileIO::truncate(fs_off_t size)
 {
-  if (!isWritable()) throw create_errno_system_error( -std::errc::bad_file_descriptor );
+  if (!isWritable()) throw create_errno_system_error( std::errc::bad_file_descriptor );
   int res = _fnode->truncate( size );
   if(res < 0) throw create_errno_system_error( -res );
 }

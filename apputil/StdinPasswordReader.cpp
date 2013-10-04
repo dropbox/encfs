@@ -18,10 +18,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "fs/StdinPasswordReader.h"
-
 #include <cstdio>
 #include <cstring>
+
+#include "apputil/StdinPasswordReader.h"
 
 namespace encfs {
 

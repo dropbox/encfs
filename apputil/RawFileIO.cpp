@@ -21,19 +21,21 @@
 #ifdef linux
 #define _XOPEN_SOURCE 500 // pick up pread , pwrite
 #endif
-#include <unistd.h>
-
-#include "base/Error.h"
-#include "fs/RawFileIO.h"
-
-#include <glog/logging.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
+
 #include <fcntl.h>
-#include <cstring>
+#include <unistd.h>
 
 #include <cerrno>
+#include <cstring>
+
+#include <glog/logging.h>
+
+#include "base/Error.h"
+
+#include "apputil/RawFileIO.h"
 
 namespace encfs {
 

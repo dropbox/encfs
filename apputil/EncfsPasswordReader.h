@@ -26,9 +26,10 @@
 #include "base/optional.h"
 
 #include "fs/PasswordReader.h"
-#include "fs/StdinPasswordReader.h"
-#include "fs/ProgramPasswordReader.h"
-#include "fs/PromptPasswordReader.h"
+
+#include "apputil/ProgramPasswordReader.h"
+#include "apputil/PromptPasswordReader.h"
+#include "apputil/StdinPasswordReader.h"
 
 namespace encfs {
 

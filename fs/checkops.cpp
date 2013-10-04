@@ -37,7 +37,6 @@
 #include "fs/FileUtils.h"
 #include "fs/NullNameIO.h"
 #include "fs/StreamNameIO.h"
-#include "fs/encfs.h"
 
 #ifdef HAVE_TR1_UNORDERED_SET
 #include <tr1/unordered_set>

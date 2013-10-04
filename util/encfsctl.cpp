@@ -40,14 +40,16 @@
 #include "cipher/MAC.h"
 #include "cipher/StreamCipher.h"
 
-#include "fs/encfs.h"
+
+// TODO: get rid of all the following includes
+// in preference of use EncfsFsIO.h only
 #include "fs/FileUtils.h"
 #include "fs/Context.h"
 #include "fs/FileNode.h"
 #include "fs/DirNode.h"
-#include "fs/PosixFsIO.h"
-#include "fs/EncfsPasswordReader.h"
 
+#include "apputil/EncfsPasswordReader.h"
+#include "apputil/PosixFsIO.h"
 
 using namespace encfs;
 using gnu::autosprintf;

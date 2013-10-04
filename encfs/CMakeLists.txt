@@ -8,12 +8,17 @@ link_directories (${Encfs_BINARY_DIR}/cipher)
 include_directories (${Encfs_SOURCE_DIR}/fs)
 link_directories (${Encfs_BINARY_DIR}/fs)
 
+include_directories (${Encfs_SOURCE_DIR}/apputil)
+link_directories (${Encfs_BINARY_DIR}/apputil)
+
 include_directories (${CMAKE_BINARY_DIR}/base)
 
 add_executable (encfs
     EncFSFuseContext.cpp
+    encfs.cpp
     main.cpp)
 target_link_libraries (encfs
+    encfs-apputil
     encfs-fs
     encfs-cipher
     encfs-base

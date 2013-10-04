@@ -2,10 +2,8 @@ protobuf_generate_cpp (PROTO_SRCS PROTO_HDRS ${PROJECT_SOURCE_DIR}/protos/fsconf
 
 include_directories (${PROJECT_BINARY_DIR}/base)
 add_library (encfs-fs
-    encfs.cpp
     Context.cpp
     FileIO.cpp
-    RawFileIO.cpp
     BlockFileIO.cpp
     CipherFileIO.cpp
     MACFileIO.cpp
@@ -17,12 +15,7 @@ add_library (encfs-fs
     FileNode.cpp
     FileUtils.cpp
     FsIO.cpp
-    PosixFsIO.cpp
     PasswordReader.cpp
-    EncfsPasswordReader.cpp
-    ProgramPasswordReader.cpp
-    PromptPasswordReader.cpp
-    StdinPasswordReader.cpp
     EncfsFsIO.cpp
     ${PROTO_SRCS}
     ${PROTO_HDRS}

@@ -52,7 +52,7 @@ using std::tuple;
 
 #include "fs/FsIO.h"
 
-#include "fs/encfs.h"
+#include "encfs/encfs.h"
 
 using std::map;
 using std::string;
@@ -518,7 +518,7 @@ int encfs_getxattr( const char *cpath, const char *cname,
                     char *value, size_t size, uint32_t position )
 {
 #else
-int encfs_getxattr( const char *path, const char *cname,
+int encfs_getxattr( const char *cpath, const char *cname,
                     char *value, size_t size )
 {
   uint32_t position = 0;

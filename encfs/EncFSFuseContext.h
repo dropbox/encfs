@@ -23,6 +23,7 @@
 
 #include <fuse.h>
 
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <thread>

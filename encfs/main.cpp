@@ -43,14 +43,17 @@
 
 #include "cipher/CipherV1.h"
 
-#include "encfs/EncFS_Args.h"
 #include "fs/EncfsFsIO.h"
-#include "fs/EncfsPasswordReader.h"
+// TODO: get rid of the following import
 #include "fs/FileUtils.h"
 #include "fs/FsIO.h"
 #include "fs/PasswordReader.h"
-#include "fs/PosixFsIO.h"
-#include "fs/encfs.h"
+
+#include "encfs/EncFS_Args.h"
+#include "apputil/EncfsPasswordReader.h"
+#include "apputil/PosixFsIO.h"
+#include "encfs/encfs.h"
+
 
 // Fuse version >= 26 requires another argument to fuse_unmount, which we
 // don't have.  So use the backward compatible call instead..
