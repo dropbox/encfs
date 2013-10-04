@@ -5,11 +5,6 @@
 #cmakedefine XATTR_ADD_OPT
 #cmakedefine HAVE_COMMON_CRYPTO
 
-#cmakedefine HAVE_TR1_MEMORY
-#cmakedefine HAVE_TR1_UNORDERED_MAP
-#cmakedefine HAVE_TR1_UNORDERED_SET
-#cmakedefine HAVE_TR1_TUPLE
-
 #cmakedefine HAVE_VALGRIND_VALGRIND_H
 #cmakedefine HAVE_VALGRIND_MEMCHECK_H
 

@@ -75,11 +75,6 @@ include (CheckIncludeFileCXX)
 check_include_file_cxx (attr/xattr.h HAVE_ATTR_XATTR_H)
 check_include_file_cxx (sys/xattr.h HAVE_SYS_XATTR_H)
 
-check_include_file_cxx (tr1/memory HAVE_TR1_MEMORY)
-check_include_file_cxx (tr1/unordered_map HAVE_TR1_UNORDERED_MAP)
-check_include_file_cxx (tr1/unordered_set HAVE_TR1_UNORDERED_SET)
-check_include_file_cxx (tr1/tuple HAVE_TR1_TUPLE)
-
 check_include_file_cxx (valgrind/valgrind.h HAVE_VALGRIND_VALGRIND_H)
 check_include_file_cxx (valgrind/memcheck.h HAVE_VALGRIND_MEMCHECK_H)
 

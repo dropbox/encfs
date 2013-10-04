@@ -31,18 +31,6 @@
 #include <memory>
 #include <string>
 
-#ifdef HAVE_TR1_TUPLE
-#include <tr1/tuple>
-using std::tr1::get;
-using std::tr1::make_tuple;
-using std::tr1::tuple;
-#else
-#include <tuple>
-using std::get;
-using std::make_tuple;
-using std::tuple;
-#endif
-
 #include <glog/logging.h>
 
 #include "base/Mutex.h"

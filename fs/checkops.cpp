@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <iostream>
 #include <sstream>
+#include <unordered_set>
 
 #include <glog/logging.h>
 
@@ -38,17 +39,10 @@
 #include "fs/NullNameIO.h"
 #include "fs/StreamNameIO.h"
 
-#ifdef HAVE_TR1_UNORDERED_SET
-#include <tr1/unordered_set>
-using std::tr1::unordered_set;
-#else
-#include <unordered_set>
-using std::unordered_set;
-#endif
-
 using std::cerr;
 using std::shared_ptr;
 using std::string;
+using std::unordered_set;
 
 namespace encfs {
 
