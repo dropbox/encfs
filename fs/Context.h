@@ -24,40 +24,24 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <unordered_map>
 
 #include "base/config.h"
 #include "base/Mutex.h"
 
-#ifdef HAVE_TR1_UNORDERED_MAP
-#include <tr1/unordered_map>
-namespace umap = std::tr1;
-#else
-#include <unordered_map>
-namespace umap = std;
-#endif
-
 namespace encfs {
 
-struct EncFS_Args;
-struct EncFS_Opts;
 class FileNode;
 class DirNode;
 
 class EncFS_Context
 {
  public:
-  EncFS_Context();
-  ~EncFS_Context();
-
-  std::shared_ptr<FileNode> getNode(void *ptr);
-  std::shared_ptr<FileNode> lookupNode(const char *path);
-
   int openFileCount() const;
 
-  void *putNode(const char *path, const std::shared_ptr<FileNode> &node);
-
-  void eraseNode(const char *path, void *placeholder);
-
+  std::shared_ptr<FileNode> lookupNode(const char *path) const;
+  void trackNode(const char *path, const std::shared_ptr<FileNode> &node);
+  void eraseNode(const char *path);
   void renameNode(const char *oldName, const char *newName);
 
   void setRoot(const std::shared_ptr<DirNode> &root);
@@ -65,29 +49,9 @@ class EncFS_Context
   bool isMounted();
 
  private:
-  /* This placeholder is what is referenced in FUSE context (passed to
-   * callbacks).
-   *
-   * A FileNode may be opened many times, but only one FileNode instance per
-   * file is kept.  Rather then doing reference counting in FileNode, we
-   * store a unique Placeholder for each open() until the corresponding
-   * release() is called.  shared_ptr then does our reference counting for
-   * us.
-   */
-  struct Placeholder
-  {
-    std::shared_ptr<FileNode> node;
-
-    Placeholder( const std::shared_ptr<FileNode> &ptr ) : node(ptr) {}
-  };
 
   // set of open files, indexed by path
-  typedef umap::unordered_map<std::string, std::set<Placeholder*> > FileMap;
-
-#ifdef CMAKE_USE_PTHREADS_INIT
-  mutable Mutex contextMutex;
-#endif
-
+  typedef std::unordered_map<std::string, std::weak_ptr<FileNode> > FileMap;
   FileMap openFiles;
 
   std::shared_ptr<DirNode> root;

@@ -23,12 +23,14 @@
 
 #include <cstdint>
 
+#include <memory>
 #include <string>
 
 #include "base/Mutex.h"
 
 #include "cipher/CipherKey.h"
 
+#include "fs/Context.h"
 #include "fs/CipherFileIO.h"
 #include "fs/FileUtils.h"
 
@@ -41,11 +43,14 @@ class DirNode;
 class FileNode
 {
 public:
-    FileNode(DirNode *parent,
+    FileNode(const std::shared_ptr<EncFS_Context> &ctx,
              const FSConfigPtr &cfg,
              const char *plaintextName,
              const char *cipherName);
     ~FileNode();
+
+    FileNode(const FileNode &src) = delete;
+    FileNode &operator = (const FileNode &src) = delete;
 
     const char *plaintextName() const;
     const char *cipherName() const;
@@ -75,8 +80,8 @@ public:
 
     // datasync or full sync
     int sync(bool dataSync);
-private:
 
+private:
     // doing locking at the FileNode level isn't as efficient as at the
     // lowest level of RawFileIO, since that means locks are held longer
     // (held during CPU intensive crypto operations!).  However it makes it
@@ -91,12 +96,7 @@ private:
     std::shared_ptr<CipherFileIO> cipher_io;
     std::string _pname; // plaintext name
     std::string _cname; // encrypted name
-    DirNode *parent;
-
-private:
-    FileNode(const FileNode &src);
-    FileNode &operator = (const FileNode &src);
-
+    std::shared_ptr<EncFS_Context> _ctx;
 };
 
 }  // namespace encfs

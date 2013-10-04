@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "fs/Context.h"
+#include "fs/FileUtils.h"
 #include "fs/FsIO.h"
 #include "fs/fsconfig.pb.h"
 

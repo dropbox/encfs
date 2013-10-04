@@ -18,7 +18,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// TODO: merge with root DirNode
+// TODO: rename to FileNode tracker
+
+#include <iostream>
+#include <string>
+#include <stdexcept>
 
 #include "fs/Context.h"
 
@@ -30,16 +34,6 @@
 using std::shared_ptr;
 
 namespace encfs {
-
-EncFS_Context::EncFS_Context()
-{ 
-}
-
-EncFS_Context::~EncFS_Context()
-{
-  // release all entries from map
-  openFiles.clear();
-}
 
 shared_ptr<DirNode> EncFS_Context::getRoot()
 {
@@ -61,68 +55,42 @@ int EncFS_Context::openFileCount() const
   return openFiles.size();
 }
 
-shared_ptr<FileNode> EncFS_Context::lookupNode(const char *path)
+shared_ptr<FileNode> EncFS_Context::lookupNode(const char *path) const
 {
-  FileMap::iterator it = openFiles.find( std::string(path) );
-  if(it != openFiles.end())
+  try
   {
-    // all the items in the set point to the same node.. so just use the
-    // first
-    return (*it->second.begin())->node;
-  } else
+    const std::weak_ptr<FileNode> &ref = openFiles.at( std::string(path) );
+    return ref.lock();
+  } catch ( const std::out_of_range &err )
   {
-    return shared_ptr<FileNode>();
+    return nullptr;
   }
 }
 
-void EncFS_Context::renameNode(const char *from, const char *to)
+void EncFS_Context::renameNode( const char *from, const char *to )
 {
-  FileMap::iterator it = openFiles.find( std::string(from) );
-  if(it != openFiles.end())
-  {
-    std::set<Placeholder *> val = it->second;
-    openFiles.erase(it);
-    openFiles[ std::string(to) ] = val;
-  }
+  auto from_path = std::string( from );
+  auto to_path = std::string( to );
+
+  assert( !openFiles.count( to_path ) );
+  assert( openFiles.count( from_path ) );
+
+  auto it = openFiles.find( from_path );
+  openFiles[ to_path ] = it->second;
+  openFiles.erase( it );
 }
 
-shared_ptr<FileNode> EncFS_Context::getNode(void *pl)
+void EncFS_Context::trackNode( const char *cpath, const shared_ptr<FileNode> &node)
 {
-  Placeholder *ph = (Placeholder*)pl;
-  return ph->node;
+  auto path = std::string( cpath );
+  assert( !openFiles.count( path ) );
+  openFiles[ std::move( path ) ] = std::weak_ptr<FileNode>( node );
 }
 
-void *EncFS_Context::putNode(const char *path, 
-    const shared_ptr<FileNode> &node)
+void EncFS_Context::eraseNode(const char *path)
 {
-  Placeholder *pl = new Placeholder( node );
-  openFiles[ std::string(path) ].insert(pl);
-
-  return (void *)pl;
-}
-
-void EncFS_Context::eraseNode(const char *path, void *pl)
-{
-  Placeholder *ph = (Placeholder *)pl;
-
-  FileMap::iterator it = openFiles.find( std::string(path) );
-  rAssert(it != openFiles.end());
-
-  int rmCount = it->second.erase( ph );
-
-  rAssert(rmCount == 1);
-
-  // if no more references to this file, remove the record all together
-  if(it->second.empty())
-  {
-    // attempts to make use of shallow copy to clear memory used to hold
-    // unencrypted filenames.. not sure this does any good..
-    std::string storedName = it->first;
-    openFiles.erase( it );
-    storedName.assign( storedName.length(), '\0' );
-  }
-
-  delete ph;
+  assert( openFiles.count( path ) );
+  openFiles.erase( std::string( path ) );
 }
 
 }  // namespace encfs

@@ -29,6 +29,7 @@
 #include "base/Mutex.h"
 #include "cipher/MemoryPool.h"
 
+#include "fs/Context.h"
 #include "fs/CipherFileIO.h"
 #include "fs/DirNode.h"
 #include "fs/FileIO.h"
@@ -56,25 +57,28 @@ namespace encfs {
 
 #define SSIZET_MAX ((ssize_t) (~((uintmax_t) 0) >> ((sizeof(uintmax_t) * 8) - (sizeof(ssize_t) * 8 - 1))))
 
-FileNode::FileNode(DirNode *parent_, const FSConfigPtr &cfg,
-    const char *plaintextName_, const char *cipherName_)
+FileNode::FileNode(const shared_ptr<EncFS_Context> &ctx,
+                   const FSConfigPtr &cfg,
+                   const char *plaintextName_,
+                   const char *cipherName_)
 {
   Lock _lock( mutex );
 
   this->_pname = plaintextName_;
   this->_cname = cipherName_;
-  this->parent = parent_;
+  this->_ctx = ctx;
 
   this->fsConfig = cfg;
 }
 
 FileNode::~FileNode()
 {
+  this->_ctx->eraseNode( _pname.c_str() );
   // FileNode mutex should be locked before the destructor is called
-
   _pname.assign( _pname.length(), '\0' );
   _cname.assign( _cname.length(), '\0' );
-  io.reset();
+  cipher_io = nullptr;
+  io = nullptr;
 }
 
 const char *FileNode::cipherName() const
@@ -113,8 +117,10 @@ static bool setIV(const shared_ptr<FileIO> &io,
 }
 
 bool FileNode::setName( const char *plaintextName_, const char *cipherName_,
-    uint64_t iv, bool setIVFirst )
+                        uint64_t iv, bool setIVFirst )
 {
+  std::string oldPName = _pname;
+
   //Lock _lock( mutex );
   VLOG(1) << "calling setIV on " << cipherName_;
   if(setIVFirst)
@@ -129,7 +135,6 @@ bool FileNode::setName( const char *plaintextName_, const char *cipherName_,
       this->_cname = cipherName_;
   } else
   {
-    std::string oldPName = _pname;
     std::string oldCName = _cname;
 
     if(plaintextName_)
@@ -144,6 +149,8 @@ bool FileNode::setName( const char *plaintextName_, const char *cipherName_,
       return false;
     }
   }
+
+  if (plaintextName_) this->_ctx->renameNode( oldPName.c_str(), _pname.c_str() );
 
   return true;
 }

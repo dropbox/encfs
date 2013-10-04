@@ -667,11 +667,7 @@ shared_ptr<FileNode> DirNode::renameNode(const char *from, const char *to,
     VLOG(1) << "renaming internal node " << node->cipherName() 
       << " -> " << cname.c_str();
 
-    if(node->setName( to, cname.c_str(), newIV, forwardMode ))
-    {
-      if(ctx)
-        ctx->renameNode( from, to );
-    } else
+    if(!node->setName( to, cname.c_str(), newIV, forwardMode ))
     {
       // rename error! - put it back 
       LOG(ERROR) << "renameNode failed";
@@ -685,19 +681,20 @@ shared_ptr<FileNode> DirNode::renameNode(const char *from, const char *to,
 shared_ptr<FileNode> DirNode::findOrCreate(const char *plainName)
 {
   shared_ptr<FileNode> node;
-  if(ctx)
-    node = ctx->lookupNode( plainName );
+  if(ctx) node = ctx->lookupNode( plainName );
 
   if(!node)
   {
     uint64_t iv = 0;
     string cipherName = naming->encodePath( plainName, &iv );
-    node = std::make_shared<FileNode>( this, fsConfig,
+    node = std::make_shared<FileNode>( ctx, fsConfig,
                                        plainName,
                                        appendToRoot( cipherName ).c_str() );
 
-    if(fsConfig->config->external_iv())
-      node->setName(0, 0, iv);
+    // add weak reference to node
+    ctx->trackNode( plainName, node );
+
+    if(fsConfig->config->external_iv()) node->setName(0, 0, iv);
 
     VLOG(1) << "created FileNode for " << node->cipherName();
   }
