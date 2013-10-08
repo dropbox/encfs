@@ -38,6 +38,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <limits>
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -269,16 +270,28 @@ void PosixFsIO::set_times(const Path &path,
     if(res_gettimeofday < 0) current_fs_error();
   }
 
+  typedef decltype(new_times[0].tv_sec) _second_type;
+
+  if(atime && *atime > std::numeric_limits<_second_type>::max())
+  {
+    current_fs_error(EINVAL);
+  }
+
   new_times[0] = atime
-    ? (struct timeval) {*atime, 0}
+    ? (struct timeval) {(_second_type) *atime, 0}
     : now;
 
+  if(mtime && *mtime > std::numeric_limits<_second_type>::max())
+  {
+    current_fs_error(EINVAL)
+  }
+
   new_times[1] = mtime
-    ? (struct timeval) {*mtime, 0}
+    ? (struct timeval) {(_second_type) *mtime, 0}
     : now;
 
   const int res_utimes = ::utimes( path.c_str(), new_times );
-  if (res_utimes < 0) current_fs_error();
+  if(res_utimes < 0) current_fs_error();
 }
 
 fs_posix_uid_t PosixFsIO::posix_setfsuid(fs_posix_uid_t uid)

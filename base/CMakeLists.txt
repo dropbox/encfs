@@ -25,6 +25,7 @@ add_library (encfs-base
 )
 
 target_link_libraries (encfs-base
+    ${CMAKE_THREAD_LIBS_INIT} #  for protobuf
     ${PROTOBUF_LIBRARY}
     ${TINYXML_LIBRARIES}
 )

@@ -42,14 +42,14 @@ endif (WITH_COMMON_CRYPTO)
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror")
 
 include (CheckCXXCompilerFlag)
-check_cxx_compiler_flag (-std=c++11 HAVE_C11_FLAG)
-check_cxx_compiler_flag (-std=gnu++11 HAVE_GNU11_FLAG)
+check_cxx_compiler_flag (-std=c++11 HAVE_CXX11_FLAG)
+check_cxx_compiler_flag (-std=c++0x HAVE_CXX0x_FLAG)
 
-if (HAVE_GNU11_FLAG)
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11")
-elseif (HAVE_C11_FLAG)
+if (HAVE_CXX11_FLAG)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-endif (HAVE_GNU11_FLAG)
+elseif (HAVE_CXX0x_FLAG)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+endif (HAVE_CXX11_FLAG)
 
 # Flume specific flags.
 find_package (FUSE REQUIRED)

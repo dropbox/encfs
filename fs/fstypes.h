@@ -38,12 +38,6 @@ typedef uintmax_t fs_posix_gid_t;
 typedef uintmax_t fs_posix_mode_t;
 typedef uintmax_t fs_posix_dev_t;
 
-enum
-{
-  FS_TIME_MIN=INTMAX_MIN,
-  FS_TIME_MAX=INTMAX_MAX,
-};
-
 enum class FsFileType
 {
   UNKNOWN,
@@ -52,9 +46,17 @@ enum class FsFileType
 };
 
 struct FsPosixAttrs {
-  fs_posix_gid_t gid;
-  fs_posix_uid_t uid;
   fs_posix_mode_t mode;
+  fs_posix_uid_t uid;
+  fs_posix_gid_t gid;
+
+  FsPosixAttrs(fs_posix_mode_t mode_,
+               fs_posix_uid_t uid_,
+               fs_posix_gid_t gid_)
+  : mode( mode_ )
+  , uid( uid_ )
+  , gid( gid_ )
+  {}
 };
 
 struct FsFileAttrs

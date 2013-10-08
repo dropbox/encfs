@@ -1,4 +1,7 @@
+=pod
+
 =cut
+
 Copyright (c) 2003-2004, Valient Gough <vgough@pobox.com>
 All rights reserved.
 

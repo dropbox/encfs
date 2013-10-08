@@ -231,16 +231,9 @@ FsFileAttrs stat_to_fs_file_attrs(const struct stat &st) {
   attrs.type = (S_ISDIR(st.st_mode) ? FsFileType::DIRECTORY :
                 S_ISREG(st.st_mode) ? FsFileType::REGULAR :
                 FsFileType::UNKNOWN);
-  assert( st.st_mtime >= FS_TIME_MIN );
-  assert( st.st_mtime <= FS_TIME_MAX );
-  attrs.mtime = (fs_time_t) st.st_mtime;
-  attrs.size = (fs_off_t) st.st_size;
-
-  attrs.posix = FsPosixAttrs {
-    .mode = st.st_mode,
-    .uid = st.st_uid,
-    .gid = st.st_gid,
-  };
+  attrs.mtime = { st.st_mtime };
+  attrs.size = { st.st_size };
+  attrs.posix = FsPosixAttrs( st.st_mode, st.st_uid, st.st_gid );
 
   return attrs;
 }
