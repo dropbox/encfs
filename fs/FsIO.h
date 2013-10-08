@@ -269,14 +269,15 @@ public:
 };
 
 // path helper
-template<const char *SEP>
-class StringPath : public PathPoly
+class StringPathDynamicSep : public PathPoly
 {
 protected:
+    std::string _sep;
     std::string _path;
 
-    StringPath(std::string path)
-      : _path( std::move( path ) )
+    StringPathDynamicSep(std::string sep, std::string path)
+      : _sep( std::move( sep ) )
+    , _path( std::move( path ) )
     {}
 
     virtual std::shared_ptr<PathPoly> _from_string(std::string str) const =0;
@@ -294,22 +295,31 @@ public:
 
     virtual Path join(const std::string &name) const override
     {
-      return _from_string( _path + SEP + name );
+      return _from_string( _path + _sep + name );
     }
 
     virtual std::string basename() const override
     {
       if(is_root()) throw std::logic_error( "basename on root path is undefined" );
-      auto slash_pos = _path.rfind( SEP );
+      auto slash_pos = _path.rfind( _sep );
       return _path.substr( slash_pos );
     }
 
     virtual bool operator==(const std::shared_ptr<PathPoly> &p) const override
     {
-      auto p2 = std::dynamic_pointer_cast<StringPath>( p );
+      auto p2 = std::dynamic_pointer_cast<StringPathDynamicSep>( p );
       if(!p2) return false;
       return ((const std::string &) *p2 == (const std::string &) *this);
     }
+};
+
+template<const char *SEP>
+class StringPath : public StringPathDynamicSep
+{
+protected:
+    StringPath(std::string path)
+    : StringPathDynamicSep( SEP, std::move( path ) )
+    {}
 };
 
 // fsio helpers
