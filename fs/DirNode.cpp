@@ -186,7 +186,7 @@ bool RenameOp::apply()
       bool preserve_mtime;
       try
       {
-        old_mtime = dn->fs_io->get_attrs( oldCNamePath ).mtime;
+        old_mtime = encfs::get_attrs( dn->fs_io, oldCNamePath ).mtime;
         preserve_mtime = true;
       } catch (...)
       {
@@ -302,7 +302,7 @@ string DirNode::rootDirectory()
   return rootDir;
 }
 
-Path DirNode::appendToRoot(const string &path)
+Path DirNode::appendToRoot(const string &path) const
 {
   return fs_io->pathFromString( (const std::string &) rootDir + '/' + path);
 }
@@ -380,7 +380,7 @@ string DirNode::relativeCipherPath(const char *plaintextPath)
   }
 }
 
-DirTraverse DirNode::openDir(const char *plaintextPath)
+DirTraverse DirNode::openDir(const char *plaintextPath) const
 {
   auto cyName = appendToRoot( naming->encodePath( plaintextPath ) );
   //rDebug("openDir on %s", cyName.c_str() );
@@ -547,9 +547,9 @@ int DirNode::posix_mkdir(const char *plaintextPath, fs_posix_mode_t mode)
 
   VLOG(1) << "mkdir on " << cyName;
 
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::posix_mkdir ),
-                               std::move( cyName ), mode );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( fs_io, &FsIO::posix_mkdir ),
+                                    std::move( cyName ), mode );
 }
 
 int
@@ -588,7 +588,7 @@ DirNode::rename(const char *fromPlaintext, const char *toPlaintext)
     bool preserve_mtime = true;
     try
     {
-      old_mtime = fs_io->get_attrs( fromCName ).mtime;
+      old_mtime = encfs::get_attrs( fs_io, fromCName ).mtime;
     } catch ( const std::exception &err )
     {
       LOG(WARNING) << "get_mtime error: " << err.what();
@@ -596,9 +596,9 @@ DirNode::rename(const char *fromPlaintext, const char *toPlaintext)
     }
 
     renameNode( fromPlaintext, toPlaintext );
-    res = withExceptionCatcher((int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::rename ),
-                               fromCName, toCName );
+    res = withExceptionCatcherNoRet((int) std::errc::io_error,
+                                    bindMethod( fs_io, &FsIO::rename ),
+                                    fromCName, toCName );
     if(res < 0)
     {
       // undo
@@ -608,8 +608,8 @@ DirNode::rename(const char *fromPlaintext, const char *toPlaintext)
         renameOp->undo();
     } else if(preserve_mtime)
     {
-      withExceptionCatcher(1, bindMethod( fs_io, &FsIO::set_times ),
-                           toCName, opt::nullopt, old_mtime );
+      withExceptionCatcherNoRet(1, bindMethod( fs_io, &FsIO::set_times ),
+                                toCName, opt::nullopt, old_mtime );
     }
   } catch( Error &err )
   {
@@ -637,9 +637,9 @@ int DirNode::posix_link(const char *from, const char *to)
     res = -(int) std::errc::operation_not_permitted;
   } else
   {
-    res = withExceptionCatcher( (int) std::errc::io_error,
-                                bindMethod( fs_io, &FsIO::posix_link ),
-                                fromCName, toCName );
+    res = withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                     bindMethod( fs_io, &FsIO::posix_link ),
+                                     fromCName, toCName );
   }
 
   return res;
@@ -761,9 +761,9 @@ int DirNode::unlink( const char *plaintextName )
   } else
   {
     auto fullName = appendToRoot( cyName );
-    res = withExceptionCatcher( (int) std::errc::io_error,
-                                bindMethod( fs_io, &FsIO::unlink ),
-                                fullName );
+    res = withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                     bindMethod( fs_io, &FsIO::unlink ),
+                                     fullName );
   }
 
   return res;
@@ -773,21 +773,33 @@ int DirNode::mkdir( const char *plaintextName )
 {
   Lock _lock( mutex );
   auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::mkdir ), fullName );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( fs_io, &FsIO::mkdir ), fullName );
 }
 
-int DirNode::get_attrs(FsFileAttrs *attrs, const char *plaintextName)
+int DirNode::get_attrs(FsFileAttrs *attrs, const char *plaintextName) const
 {
   Lock _lock( mutex );
 
   auto cyName = appendToRoot( naming->encodePath( plaintextName ) );
-  VLOG(1) << "unlink " << cyName;
+  VLOG(1) << "get_attrs " << cyName;
 
-  int res = withExceptionCatcher( (int) std::errc::io_error,
-                                  bindMethod( fs_io, &FsIO::get_attrs ),
-                                  attrs, cyName );
-  if(res < 0) return res;
+  return withExceptionCatcher( (int) std::errc::io_error,
+                               encfs::get_attrs<decltype(fs_io)>,
+                               attrs, fs_io, cyName );
+}
+
+int DirNode::posix_stat(FsFileAttrs *attrs, const char *plaintextName, bool follow)
+{
+  Lock _lock( mutex );
+
+  auto cyName = appendToRoot( naming->encodePath( plaintextName ) );
+  VLOG(1) << "posix_stat " << cyName;
+
+  int ret = withExceptionCatcher( (int) std::errc::io_error,
+                                  bindMethod( fs_io, &FsIO::posix_stat ),
+                                  attrs, cyName, follow );
+  if(ret < 0) return ret;
 
   // TODO: make sure this wrap code is similar to how FileIO is created
   // in FileNode
@@ -798,18 +810,18 @@ int DirNode::get_attrs(FsFileAttrs *attrs, const char *plaintextName)
     *attrs = MACFileIO::wrapAttrs( fsConfig, std::move( *attrs ) );
   }
 
-  if(attrs->type == FsFileType::POSIX_LINK)
+  if(posix_is_symlink( attrs->posix->mode ))
   {
     opt::optional<PosixSymlinkData> buf;
-    res = withExceptionCatcher( (int) std::errc::io_error,
+    ret = withExceptionCatcher( (int) std::errc::io_error,
                                 bindMethod( this, &DirNode::_posix_readlink ),
                                 &buf, cyName );
-    if(res < 0) return res;
+    if(ret < 0) return ret;
     assert( buf );
     attrs->size = buf->size();
   }
 
-  return res;
+  return ret;
 }
 
 PosixSymlinkData DirNode::_posix_readlink(const std::string &cyPath)
@@ -837,13 +849,18 @@ int DirNode::posix_symlink(const char *path, const char *data)
 
   VLOG(1) << "symlink " << fromCName << " -> " << toCName;
 
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::posix_symlink ),
-                               fs_io->pathFromString( std::move( toCName ) ),
-                               PosixSymlinkData( std::move( fromCName ) ) );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( fs_io, &FsIO::posix_symlink ),
+                                    fs_io->pathFromString( std::move( toCName ) ),
+                                    PosixSymlinkData( std::move( fromCName ) ) );
 }
 
-Path DirNode::pathFromString(const std::string &string)
+const std::string &DirNode::path_sep() const
+{
+  return fs_io->path_sep();
+}
+
+Path DirNode::pathFromString(const std::string &string) const
 {
   return fs_io->pathFromString( string );
 }
@@ -856,9 +873,9 @@ int DirNode::posix_create( shared_ptr<FileNode> *fnode,
 
   // first call posix_create to clear node and whatever else
   auto cyName = appendToRoot( naming->encodePath( plainName ) );
-  int ret = withExceptionCatcher( (int) std::errc::io_error,
-                                  bindMethod( fs_io, &FsIO::posix_create ),
-                                  cyName, mode );
+  int ret = withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                       bindMethod( fs_io, &FsIO::posix_create ),
+                                       cyName, mode );
   if(ret < 0) return ret;
 
   // then open node as usual, this is fine since the fs is locked during this
@@ -875,9 +892,9 @@ int DirNode::posix_mknod(const char *plaintextName,
   Lock _lock( mutex );
 
   auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::posix_mknod ),
-                               fullName, mode, dev );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( fs_io, &FsIO::posix_mknod ),
+                                    fullName, mode, dev );
 }
 
 int DirNode::posix_setfsgid( fs_posix_gid_t *oldgid, fs_posix_gid_t newgid)
@@ -902,9 +919,9 @@ int DirNode::rmdir( const char *plaintextName )
 {
   Lock _lock( mutex );
   auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::rmdir ),
-                               fullName );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( fs_io, &FsIO::rmdir ),
+                                    fullName );
 }
 
 int DirNode::set_times( const char *plaintextName,
@@ -913,31 +930,31 @@ int DirNode::set_times( const char *plaintextName,
 {
   Lock _lock( mutex );
   auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::set_times ),
-                               fullName, std::move( atime ), std::move( mtime ) );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( fs_io, &FsIO::set_times ),
+                                    fullName, std::move( atime ), std::move( mtime ) );
 
 }
 
-int DirNode::posix_chmod( const char *plaintextName, fs_posix_mode_t mode )
+int DirNode::posix_chmod( const char *plaintextName, bool follow, fs_posix_mode_t mode )
 {
   Lock _lock( mutex );
 
   auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::posix_chmod ),
-                               fullName, mode );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( fs_io, &FsIO::posix_chmod ),
+                                    fullName, follow, mode );
 
 }
 
-int DirNode::posix_chown( const char *plaintextName, fs_posix_uid_t uid, fs_posix_gid_t gid )
+int DirNode::posix_chown( const char *plaintextName, bool follow, fs_posix_uid_t uid, fs_posix_gid_t gid )
 {
   Lock _lock( mutex );
 
   auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::posix_chown ),
-                               fullName, uid, gid );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( fs_io, &FsIO::posix_chown ),
+                                    fullName, follow, uid, gid );
 
 }
 
@@ -947,10 +964,10 @@ int DirNode::posix_setxattr( const char *plaintextName, bool follow, std::string
   Lock _lock( mutex );
 
   auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::posix_setxattr ),
-                               std::move( fullName ), follow, std::move( name ),
-                               offset, std::move( buf ), std::move( flags ) );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( fs_io, &FsIO::posix_setxattr ),
+                                    std::move( fullName ), follow, std::move( name ),
+                                    offset, std::move( buf ), std::move( flags ) );
 }
 
 int DirNode::posix_getxattr( opt::optional<std::vector<byte>> *ret,
@@ -984,9 +1001,9 @@ int DirNode::posix_removexattr( const char *plaintextName, bool follow, std::str
   Lock _lock( mutex );
 
   auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( fs_io, &FsIO::posix_removexattr ),
-                               std::move( fullName ), follow, std::move( name ) );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( fs_io, &FsIO::posix_removexattr ),
+                                    std::move( fullName ), follow, std::move( name ) );
 }
 
 

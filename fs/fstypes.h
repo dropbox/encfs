@@ -30,10 +30,9 @@
 
 namespace encfs {
 
-typedef uintptr_t fs_dir_handle_t;
 typedef intmax_t fs_time_t;
 typedef intmax_t fs_off_t;
-typedef intmax_t fs_file_id_t;
+typedef uintmax_t fs_file_id_t;
 typedef uintmax_t fs_posix_uid_t;
 typedef uintmax_t fs_posix_gid_t;
 typedef uintmax_t fs_posix_mode_t;
@@ -50,7 +49,6 @@ enum class FsFileType
   UNKNOWN,
   DIRECTORY,
   REGULAR,
-  POSIX_LINK,
 };
 
 struct FsPosixAttrs {
@@ -64,8 +62,13 @@ struct FsFileAttrs
   FsFileType type;
   fs_time_t mtime;
   fs_off_t size;
+  fs_file_id_t file_id;
   opt::optional<FsPosixAttrs> posix;
 };
+
+inline bool posix_is_symlink(fs_posix_mode_t mode) {
+  return mode & 0120000;
+}
 
 // posix symlink data is just arbitrary 0-terminated data
 typedef std::string PosixSymlinkData;

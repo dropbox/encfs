@@ -116,17 +116,7 @@ FsFileAttrs RawFileIO::get_attrs() const
     throw std::system_error( eno, errno_category() );
   }
 
-  FsFileAttrs attrs;
-
-  attrs.type = (S_ISDIR(st.st_mode) ? FsFileType::DIRECTORY :
-                S_ISREG(st.st_mode) ? FsFileType::REGULAR :
-                FsFileType::UNKNOWN);
-  assert( st.st_mtime >= FS_TIME_MIN );
-  assert( st.st_mtime <= FS_TIME_MAX );
-  attrs.mtime = (fs_time_t) st.st_mtime;
-  attrs.size = (fs_off_t) st.st_size;
-
-  return attrs;
+  return stat_to_fs_file_attrs( st );
 }
 
 size_t RawFileIO::read( const IORequest &req ) const
@@ -233,6 +223,26 @@ void RawFileIO::sync(bool datasync)
   res = fsync(fd);
 #endif
   if(res < 0) throw std::system_error( errno, errno_category() );
+}
+
+FsFileAttrs stat_to_fs_file_attrs(const struct stat &st) {
+  FsFileAttrs attrs;
+
+  attrs.type = (S_ISDIR(st.st_mode) ? FsFileType::DIRECTORY :
+                S_ISREG(st.st_mode) ? FsFileType::REGULAR :
+                FsFileType::UNKNOWN);
+  assert( st.st_mtime >= FS_TIME_MIN );
+  assert( st.st_mtime <= FS_TIME_MAX );
+  attrs.mtime = (fs_time_t) st.st_mtime;
+  attrs.size = (fs_off_t) st.st_size;
+
+  attrs.posix = FsPosixAttrs {
+    .mode = st.st_mode,
+    .uid = st.st_uid,
+    .gid = st.st_gid,
+  };
+
+  return attrs;
 }
 
 }  // namespace encfs

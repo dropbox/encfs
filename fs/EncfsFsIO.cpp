@@ -186,12 +186,17 @@ std::shared_ptr<DirNode> EncfsFsIO::getRoot() const
   return ctx->getRoot();
 }
 
-Path EncfsFsIO::pathFromString(const std::string &path)
+const std::string &EncfsFsIO::path_sep() const
+{
+  return ctx->getRoot()->path_sep();
+}
+
+Path EncfsFsIO::pathFromString(const std::string &path) const
 {
   return ctx->getRoot()->pathFromString( path );
 }
 
-Directory EncfsFsIO::opendir(const Path &path)
+Directory EncfsFsIO::opendir(const Path &path) const
 {
   auto dt = getRoot()->openDir( path.c_str() );
   if(!dt.valid()) throw create_errno_system_error( std::errc::io_error );
@@ -240,15 +245,6 @@ void EncfsFsIO::set_times(const Path &path,
 {
   const int res = getRoot()->set_times( path.c_str(), atime, mtime );
   if(res < 0) throw create_errno_system_error( -res );
-}
-
-FsFileAttrs EncfsFsIO::get_attrs(const Path &path)
-{
-  FsFileAttrs attrs;
-  const int res = getRoot()->get_attrs( &attrs, path.c_str() );
-  if(res < 0) throw create_errno_system_error( -res );
-
-  return attrs;
 }
 
 fs_posix_uid_t EncfsFsIO::posix_setfsuid(fs_posix_uid_t uid)
@@ -312,15 +308,15 @@ PosixSymlinkData EncfsFsIO::posix_readlink(const Path &path) const
   return std::move( toret );
 }
 
-void EncfsFsIO::posix_chmod(const Path &path, fs_posix_mode_t mode)
+void EncfsFsIO::posix_chmod(const Path &path, bool follow, fs_posix_mode_t mode)
 {
-  const int res = getRoot()->posix_chmod( path.c_str(), mode );
+  const int res = getRoot()->posix_chmod( path.c_str(), follow, mode );
   if(res < 0) throw create_errno_system_error( -res );
 }
 
-void EncfsFsIO::posix_chown(const Path &path, fs_posix_uid_t uid, fs_posix_gid_t gid)
+void EncfsFsIO::posix_chown(const Path &path, bool follow, fs_posix_uid_t uid, fs_posix_gid_t gid)
 {
-  const int res = getRoot()->posix_chown( path.c_str(), uid, gid );
+  const int res = getRoot()->posix_chown( path.c_str(), follow, uid, gid );
   if(res < 0) throw create_errno_system_error( -res );
 }
 
@@ -364,6 +360,14 @@ void EncfsFsIO::posix_removexattr(const Path &path, bool follow, std::string nam
 {
   const int res = getRoot()->posix_removexattr( path.c_str(), follow, name );
   if(res < 0) throw create_errno_system_error( -res );
+}
+
+FsFileAttrs EncfsFsIO::posix_stat(const Path &path, bool follow) const
+{
+  FsFileAttrs posix_attrs;
+  const int res = getRoot()->posix_stat( &posix_attrs, path.c_str(), follow );
+  if(res < 0) throw create_errno_system_error( -res );
+  return posix_attrs;
 }
 
 }

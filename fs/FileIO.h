@@ -119,7 +119,7 @@ int withExceptionCatcher(int defaultRes, F fn, R *res, Args &&... args)
 {
   try
   {
-    if (res) *res = fn( std::forward<Args>( args )... );
+    if(res) *res = fn( std::forward<Args>( args )... );
     else fn( std::forward<Args>( args )... );
     return 0;
   } catch( const std::system_error &err )
@@ -132,7 +132,7 @@ int withExceptionCatcher(int defaultRes, F fn, R *res, Args &&... args)
 }
 
 template<typename F, typename... Args>
-int withExceptionCatcher(int defaultRes, F fn, Args &&... args)
+int withExceptionCatcherNoRet(int defaultRes, F fn, Args &&... args)
 {
   try
   {
@@ -159,7 +159,7 @@ template<typename... Args>
 std::function<int(Args...)> wrapWithExceptionCatcher(int defaultRes, std::function<void(Args...)> fn)
 {
   return [=] (Args &&... args) {
-    return withExceptionCatcher( defaultRes, fn, std::forward<Args>( args )... );
+    return withExceptionCatcherNoRet( defaultRes, fn, std::forward<Args>( args )... );
   };
 }
 

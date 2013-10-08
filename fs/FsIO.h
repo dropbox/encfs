@@ -64,6 +64,7 @@ public:
     virtual Path join(const std::string & path) const =0;
     virtual std::string basename() const =0;
     virtual Path dirname() const =0;
+    virtual bool is_root() const =0;
     virtual bool operator==(const std::shared_ptr<PathPoly> &p) const =0;
 };
 
@@ -114,6 +115,11 @@ public:
       return _impl->dirname();
     }
 
+    bool is_root() const
+    {
+      return _impl->is_root();
+    }
+
     bool operator==(const std::shared_ptr<PathPoly> &p) const
     {
       return (*_impl) == p;
@@ -141,7 +147,7 @@ public:
       assert( _impl );
     }
 
-    std::unique_ptr<T> take_ptr()
+    operator std::unique_ptr<T> () &&
     {
       return std::move( _impl );
     }
@@ -219,9 +225,10 @@ class FsIO
 public:
     virtual ~FsIO() =0;
 
-    virtual Path pathFromString(const std::string &path) =0;
+    virtual const std::string &path_sep() const =0;
+    virtual Path pathFromString(const std::string &path) const =0;
 
-    virtual Directory opendir(const Path &path) =0;
+    virtual Directory opendir(const Path &path) const =0;
     virtual File openfile(const Path &path,
                           bool open_for_write = false,
                           bool create = false) =0;
@@ -237,11 +244,11 @@ public:
                            const opt::optional<fs_time_t> &atime,
                            const opt::optional<fs_time_t> &mtime) =0;
 
-    virtual FsFileAttrs get_attrs(const Path &path) =0;
-
     // optional methods to support full file system emulation on posix
     virtual fs_posix_uid_t posix_setfsuid(fs_posix_uid_t uid);
     virtual fs_posix_gid_t posix_setfsgid(fs_posix_gid_t gid);
+
+    // fs modifiers
     virtual File posix_create(const Path &pathSrc, fs_posix_mode_t mode);
     virtual void posix_mkdir(const Path &path, fs_posix_mode_t mode);
     virtual void posix_mknod(const Path &path, fs_posix_mode_t mode, fs_posix_dev_t dev);
@@ -249,8 +256,8 @@ public:
     virtual void posix_link(const Path &pathSrc, const Path &pathDst);
     virtual void posix_symlink(const Path &path, PosixSymlinkData link_data);
     virtual PosixSymlinkData posix_readlink(const Path &path) const;
-    virtual void posix_chmod(const Path &pathSrc, fs_posix_mode_t mode);
-    virtual void posix_chown(const Path &pathSrc, fs_posix_uid_t uid, fs_posix_gid_t gid);
+    virtual void posix_chmod(const Path &pathSrc, bool follow, fs_posix_mode_t mode);
+    virtual void posix_chown(const Path &pathSrc, bool follow, fs_posix_uid_t uid, fs_posix_gid_t gid);
     virtual void posix_setxattr(const Path &path, bool follow,
                                 std::string name, size_t offset,
                                 std::vector<byte> buf, PosixSetxattrFlags flags);
@@ -258,7 +265,63 @@ public:
                                              std::string name, size_t offset, size_t amt) const;
     virtual PosixXattrList posix_listxattr(const Path &path, bool follow) const;
     virtual void posix_removexattr(const Path &path, bool follow, std::string name);
+    virtual FsFileAttrs posix_stat(const Path &path, bool follow) const;
 };
+
+// path helper
+template<const char *SEP>
+class StringPath : public PathPoly
+{
+protected:
+    std::string _path;
+
+    StringPath(std::string path)
+      : _path( std::move( path ) )
+    {}
+
+    virtual std::shared_ptr<PathPoly> _from_string(std::string str) const =0;
+
+public:
+    virtual operator const std::string &() const override
+    {
+      return _path;
+    }
+
+    virtual const char *c_str() const override
+    {
+      return _path.c_str();
+    }
+
+    virtual Path join(const std::string &name) const override
+    {
+      return _from_string( _path + SEP + name );
+    }
+
+    virtual std::string basename() const override
+    {
+      if(is_root()) throw std::logic_error( "basename on root path is undefined" );
+      auto slash_pos = _path.rfind( SEP );
+      return _path.substr( slash_pos );
+    }
+
+    virtual bool operator==(const std::shared_ptr<PathPoly> &p) const override
+    {
+      auto p2 = std::dynamic_pointer_cast<StringPath>( p );
+      if(!p2) return false;
+      return ((const std::string &) *p2 == (const std::string &) *this);
+    }
+};
+
+// fsio helpers
+
+template<typename T>
+FsFileAttrs get_attrs(T fs_io, const Path &p)
+{
+  const bool create = false;
+  const bool open_for_write = false;
+  return fs_io->openfile(p, open_for_write, create).get_attrs();
+}
+
 
 }  // namespace encfs
 

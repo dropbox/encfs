@@ -53,6 +53,11 @@ enum {
   ESUCCESS=0,
 };
 
+enum {
+  NO_FOLLOW,
+  YES_FOLLOW,
+};
+
 EncFSFuseContext *get_global_encfs_fuse_context()
 {
   return (EncFSFuseContext *) fuse_get_context()->private_data;
@@ -131,8 +136,8 @@ int encfs_getattr(const char *cpath, struct stat *stbuf)
   auto path = fs_io.pathFromString( cpath );
 
   FsFileAttrs attrs;
-  int ret = withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::get_attrs ),
-                                  &attrs, path );
+  int ret = withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::posix_stat ),
+                                  &attrs, path, NO_FOLLOW );
   if(ret < 0) return ret;
 
   fill_stbuf_from_file_attrs( stbuf, &attrs );
@@ -198,7 +203,7 @@ static int _do_mk_preserve(F f, const char *cpath, Args... args)
     oldgid = fs_io.posix_setfsgid( fctx->gid );
   }
 
-  int res = withExceptionCatcher(EIO, f, fs_io, path, args... );
+  int res = withExceptionCatcherNoRet(EIO, f, fs_io, path, args... );
 
   // Is this error due to access problems?
   if(gIsPublic() && -res == EACCES)
@@ -209,9 +214,9 @@ static int _do_mk_preserve(F f, const char *cpath, Args... args)
               << parent.c_str();
 
     // TODO: no exception
-    auto attrs = fs_io.get_attrs( parent );
+    auto attrs = encfs::get_attrs( &fs_io, parent );
     if(attrs.posix) fs_io.posix_setfsgid( attrs.posix->gid );
-    res = withExceptionCatcher(EIO, f, fs_io, path, args... );
+    res = withExceptionCatcherNoRet(EIO, f, fs_io, path, args... );
   }
 
   if (gIsPublic())
@@ -258,8 +263,8 @@ static int _do_one_path(U m, const char *cpath, Args... args)
   auto &fs_io = gGetFS();
   auto path = fs_io.pathFromString( cpath );
 
-  return withExceptionCatcher( EIO, bindMethod( fs_io, m ),
-                               std::move( path ), args... );
+  return withExceptionCatcherNoRet( EIO, bindMethod( fs_io, m ),
+                                    std::move( path ), args... );
 }
 
 template<typename U, typename... Args>
@@ -269,8 +274,8 @@ static int _do_two_path(U m, const char *from, const char *to, Args... args)
   auto from_path = fs_io.pathFromString( from );
   auto to_path = fs_io.pathFromString( to );
 
-  return withExceptionCatcher( EIO, bindMethod( fs_io, m ),
-                               std::move( from_path ), std::move( to_path ), args... );
+  return withExceptionCatcherNoRet( EIO, bindMethod( fs_io, m ),
+                                    std::move( from_path ), std::move( to_path ), args... );
 }
 
 int encfs_unlink(const char *cpath)
@@ -309,8 +314,8 @@ int encfs_symlink(const char *from, const char *to)
   auto to_path = fs_io.pathFromString( to );
 
   // TODO: make sure link will be owned by client uid if public
-  return withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::posix_symlink ),
-                               std::move( to_path ), std::move( link_data ) );
+  return withExceptionCatcherNoRet( EIO, bindMethod( fs_io, &FsIO::posix_symlink ),
+                                    std::move( to_path ), std::move( link_data ) );
 }
 
 int encfs_link(const char *from, const char *to)
@@ -326,12 +331,12 @@ int encfs_rename(const char *from, const char *to)
 
 int encfs_chmod(const char *cpath, mode_t mode)
 {
-  return _do_one_path( &FsIO::posix_chmod, cpath, mode );
+  return _do_one_path( &FsIO::posix_chmod, cpath, NO_FOLLOW, mode );
 }
 
 int encfs_chown(const char *cpath, uid_t uid, gid_t gid)
 {
-  return _do_one_path( &FsIO::posix_chown, cpath, uid, gid );
+  return _do_one_path( &FsIO::posix_chown, cpath, NO_FOLLOW, uid, gid );
 }
 
 int encfs_truncate(const char *cpath, off_t size)
@@ -352,15 +357,15 @@ int encfs_truncate(const char *cpath, off_t size)
   // but the ambiguity is allowed from the client's perspective
   // i.e. we still avoid TOCTTOU bugs
 
-  return withExceptionCatcher( EIO, bindMethod( *maybeFile, &File::truncate ),
-                               size );
+  return withExceptionCatcherNoRet( EIO, bindMethod( *maybeFile, &File::truncate ),
+                                    size );
 }
 
 int encfs_ftruncate(const char *path, off_t size, struct fuse_file_info *fi)
 {
   auto &fref = gGetFile( path, fi );
-  return withExceptionCatcher( EIO, bindMethod( fref, &File::truncate ),
-                               size );
+  return withExceptionCatcherNoRet( EIO, bindMethod( fref, &File::truncate ),
+                                    size );
 }
 
 int encfs_utimens(const char *cpath, const struct timespec ts[2])
@@ -370,8 +375,8 @@ int encfs_utimens(const char *cpath, const struct timespec ts[2])
 
   // NB: we don't support nanosecond resolution
 
-  return withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::set_times ),
-                               path, ts[0].tv_sec, ts[1].tv_sec );
+  return withExceptionCatcherNoRet( EIO, bindMethod( fs_io, &FsIO::set_times ),
+                                    path, ts[0].tv_sec, ts[1].tv_sec );
 }
 
 int encfs_open(const char *cpath, struct fuse_file_info *fi)
@@ -405,8 +410,8 @@ int encfs_flush(const char *path, struct fuse_file_info *fi)
      (NFS does the same thing during fsync(2) as close(2))
    */
   auto &fref = gGetFile( path, fi );
-  return withExceptionCatcher( EIO, bindMethod( fref, &File::sync ),
-                               false );
+  return withExceptionCatcherNoRet( EIO, bindMethod( fref, &File::sync ),
+                                    false );
 }
 
 /*
@@ -439,8 +444,8 @@ int encfs_fsync(const char *path, int dataSync,
     struct fuse_file_info *fi)
 {
   auto &fref = gGetFile( path, fi );
-  return withExceptionCatcher( EIO, bindMethod( fref, &File::sync ),
-                               dataSync );
+  return withExceptionCatcherNoRet( EIO, bindMethod( fref, &File::sync ),
+                                    dataSync );
 }
 
 int encfs_write(const char *path, const char *buf, size_t size,
@@ -448,8 +453,8 @@ int encfs_write(const char *path, const char *buf, size_t size,
 {
   auto &fref = gGetFile( path, fi );
 
-  int ret = withExceptionCatcher( EIO, bindMethod( fref, (void (File::*)(fs_off_t, const byte *, size_t)) &File::write ),
-                                  (fs_off_t) offset, (byte *) buf, size );
+  int ret = withExceptionCatcherNoRet( EIO, bindMethod( fref, (void (File::*)(fs_off_t, const byte *, size_t)) &File::write ),
+                                       (fs_off_t) offset, (byte *) buf, size );
   if(ret < 0) return ret;
 
   assert( size <= INT_MAX );
@@ -475,13 +480,14 @@ int encfs_statfs(const char */*path*/, struct statvfs */*st*/)
 int encfs_setxattr( const char *cpath, const char *cname,
     const char *value, size_t size, int flags_, uint32_t position )
 {
-  bool follow = (flags_ & XATTR_NOFOLLOW);
+  // we shouldn't get no follow in the flags since encfs
+  // dispatches on inode
+  assert(!(flags_ & XATTR_NOFOLLOW));
 
 #else
 int encfs_setxattr( const char *cpath, const char *cname,
     const char *value, size_t size, int flags_ )
 {
-  bool follow = false;
   uint32_t position = 0;
 
 #endif
@@ -497,7 +503,7 @@ int encfs_setxattr( const char *cpath, const char *cname,
      all to moves automatically (since they are auto variables
      and will no longer be used */
   return _do_one_path( &FsIO::posix_setxattr,
-                       cpath, std::move( follow ), std::move( name ),
+                       cpath, NO_FOLLOW, std::move( name ),
                        (size_t) position, std::move( buf ), std::move( flags ) );
 }
 
@@ -517,10 +523,9 @@ int encfs_getxattr( const char *cpath, const char *cname,
   auto path = fs_io.pathFromString( cpath );
   auto name = string( cname );
 
-  bool follow = true;
   opt::optional<std::vector<byte>> buf;
   int ret = withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::posix_getxattr ),
-                                  &buf, path, follow, name, (size_t) position, size );
+                                  &buf, path, NO_FOLLOW, name, (size_t) position, size );
   if(ret < 0) return ret;
 
   assert( buf );
@@ -536,11 +541,9 @@ int encfs_listxattr( const char *cpath, char *list, size_t size )
   auto &fs_io = gGetFS();
   auto path = fs_io.pathFromString( cpath );
 
-  bool follow = true;
-
   opt::optional<PosixXattrList> maybeList;
   int ret = withExceptionCatcher( EIO, bindMethod( fs_io, &FsIO::posix_listxattr ),
-                                  &maybeList, path, follow );
+                                  &maybeList, path, NO_FOLLOW );
   if(ret < 0) return ret;
 
   assert( maybeList );
@@ -561,9 +564,8 @@ int encfs_listxattr( const char *cpath, char *list, size_t size )
 
 int encfs_removexattr( const char *cpath, const char *name )
 {
-  bool follow = true;
   return _do_one_path( &FsIO::posix_removexattr,
-                       cpath, follow, string( name ) );
+                       cpath, NO_FOLLOW, string( name ) );
 }
 
 }  // namespace encfs

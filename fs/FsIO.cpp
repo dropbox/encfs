@@ -85,12 +85,12 @@ void FsIO::posix_mkfifo(const Path &/*path*/, fs_posix_mode_t /*mode*/)
   throw create_errno_system_error( std::errc::function_not_supported );
 }
 
-void FsIO::posix_chmod(const Path &/*pathSrc*/, fs_posix_mode_t /*mode*/)
+void FsIO::posix_chmod(const Path &/*pathSrc*/, bool /*follow*/, fs_posix_mode_t /*mode*/)
 {
   throw create_errno_system_error( std::errc::function_not_supported );
 }
 
-void FsIO::posix_chown(const Path &/*pathSrc*/, fs_posix_uid_t /*uid*/, fs_posix_gid_t /*gid*/)
+void FsIO::posix_chown(const Path &/*pathSrc*/, bool /*follow*/, fs_posix_uid_t /*uid*/, fs_posix_gid_t /*gid*/)
 {
   throw create_errno_system_error( std::errc::function_not_supported );
 }
@@ -114,6 +114,11 @@ PosixXattrList FsIO::posix_listxattr(const Path &/*path*/, bool /*follow*/) cons
 }
 
 void FsIO::posix_removexattr(const Path &/*path*/, bool /*follow*/, std::string /*name*/)
+{
+  throw create_errno_system_error( std::errc::function_not_supported );
+}
+
+FsFileAttrs FsIO::posix_stat(const Path &/*path*/, bool /*follow*/) const
 {
   throw create_errno_system_error( std::errc::function_not_supported );
 }

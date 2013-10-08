@@ -123,10 +123,11 @@ public:
 
     // FS wrappers
 
-    Path pathFromString(const std::string &string);
+    const std::string &path_sep() const;
+    Path pathFromString(const std::string &string) const;
 
-    DirTraverse openDir( const char *plainDirName );
-    int get_attrs(FsFileAttrs *attrs, const char *plaintextName);
+    DirTraverse openDir( const char *plainDirName ) const;
+    int get_attrs(FsFileAttrs *attrs, const char *plaintextName) const;
     int rename( const char *fromPlaintext, const char *toPlaintext );
     int unlink( const char *plaintextName );
     int mkdir( const char *plaintextName );
@@ -143,8 +144,8 @@ public:
     int posix_create( std::shared_ptr<FileNode> *fnode, const char *plainName, fs_posix_mode_t mode );
     int posix_setfsgid( fs_posix_gid_t *oldgid, fs_posix_gid_t newgid );
     int posix_setfsuid( fs_posix_uid_t *olduid, fs_posix_uid_t newuid );
-    int posix_chmod( const char *path, fs_posix_mode_t mode );
-    int posix_chown( const char *path, fs_posix_uid_t uid, fs_posix_gid_t gid );
+    int posix_chmod( const char *path, bool follow, fs_posix_mode_t mode );
+    int posix_chown( const char *path, bool follow, fs_posix_uid_t uid, fs_posix_gid_t gid );
     int posix_setxattr( const char *path, bool follow, std::string name,
                         size_t offset, std::vector<byte> buf, PosixSetxattrFlags flags );
     int posix_getxattr( opt::optional<std::vector<byte>> *ret,
@@ -153,6 +154,7 @@ public:
     int posix_listxattr( opt::optional<PosixXattrList> *ret,
                          const char *path, bool follow );
     int posix_removexattr( const char *path, bool follow, std::string name );
+    int posix_stat(FsFileAttrs *posix_attrs, const char *plaintextName, bool follow);
 
 protected:
     /*
@@ -182,13 +184,13 @@ private:
 
     std::shared_ptr<FileNode> findOrCreate( const char *plainName);
 
-    Path appendToRoot(const std::string &path);
+    Path appendToRoot(const std::string &path) const;
     PosixSymlinkData decryptLinkPath(PosixSymlinkData in);
     PosixSymlinkData _posix_readlink(const std::string &cyPath);
     std::shared_ptr<FileNode> _openNode( const char *plainName, const char * requestor,
                                          bool requestWrite, bool createFile, int *result );
 
-    Mutex mutex;
+    mutable Mutex mutex;
 
     std::shared_ptr<EncFS_Context> ctx;
 

@@ -79,73 +79,42 @@ using std::shared_ptr;
 
 namespace encfs {
 
-class PosixPath : public PathPoly
-{
-private:
-    std::string _path;
-
-public:
-    PosixPath(std::string path)
-    : _path( std::move( path ) )
-    {}
-
-    virtual operator const std::string &() const override
-    {
-      return _path;
-    }
-
-    virtual const char *c_str() const override
-    {
-      return _path.c_str();
-    }
-
-    virtual Path join(const std::string &name) const override
-    {
-      return std::make_shared<PosixPath>( _path + '/' + name );
-    }
-
-    virtual bool is_root() const
-    {
-      return _path == "/";
-    }
-
-    virtual std::string basename() const override
-    {
-      if (is_root()) {
-        throw std::logic_error("basename on root path is undefined");
-      }
-
-      auto slash_pos = _path.rfind('/');
-      return _path.substr( slash_pos );
-    }
-
-    virtual Path dirname() const override
-    {
-      auto slash_pos = _path.rfind('/');
-
-      if (!slash_pos) {
-        return std::make_shared<PosixPath>( "/" );
-      }
-
-      return std::make_shared<PosixPath>( _path.substr( 0, slash_pos ) );
-    }
-
-    virtual bool operator==(const shared_ptr<PathPoly> &p) const override
-    {
-      shared_ptr<PosixPath> p2 = std::dynamic_pointer_cast<PosixPath>(p);
-      if (!p2) {
-        return false;
-      }
-      return (const std::string &) *p2 == (const std::string &) *this;
-    }
-
-    friend class PosixFsIO;
-};
-
 static void current_fs_error(int thiserror = -1) {
   if (thiserror < 0) thiserror = errno;
   throw std::system_error( thiserror, errno_category() );
 }
+
+extern const char POSIX_PATH_SEP[] = "/";
+class PosixPath final : public StringPath<POSIX_PATH_SEP> {
+protected:
+  virtual std::shared_ptr<PathPoly> _from_string(std::string str) const
+  {
+    return std::make_shared<PosixPath>( std::move( str ) );
+  }
+
+public:
+  PosixPath(std::string str)
+    : StringPath( std::move( str ) )
+  {}
+
+  virtual Path dirname() const override
+  {
+    const auto &str = (const std::string &) *this;
+
+    auto slash_pos = str.rfind('/');
+
+    if (!slash_pos) {
+      return std::make_shared<PosixPath>( "/" );
+    }
+
+    return std::make_shared<PosixPath>( str.substr( 0, slash_pos ) );
+  }
+
+  virtual bool is_root() const
+  {
+    return (const std::string &) *this == POSIX_PATH_SEP;
+  }
+};
 
 class PosixDirectoryIO final : public DirectoryIO
 {
@@ -221,7 +190,13 @@ static bool endswith(const std::string &haystack,
                            needle.length(), needle);
 }
 
-Path PosixFsIO::pathFromString(const std::string &path)
+const std::string &PosixFsIO::path_sep() const
+{
+  static const std::string path_sep = POSIX_PATH_SEP;
+  return path_sep;
+}
+
+Path PosixFsIO::pathFromString(const std::string &path) const
 {
   /* TODO: throw exception if path is not a UTF-8 posix path */
   if(path[0] != '/')
@@ -238,7 +213,7 @@ Path PosixFsIO::pathFromString(const std::string &path)
   return std::make_shared<PosixPath>( std::move( newpath ) );
 }
 
-Directory PosixFsIO::opendir(const Path &path)
+Directory PosixFsIO::opendir(const Path &path) const
 {
   DIR *const res = ::opendir( path.c_str() );
   if(!res) current_fs_error();
@@ -279,28 +254,6 @@ void PosixFsIO::rmdir(const Path &path)
 {
   const int res = ::rmdir( path.c_str() );
   if(res < 0) current_fs_error();
-}
-
-FsFileAttrs PosixFsIO::get_attrs(const Path &path)
-{
-  struct stat st;
-  const int res_stat = ::lstat( path.c_str(), &st );
-  if (res_stat < 0) current_fs_error();
-
-  const FsFileType type = (S_ISDIR(st.st_mode) ? FsFileType::DIRECTORY :
-                           S_ISREG(st.st_mode) ? FsFileType::REGULAR :
-                           FsFileType::UNKNOWN);
-  assert( st.st_mtime >= FS_TIME_MIN );
-  assert( st.st_mtime <= FS_TIME_MAX );
-  const fs_time_t mtime = (fs_time_t) st.st_mtime;
-  const fs_off_t size = (fs_off_t) st.st_size;
-  const FsPosixAttrs posix = {
-    .gid = st.st_gid,
-    .uid = st.st_uid,
-    .mode = st.st_mode,
-  };
-
-  return { .type = type, .mtime = mtime, .size = size, .posix = std::move( posix ) };
 }
 
 void PosixFsIO::set_times(const Path &path,
@@ -389,14 +342,16 @@ PosixSymlinkData PosixFsIO::posix_readlink(const Path &path) const
   return PosixSymlinkData( buf, (size_t) res );
 }
 
-void PosixFsIO::posix_chmod(const Path &path, fs_posix_mode_t mode)
+void PosixFsIO::posix_chmod(const Path &path, bool follow, fs_posix_mode_t mode)
 {
+  if (!follow) return current_fs_error(ENOSYS);
   const int res = ::chmod( path.c_str(), mode );
   if(res < 0) current_fs_error();
 }
 
-void PosixFsIO::posix_chown(const Path &path, fs_posix_uid_t uid, fs_posix_gid_t gid)
+void PosixFsIO::posix_chown(const Path &path, bool follow, fs_posix_uid_t uid, fs_posix_gid_t gid)
 {
+  if (!follow) return current_fs_error(ENOSYS);
   const int res = ::chown( path.c_str(), uid, gid );
   if(res < 0) current_fs_error();
 }
@@ -493,5 +448,14 @@ void PosixFsIO::posix_removexattr(const Path &path, bool follow, std::string nam
 }
 
 #endif
+
+FsFileAttrs PosixFsIO::posix_stat(const Path &path, bool follow) const
+{
+  const auto fn = follow ? &::stat : &::lstat;
+  struct stat st;
+  const int ret = fn( path.c_str(), &st);
+  if(ret < 0) current_fs_error();
+  return stat_to_fs_file_attrs(st);
+}
 
 }  // namespace encfs

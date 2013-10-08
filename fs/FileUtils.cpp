@@ -110,7 +110,7 @@ bool fileExists( const shared_ptr<FsIO> &fs_io, const char * fileName )
 {
   try
   {
-    fs_io->get_attrs( fs_io->pathFromString( fileName ) );
+    get_attrs( fs_io, fs_io->pathFromString( fileName ) );
     return true;
   } catch ( ... )
   {
@@ -122,7 +122,7 @@ bool isDirectory( const shared_ptr<FsIO> &fs_io, const char *fileName )
 {
   try
   {
-    return fs_io->get_attrs( fs_io->pathFromString( fileName ) ).type == FsFileType::DIRECTORY;
+    return get_attrs( fs_io, fs_io->pathFromString( fileName ) ).type == FsFileType::DIRECTORY;
   } catch ( ... )
   {
     return false;

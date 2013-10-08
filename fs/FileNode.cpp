@@ -172,7 +172,7 @@ int FileNode::open(bool requestWrite, bool create)
   //     converting a file descriptor to a file name
 
   auto fs_io = fsConfig->opts->fs_io;
-  opt::optional<File> rawfile;
+  std::unique_ptr<FileIO> rawfile;
   const int res = withExceptionCatcher( (int) std::errc::io_error,
                                         bindMethod( fs_io, &FsIO::openfile ),
                                         &rawfile,
@@ -185,11 +185,11 @@ int FileNode::open(bool requestWrite, bool create)
   if(cipher_io)
   {
     // the file was already opened, just reset the base of cipher_io
-    cipher_io->setBase( rawfile->take_ptr() );
+    cipher_io->setBase( std::move( rawfile ) );
   } else
   {
     // chain RawFileIO & CipherFileIO
-    io = cipher_io = std::make_shared<CipherFileIO>( rawfile->take_ptr(), fsConfig );
+    io = cipher_io = std::make_shared<CipherFileIO>( std::move( rawfile ), fsConfig );
 
     if(fsConfig->config->block_mac_bytes() || fsConfig->config->block_mac_rand_bytes())
     {
@@ -250,9 +250,9 @@ bool FileNode::write(fs_off_t offset, byte *data, size_t size)
 
   Lock _lock( mutex );
 
-  const int res = withExceptionCatcher( (int) std::errc::io_error,
-                                        bindMethod( io, &FileIO::write ),
-                                        req );
+  const int res = withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                             bindMethod( io, &FileIO::write ),
+                                             req );
   return !res;
 }
 
@@ -267,18 +267,18 @@ int FileNode::truncate( fs_off_t size )
 
   Lock _lock( mutex );
 
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( io, &FileIO::truncate ),
-                               size );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( io, &FileIO::truncate ),
+                                    size );
 }
 
 int FileNode::sync(bool datasync)
 {
   Lock _lock( mutex );
 
-  return withExceptionCatcher( (int) std::errc::io_error,
-                               bindMethod( io, &FileIO::sync ),
-                               datasync );
+  return withExceptionCatcherNoRet( (int) std::errc::io_error,
+                                    bindMethod( io, &FileIO::sync ),
+                                    datasync );
 }
 
 // no-op for now (should close a dup'd FD)

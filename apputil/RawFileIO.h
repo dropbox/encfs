@@ -60,6 +60,8 @@ protected:
     bool canWrite;
 };
 
+FsFileAttrs stat_to_fs_file_attrs(const struct stat &fs);
+
 }  // namespace encfs
 
 #endif
