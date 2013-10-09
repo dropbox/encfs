@@ -272,7 +272,9 @@ void PosixFsIO::set_times(const Path &path,
 
   typedef decltype(new_times[0].tv_sec) _second_type;
 
-  if(atime && *atime > std::numeric_limits<_second_type>::max())
+  if(atime &&
+     (*atime > std::numeric_limits<_second_type>::max() ||
+      *atime < std::numeric_limits<_second_type>::lowest()))
   {
     current_fs_error(EINVAL);
   }
@@ -281,9 +283,11 @@ void PosixFsIO::set_times(const Path &path,
     ? (struct timeval) {(_second_type) *atime, 0}
     : now;
 
-  if(mtime && *mtime > std::numeric_limits<_second_type>::max())
+  if(mtime &&
+     (*mtime > std::numeric_limits<_second_type>::max() ||
+      *mtime < std::numeric_limits<_second_type>::lowest()))
   {
-    current_fs_error(EINVAL)
+    current_fs_error(EINVAL);
   }
 
   new_times[1] = mtime
