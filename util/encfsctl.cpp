@@ -48,8 +48,8 @@
 #include "fs/FileNode.h"
 #include "fs/DirNode.h"
 
-#include "apputil/EncfsPasswordReader.h"
-#include "apputil/PosixFsIO.h"
+#include "encfs/EncfsPasswordReader.h"
+#include "encfs/PosixFsIO.h"
 
 using namespace encfs;
 using gnu::autosprintf;

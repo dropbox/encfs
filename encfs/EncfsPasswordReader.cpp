@@ -19,11 +19,11 @@
  */
 
 
-#include "apputil/StdinPasswordReader.h"
-#include "apputil/ProgramPasswordReader.h"
-#include "apputil/PromptPasswordReader.h"
+#include "encfs/StdinPasswordReader.h"
+#include "encfs/ProgramPasswordReader.h"
+#include "encfs/PromptPasswordReader.h"
 
-#include "apputil/EncfsPasswordReader.h"
+#include "encfs/EncfsPasswordReader.h"
 
 namespace encfs {
 

@@ -47,10 +47,10 @@
 
 #include "base/optional.h"
 
-#include "apputil/RawFileIO.h"
+#include "encfs/RawFileIO.h"
 #include "fs/FsIO.h"
 
-#include "apputil/PosixFsIO.h"
+#include "encfs/PosixFsIO.h"
 
 // TODO: check for existence of functions at build configuration time
 //       don't do it conditionally on linux

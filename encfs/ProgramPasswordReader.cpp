@@ -34,7 +34,7 @@
 
 #include "base/i18n.h"
 
-#include "apputil/ProgramPasswordReader.h"
+#include "encfs/ProgramPasswordReader.h"
 
 using std::string;
 

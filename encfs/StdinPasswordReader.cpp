@@ -21,7 +21,7 @@
 #include <cstdio>
 #include <cstring>
 
-#include "apputil/StdinPasswordReader.h"
+#include "encfs/StdinPasswordReader.h"
 
 namespace encfs {
 

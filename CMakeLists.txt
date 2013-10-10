@@ -119,7 +119,6 @@ add_subdirectory(fs)
 add_subdirectory(encfs)
 add_subdirectory(util)
 add_subdirectory(po)
-add_subdirectory(apputil)
 
 # Test target.
 if (GTEST_FOUND)

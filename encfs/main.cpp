@@ -50,8 +50,8 @@
 #include "fs/PasswordReader.h"
 
 #include "encfs/EncFS_Args.h"
-#include "apputil/EncfsPasswordReader.h"
-#include "apputil/PosixFsIO.h"
+#include "encfs/EncfsPasswordReader.h"
+#include "encfs/PosixFsIO.h"
 #include "encfs/encfs.h"
 
 

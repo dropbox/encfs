@@ -35,7 +35,7 @@
 
 #include "base/Error.h"
 
-#include "apputil/RawFileIO.h"
+#include "encfs/RawFileIO.h"
 
 namespace encfs {
 

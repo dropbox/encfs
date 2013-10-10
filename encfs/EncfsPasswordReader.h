@@ -27,9 +27,9 @@
 
 #include "fs/PasswordReader.h"
 
-#include "apputil/ProgramPasswordReader.h"
-#include "apputil/PromptPasswordReader.h"
-#include "apputil/StdinPasswordReader.h"
+#include "encfs/ProgramPasswordReader.h"
+#include "encfs/PromptPasswordReader.h"
+#include "encfs/StdinPasswordReader.h"
 
 namespace encfs {
 

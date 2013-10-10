@@ -26,7 +26,7 @@
 
 #include "cipher/readpassphrase.h"
 
-#include "apputil/PromptPasswordReader.h"
+#include "encfs/PromptPasswordReader.h"
 
 using std::cerr;
 
