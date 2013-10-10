@@ -33,6 +33,8 @@ namespace encfs {
 
 class CipherV1;
 
+typedef std::list<std::string> NameIOPath;
+
 class NameIO
 {
  public:
@@ -71,11 +73,11 @@ class NameIO
   void setReverseEncryption( bool enable );
   bool getReverseEncryption() const;
 
-  std::string encodePath( const char *plaintextPath ) const;
-  std::string decodePath( const char *encodedPath ) const;
+  NameIOPath encodePath( const NameIOPath &plaintextPath ) const;
+  NameIOPath decodePath( const NameIOPath &encodedPath ) const;
 
-  std::string encodePath( const char *plaintextPath, uint64_t *iv ) const;
-  std::string decodePath( const char *encodedPath, uint64_t *iv ) const;
+  NameIOPath encodePath( const NameIOPath &plaintextPath, uint64_t *iv ) const;
+  NameIOPath decodePath( const NameIOPath &encodedPath, uint64_t *iv ) const;
 
   virtual int maxEncodedNameLen( int plaintextNameLen ) const =0;
   virtual int maxDecodedNameLen( int encodedNameLen ) const =0;
@@ -83,7 +85,7 @@ class NameIO
   std::string encodeName( const char *plaintextName, int length ) const;
   std::string decodeName( const char *encodedName, int length ) const;
 
- protected:	                    
+ protected:
   virtual int encodeName( const char *plaintextName, int length,
                          char *encodedName ) const;
   virtual int decodeName( const char *encodedName, int length,
@@ -97,14 +99,14 @@ class NameIO
 
  private:
 
-  std::string recodePath( const char *path,
+  NameIOPath recodePath( const NameIOPath & path,
                          int (NameIO::*codingLen)(int) const,
                          int (NameIO::*codingFunc)(const char *, int, 
                                                    uint64_t *, char *) const,
                          uint64_t *iv ) const;
 
-  std::string _encodePath( const char *plaintextPath, uint64_t *iv ) const;
-  std::string _decodePath( const char *encodedPath, uint64_t *iv ) const;
+  NameIOPath _encodePath( const NameIOPath &plaintextPath, uint64_t *iv ) const;
+  NameIOPath _decodePath( const NameIOPath &encodedPath, uint64_t *iv ) const;
   std::string _encodeName( const char *plaintextName, int length ) const;
   std::string _decodeName( const char *encodedName, int length ) const;
 

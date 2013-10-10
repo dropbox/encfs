@@ -61,11 +61,15 @@ public:
 
     virtual operator const std::string & () const =0;
     virtual const char *c_str() const =0;
-    virtual Path join(const std::string & path) const =0;
+    virtual std::shared_ptr<PathPoly> join(std::string path) const =0;
     virtual std::string basename() const =0;
-    virtual Path dirname() const =0;
+    virtual std::shared_ptr<PathPoly> dirname() const =0;
     virtual bool is_root() const =0;
     virtual bool operator==(const std::shared_ptr<PathPoly> &p) const =0;
+    virtual bool operator!=(const std::shared_ptr<PathPoly> &p) const
+    {
+      return !(*this == p);
+    }
 };
 
 class DirectoryIO
@@ -122,12 +126,22 @@ public:
 
     bool operator==(const std::shared_ptr<PathPoly> &p) const
     {
-      return (*_impl) == p;
+      return *_impl == p;
+    }
+
+    bool operator!=(const std::shared_ptr<PathPoly> &p) const
+    {
+      return *_impl != p;
     }
 
     operator std::shared_ptr<PathPoly> () const
     {
       return _impl;
+    }
+
+    void zero()
+    {
+      // nothing for now
     }
 };
 
@@ -293,7 +307,7 @@ public:
       return _path.c_str();
     }
 
-    virtual Path join(const std::string &name) const override
+    virtual std::shared_ptr<PathPoly> join(std::string name) const override
     {
       return _from_string( _path + _sep + name );
     }
@@ -332,6 +346,7 @@ FsFileAttrs get_attrs(T fs_io, const Path &p)
   return fs_io->openfile(p, open_for_write, create).get_attrs();
 }
 
+bool path_is_parent(Path potential_parent, Path potential_child);
 
 }  // namespace encfs
 

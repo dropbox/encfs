@@ -18,26 +18,27 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <cerrno>
-#include <cstring>
-
-#include <memory>
-
-#include <glog/logging.h>
-
-#include "base/Error.h"
-#include "base/Mutex.h"
-#include "cipher/MemoryPool.h"
+#include "fs/FileNode.h"
 
 #include "fs/Context.h"
 #include "fs/CipherFileIO.h"
 #include "fs/DirNode.h"
 #include "fs/FileIO.h"
 #include "fs/FileUtils.h"
+#include "fs/FsIO.h"
 #include "fs/MACFileIO.h"
 #include "fs/fsconfig.pb.h"
 
-#include "fs/FileNode.h"
+#include "base/Error.h"
+#include "base/Mutex.h"
+#include "cipher/MemoryPool.h"
+
+#include <glog/logging.h>
+
+#include <memory>
+
+#include <cerrno>
+#include <cstring>
 
 using std::string;
 using std::shared_ptr;
@@ -59,41 +60,32 @@ namespace encfs {
 
 FileNode::FileNode(const shared_ptr<EncFS_Context> &ctx,
                    const FSConfigPtr &cfg,
-                   const char *plaintextName_,
-                   const char *cipherName_)
-{
-  Lock _lock( mutex );
-
-  this->_pname = plaintextName_;
-  this->_cname = cipherName_;
-  this->_ctx = ctx;
-
-  this->fsConfig = cfg;
-}
+                   Path plaintextName_,
+                   Path cipherName_)
+  : fsConfig(cfg)
+  , _pname(plaintextName_)
+  , _cname(cipherName_)
+  , _ctx(ctx)
+{}
 
 FileNode::~FileNode()
 {
   this->_ctx->eraseNode( _pname.c_str() );
   // FileNode mutex should be locked before the destructor is called
-  _pname.assign( _pname.length(), '\0' );
-  _cname.assign( _cname.length(), '\0' );
+  _pname.zero();
+  _cname.zero();
   cipher_io = nullptr;
   io = nullptr;
 }
 
-const char *FileNode::cipherName() const
+const Path &FileNode::cipherName() const
 {
-  return _cname.c_str();
+  return _cname;
 }
 
-const char *FileNode::plaintextName() const
+const Path &FileNode::plaintextName() const
 {
-  return _pname.c_str();
-}
-
-string FileNode::plaintextParent() const
-{
-  return parentDirectory( this->fsConfig->opts->fs_io, _pname );
+  return _pname;
 }
 
 static bool setIV(const shared_ptr<FileIO> &io,
@@ -116,13 +108,14 @@ static bool setIV(const shared_ptr<FileIO> &io,
     return true;
 }
 
-bool FileNode::setName( const char *plaintextName_, const char *cipherName_,
+bool FileNode::setName( opt::optional<Path> plaintextName_,
+                        opt::optional<Path> cipherName_,
                         uint64_t iv, bool setIVFirst )
 {
-  std::string oldPName = _pname;
+  auto oldPName = _pname;
 
   //Lock _lock( mutex );
-  VLOG(1) << "calling setIV on " << cipherName_;
+  VLOG(1) << "calling setIV on " << _cname;
   if(setIVFirst)
   {
     if(fsConfig->config->external_iv() && !setIV(io, cipher_io, iv))
@@ -130,17 +123,17 @@ bool FileNode::setName( const char *plaintextName_, const char *cipherName_,
 
     // now change the name..
     if(plaintextName_)
-      this->_pname = plaintextName_;
+      this->_pname = *plaintextName_;
     if(cipherName_)
-      this->_cname = cipherName_;
+      this->_cname = *cipherName_;
   } else
   {
-    std::string oldCName = _cname;
+    auto oldCName = _cname;
 
     if(plaintextName_)
-      this->_pname = plaintextName_;
+      this->_pname = *plaintextName_;
     if(cipherName_)
-      this->_cname = cipherName_;
+      this->_cname = *cipherName_;
 
     if(fsConfig->config->external_iv() && !setIV(io, cipher_io, iv))
     {

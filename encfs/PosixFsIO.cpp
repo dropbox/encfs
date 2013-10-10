@@ -98,7 +98,7 @@ public:
     : StringPath( std::move( str ) )
   {}
 
-  virtual Path dirname() const override
+  virtual std::shared_ptr<PathPoly> dirname() const override
   {
     const auto &str = (const std::string &) *this;
 

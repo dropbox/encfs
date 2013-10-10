@@ -23,8 +23,10 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <algorithm>
 #include <iostream>
 #include <memory>
+#include <numeric>
 
 #include <glog/logging.h>
 
@@ -57,19 +59,6 @@ DirTraverse::DirTraverse(Directory && _dir_io,
 {
 }
 
-DirTraverse::DirTraverse(DirTraverse && dt)
-{
-  *this = std::move(dt);
-}
-
-DirTraverse& DirTraverse::operator=(DirTraverse && other)
-{
-  this->dir_io = std::move(other.dir_io);
-  this->iv = other.iv;
-  this->naming = other.naming;
-  return *this;
-}
-
 std::string DirTraverse::nextPlaintextName(FsFileType *fileType, fs_file_id_t *inode)
 {
   opt::optional<FsDirEnt> dirent;
@@ -80,7 +69,7 @@ std::string DirTraverse::nextPlaintextName(FsFileType *fileType, fs_file_id_t *i
     try
     {
       uint64_t localIv = iv;
-      return naming->decodePath( dirent->name.c_str(), &localIv );
+      return std::move( naming->decodePath( { dirent->name }, &localIv ).front() );
     } catch ( Error &ex )
     {
       // .. .problem decoding, ignore it and continue on to next name..
@@ -100,7 +89,7 @@ std::string DirTraverse::nextInvalid()
     try
     {
       uint64_t localIv = iv;
-      naming->decodePath( dirent->name.c_str(), &localIv );
+      naming->decodePath( { dirent->name }, &localIv );
       continue;
     } catch( Error &ex )
     {
@@ -114,14 +103,20 @@ std::string DirTraverse::nextInvalid()
 struct RenameEl
 {
   // ciphertext names
-  string oldCName;
-  string newCName; // intermediate name (not final cname)
+  Path oldCName;
+  Path newCName; // intermediate name (not final cname)
 
   // plaintext names
-  string oldPName;
-  string newPName;
+  Path oldPName;
+  Path newPName;
 
   bool isDirectory;
+
+  ~RenameEl() {
+    // clear out plaintext names from memory
+    oldPName.zero();
+    newPName.zero();
+  }
 };
 
 class RenameOp
@@ -145,8 +140,6 @@ public:
   {
   }
 
-  ~RenameOp();
-
   operator bool () const
   {
     return (bool) renameList;
@@ -156,21 +149,6 @@ public:
   void undo();
 };
 
-RenameOp::~RenameOp()
-{
-  if(renameList)
-  {
-    // got a bunch of decoded filenames sitting in memory..  do a little
-    // cleanup before leaving..
-    list<RenameEl>::iterator it;
-    for(it = renameList->begin(); it != renameList->end(); ++it)
-    {
-      it->oldPName.assign( it->oldPName.size(), ' ' );
-      it->newPName.assign( it->newPName.size(), ' ' );
-    }
-  }
-}
-
 bool RenameOp::apply()
 {
   try
@@ -179,8 +157,8 @@ bool RenameOp::apply()
     {
       // backing store rename.
       VLOG(2) << "renaming " << last->oldCName << "-> " << last->newCName;
-      auto oldCNamePath = dn->fs_io->pathFromString( last->oldCName );
-      auto newCNamePath = dn->fs_io->pathFromString( last->newCName );
+      auto oldCNamePath = last->oldCName;
+      auto newCNamePath = last->newCName;
 
       fs_time_t old_mtime;
       bool preserve_mtime;
@@ -194,7 +172,7 @@ bool RenameOp::apply()
       }
 
       // internal node rename..
-      dn->renameNode( last->oldPName.c_str(), last->newPName.c_str() );
+      dn->renameNode( last->oldPName, last->newPName );
 
       // rename on disk..
       try
@@ -204,8 +182,7 @@ bool RenameOp::apply()
       {
         LOG(WARNING) << "Error renaming " << last->oldCName << ": " <<
           err.code().message();
-        dn->renameNode( last->newPName.c_str(), 
-            last->oldPName.c_str(), false );
+        dn->renameNode( last->newPName, last->oldPName, false );
         return false;
       }
 
@@ -247,8 +224,8 @@ void RenameOp::undo()
 
     VLOG(1) << "undo: renaming " << it->newCName << " -> " << it->oldCName;
 
-    auto newCNamePath = dn->fs_io->pathFromString( it->newCName );
-    auto oldCNamePath = dn->fs_io->pathFromString( it->oldCName );
+    auto newCNamePath = it->newCName;
+    auto oldCNamePath = it->oldCName;
 
     try
     {
@@ -260,8 +237,7 @@ void RenameOp::undo()
     }
     try
     {
-      dn->renameNode( it->newPName.c_str(), 
-                      it->oldPName.c_str(), false );
+      dn->renameNode( it->newPName, it->oldPName, false );
     } catch( Error &err )
     {
       if(++errorCount == 1)
@@ -295,45 +271,120 @@ bool DirNode::hasDirectoryNameDependency() const
   return naming ? naming->getChainedNameIV() : false;
 }
 
-string DirNode::rootDirectory()
+string DirNode::rootDirectory() const
 {
   // don't update last access here, otherwise 'du' would cause lastAccess to
   // be reset.
   return rootDir;
 }
 
-Path DirNode::appendToRoot(const string &path) const
+Path DirNode::appendToRoot(const NameIOPath &path) const
 {
-  return fs_io->pathFromString( (const std::string &) rootDir + '/' + path);
-}
+  // add encoded components back against the rootdir
+  // to create the path
+  auto toret = rootDir;
+  for(const std::string & comp : path)
+  {
+    toret = toret.join( comp );
+  }
 
-string DirNode::cipherPath(const char *plaintextPath)
-{
-  return appendToRoot( naming->encodePath( plaintextPath ) );
-}
-
-string DirNode::cipherPathWithoutRoot(const char *plaintextPath)
-{
-  return naming->encodePath( plaintextPath );
-}
-
-string DirNode::plaintextParent(const string &path)
-{
-  return parentDirectory( fs_io, path );
+  return std::move( toret );
 }
 
 static bool startswith(const std::string &a, const std::string &b)
 {
+  if (a.size() < b.size()) return false;
   return !strncmp( a.c_str(), b.c_str(), b.length() );
 }
 
-string DirNode::plainPath(const char *cipherPath_)
+std::string DirNode::cipherPath(const char *plaintextPath) const
 {
+  return cipherPath( fs_io->pathFromString( plaintextPath ) );
+}
+
+NameIOPath DirNode::pathToRelativeNameIOPath(const Path & plaintextPath) const
+{
+  if(!path_is_parent( rootDir, plaintextPath ))
+  {
+    throw std::runtime_error("bad path!");
+  }
+
+  // turn those components of `plaintextPath` that come after `rootDir`
+  // into a sequence suitable for naming->encodePath
+  auto p = plaintextPath;
+  NameIOPath pp;
+  while(rootDir != p)
+  {
+    pp.push_back( p.basename() );
+    p = p.dirname();
+  }
+  pp.reverse();
+
+  return std::move( pp) ;
+}
+
+Path DirNode::cipherPath(const Path & plaintextPath, uint64_t *iv) const
+{
+  auto pp = pathToRelativeNameIOPath( plaintextPath );
+
+  uint64_t iv2 = 0;
+  if (!iv) iv = &iv2;
+  auto encodedpp = naming->encodePath( std::move( pp ), iv );
+  return appendToRoot( std::move( encodedpp ) );
+}
+
+Path DirNode::apiToInternal(const char *plaintextPath, uint64_t *iv) const
+{
+  uint64_t iv2 = 0;
+  if (!iv) iv = &iv2;
+  return cipherPath( fs_io->pathFromString( plaintextPath ), iv );
+}
+
+static string nameIOPathToRelativePosixPath(const NameIOPath &p)
+{
+  return std::accumulate( p.begin(), p.end(), string(),
+                          [] (const std::string & acc, const std::string & elt) {
+                            return acc + "/" + elt;
+                          } );
+}
+
+static NameIOPath posixPathToNameIOPath(const string & p)
+{
+  NameIOPath toret;
+
+  for(auto pit = p.cbegin(); pit != p.cend();)
+  {
+    if(*pit == '/')
+    {
+      ++pit;
+      continue;
+    }
+
+    auto sit = std::find( pit, p.cend(), '/' );
+    toret.push_back( string( pit, sit ) );
+    pit = sit;
+  }
+
+  return std::move( toret );
+}
+
+std::string DirNode::cipherPathWithoutRootPosix(std::string plaintextPath) const
+{
+  return nameIOPathToRelativePosixPath( naming->encodePath( posixPathToNameIOPath( std::move( plaintextPath ) ) ) );
+}
+
+string DirNode::plainPathPosix(const char *cipherPath_)
+{
+  // NB: this method only works when our base file system
+  //     is posix!  (due to hardcoding of '/')
+
   try
   {
-    if(startswith(cipherPath_, (const std::string &) rootDir + '/'))
+    if(startswith( cipherPath_, (const std::string &) rootDir + '/' ))
     {
-      return naming->decodePath( cipherPath_ + ((const std::string &) rootDir).length() + 1);
+      auto decoded_path =
+        naming->decodePath( pathToRelativeNameIOPath( fs_io->pathFromString( cipherPath_ ) ) );
+      return nameIOPathToRelativePosixPath( std::move( decoded_path ) );
     } else
     {
       if(cipherPath_[0] == '+')
@@ -343,7 +394,8 @@ string DirNode::plainPath(const char *cipherPath_)
             strlen(cipherPath_+1) );
       } else
       {
-        return naming->decodePath( cipherPath_ );
+        auto niopath = posixPathToNameIOPath( cipherPath_ );
+        return nameIOPathToRelativePosixPath( naming->decodePath( niopath ) );
       }
     }
 
@@ -356,12 +408,15 @@ string DirNode::plainPath(const char *cipherPath_)
 
 PosixSymlinkData DirNode::decryptLinkPath(PosixSymlinkData in)
 {
-  auto buf = plainPath( in.c_str() );
+  auto buf = plainPathPosix( in.c_str() );
   return PosixSymlinkData( std::move( buf ) );
 }
 
-string DirNode::relativeCipherPath(const char *plaintextPath)
+string DirNode::relativeCipherPathPosix(const char *plaintextPath)
 {
+  // NB: this method only works when our base file system
+  //     is posix! (due to hardcoding of '/')
+
   try
   {
     if(plaintextPath[0] == '/')
@@ -371,7 +426,7 @@ string DirNode::relativeCipherPath(const char *plaintextPath)
           strlen(plaintextPath+1));
     } else
     {
-      return naming->encodePath( plaintextPath );
+      return cipherPathWithoutRootPosix( plaintextPath );
     }
   } catch( Error &err )
   {
@@ -382,47 +437,48 @@ string DirNode::relativeCipherPath(const char *plaintextPath)
 
 DirTraverse DirNode::openDir(const char *plaintextPath) const
 {
-  auto cyName = appendToRoot( naming->encodePath( plaintextPath ) );
-  //rDebug("openDir on %s", cyName.c_str() );
-
-  opt::optional<Directory> dir_io;
-  const int res = withExceptionCatcher( (int) std::errc::io_error,
-                                        bindMethod( fs_io, &FsIO::opendir ),
-                                        &dir_io, cyName );
-  if(res < 0) return DirTraverse();
-
-  assert( dir_io );
+  uint64_t iv = 0;
+  opt::optional<Path> maybeCyName;
 
   try
   {
-    uint64_t iv = 0;
-    // if we're using chained IV mode, then compute the IV at this
-    // directory level..
-    if( naming->getChainedNameIV() )
-      naming->encodePath( plaintextPath, &iv );
-    return DirTraverse( std::move( *dir_io ), iv, naming );
+    maybeCyName = apiToInternal( plaintextPath, &iv );
   } catch( Error &err )
   {
     LOG(ERROR) << "encode err: " << err.what();
     return DirTraverse();
   }
+
+  assert( maybeCyName );
+
+  // if we're not using chained IV mode, then ignore
+  // the computed iv
+  if( !naming->getChainedNameIV() ) iv = 0;
+
+  //rDebug("openDir on %s", cyName.c_str() );
+
+  opt::optional<Directory> dir_io;
+  const int res = withExceptionCatcher( (int) std::errc::io_error,
+                                        bindMethod( fs_io, &FsIO::opendir ),
+                                        &dir_io, *maybeCyName );
+  if(res < 0) return DirTraverse();
+
+  assert( dir_io );
+
+  return DirTraverse( std::move( *dir_io ), iv, naming );
 }
 
 bool DirNode::genRenameList(list<RenameEl> &renameList, 
-    const char *fromP, const char *toP)
+    const Path &fromP, const Path &toP)
 {
   uint64_t fromIV = 0, toIV = 0;
 
   // compute the IV for both paths
-  string fromCPart = naming->encodePath( fromP, &fromIV );
-  string toCPart = naming->encodePath( toP, &toIV );
-
-  // where the files live before the rename..
-  auto sourcePath = appendToRoot( fromCPart );
+  auto sourcePath = cipherPath( fromP, &fromIV );
+  cipherPath( toP, &toIV );
 
   // ok..... we wish it was so simple.. should almost never happen
-  if(fromIV == toIV)
-    return true;
+  if(fromIV == toIV) return true;
 
   // generate the real destination path, where we expect to find the files..
   VLOG(1) << "opendir " << sourcePath;
@@ -449,58 +505,57 @@ bool DirNode::genRenameList(list<RenameEl> &renameList,
       return false;
     }
 
-    if (!dir_ent) {
-      break;
-    }
+    if(!dir_ent) break;
 
     // decode the name using the oldIV
     uint64_t localIV = fromIV;
-    string plainName;
+    opt::optional<NameIOPath> maybePlainName;
 
     try
     {
-      plainName = naming->decodePath( dir_ent->name.c_str(), &localIV );
+      maybePlainName = naming->decodePath( { dir_ent->name }, &localIV );
     } catch( Error &ex )
     {
       // if filename can't be decoded, then ignore it..
       continue;
     }
 
+    auto plainName = std::move( *maybePlainName );
+
     // any error in the following will trigger a rename failure.
     try
     {
       // re-encode using the new IV..
       localIV = toIV;
-      string newName = naming->encodePath( plainName.c_str(), &localIV );
+      auto newName = naming->encodePath( plainName, &localIV );
 
       // store rename information..
       auto oldFull = sourcePath.join( dir_ent->name );
-      auto newFull = sourcePath.join( newName );
+      auto newFull = sourcePath.join( newName.front() );
 
-      RenameEl ren;
-      ren.oldCName = oldFull;
-      ren.newCName = newFull;
-      ren.oldPName = fs_io->pathFromString( (string) fromP ).join( plainName );
-      ren.newPName = fs_io->pathFromString( (string) toP ).join( plainName );
-
-      ren.isDirectory = dir_ent->type == opt::nullopt
+      auto isDirectory_ = dir_ent->type == opt::nullopt
         ? isDirectory( fs_io, oldFull.c_str() )
         : *dir_ent->type == FsFileType::DIRECTORY;
+
+      RenameEl ren = { std::move( oldFull ), std::move( newFull ),
+                       fromP.join( plainName.front() ),
+                       toP.join( plainName.front() ),
+                       isDirectory_ };
 
       if(ren.isDirectory)
       {
         // recurse..  We want to add subdirectory elements before the
         // parent, as that is the logical rename order..
         if(!genRenameList( renameList,
-            ren.oldPName.c_str(),
-            ren.newPName.c_str() ))
+            ren.oldPName,
+            ren.newPName ))
         {
           return false;
         }
       }
 
-      VLOG(1) << "adding file " << oldFull << " to rename list";
-      renameList.push_back( ren );
+      VLOG(1) << "adding file " << ren.oldCName << " to rename list";
+      renameList.push_back( std::move( ren ) );
 
     } catch( Error &err )
     {
@@ -528,7 +583,7 @@ bool DirNode::genRenameList(list<RenameEl> &renameList,
     Returns a list of renamed items on success, a null list on failure.
 */
 shared_ptr<RenameOp>
-DirNode::newRenameOp(const char *fromP, const char *toP)
+DirNode::newRenameOp(const Path &fromP, const Path &toP)
 {
   // Do the rename in two stages to avoid chasing our tail
   // Undo everything if we encounter an error!
@@ -543,7 +598,7 @@ DirNode::newRenameOp(const char *fromP, const char *toP)
 
 int DirNode::posix_mkdir(const char *plaintextPath, fs_posix_mode_t mode)
 {
-  auto cyName = appendToRoot( naming->encodePath( plaintextPath ) );
+  auto cyName = apiToInternal( plaintextPath );
 
   VLOG(1) << "mkdir on " << cyName;
 
@@ -553,12 +608,15 @@ int DirNode::posix_mkdir(const char *plaintextPath, fs_posix_mode_t mode)
 }
 
 int
-DirNode::rename(const char *fromPlaintext, const char *toPlaintext)
+DirNode::rename(const char *cfromPlaintext, const char *ctoPlaintext)
 {
   Lock _lock( mutex );
 
-  auto fromCName = appendToRoot( naming->encodePath( fromPlaintext ) );
-  auto toCName = appendToRoot( naming->encodePath( toPlaintext ) );
+  auto fromPlaintext = fs_io->pathFromString( cfromPlaintext);
+  auto toPlaintext = fs_io->pathFromString( ctoPlaintext);
+
+  auto fromCName = apiToInternal( cfromPlaintext );
+  auto toCName = apiToInternal( ctoPlaintext );
 
   VLOG(1) << "rename " << fromCName << " -> " << toCName;
 
@@ -625,8 +683,8 @@ int DirNode::posix_link(const char *from, const char *to)
 {
   Lock _lock( mutex );
 
-  auto fromCName = appendToRoot( naming->encodePath( from ) );
-  auto toCName = appendToRoot( naming->encodePath( to ) );
+  auto fromCName = apiToInternal( from );
+  auto toCName = apiToInternal( to );
 
   VLOG(1) << "link " << fromCName << " -> " << toCName;
 
@@ -649,25 +707,20 @@ int DirNode::posix_link(const char *from, const char *to)
     The node is keyed by filename, so a rename means the internal node names
     must be changed.
 */
-shared_ptr<FileNode> DirNode::renameNode(const char *from, const char *to)
-{
-  return renameNode( from, to, true );
-}
-
-shared_ptr<FileNode> DirNode::renameNode(const char *from, const char *to, 
-    bool forwardMode)
+shared_ptr<FileNode> DirNode::renameNode(const Path &from, const Path &to,
+                                         bool forwardMode)
 {
   shared_ptr<FileNode> node = findOrCreate( from );
 
   if(node)
   {
     uint64_t newIV = 0;
-    auto cname = appendToRoot( naming->encodePath( to, &newIV ) );
+    auto cname = cipherPath( to, &newIV );
 
     VLOG(1) << "renaming internal node " << node->cipherName() 
-      << " -> " << cname.c_str();
+            << " -> " << cname;
 
-    if(!node->setName( to, cname.c_str(), newIV, forwardMode ))
+    if(!node->setName( to, cname, newIV, forwardMode ))
     {
       // rename error! - put it back 
       LOG(ERROR) << "renameNode failed";
@@ -678,23 +731,23 @@ shared_ptr<FileNode> DirNode::renameNode(const char *from, const char *to,
   return node;
 }
 
-shared_ptr<FileNode> DirNode::findOrCreate(const char *plainName)
+shared_ptr<FileNode> DirNode::findOrCreate(const Path &plainName)
 {
   shared_ptr<FileNode> node;
-  if(ctx) node = ctx->lookupNode( plainName );
+  if(ctx) node = ctx->lookupNode( plainName.c_str() );
 
   if(!node)
   {
     uint64_t iv = 0;
-    string cipherName = naming->encodePath( plainName, &iv );
+    auto cipherName = cipherPath( plainName, &iv );
     node = std::make_shared<FileNode>( ctx, fsConfig,
                                        plainName,
-                                       appendToRoot( cipherName ).c_str() );
+                                       cipherName );
 
     // add weak reference to node
-    ctx->trackNode( plainName, node );
+    ctx->trackNode( plainName.c_str(), node );
 
-    if(fsConfig->config->external_iv()) node->setName(0, 0, iv);
+    if(fsConfig->config->external_iv()) node->setName( opt::nullopt, opt::nullopt, iv );
 
     VLOG(1) << "created FileNode for " << node->cipherName();
   }
@@ -703,18 +756,14 @@ shared_ptr<FileNode> DirNode::findOrCreate(const char *plainName)
 }
 
 shared_ptr<FileNode>
-DirNode::lookupNode( const char *plainName, const char * requestor )
+DirNode::lookupNode( const char *plainName, const char */*requestor*/ )
 {
-  (void)requestor;
   Lock _lock( mutex );
-
-  shared_ptr<FileNode> node = findOrCreate( plainName );
-
-  return node;
+  return findOrCreate( fs_io->pathFromString( plainName ) );
 }
 
 shared_ptr<FileNode>
-DirNode::_openNode( const char *plainName, const char */*requestor*/,
+DirNode::_openNode( const Path &plainName, const char * /*requestor*/,
                     bool requestWrite, bool createFile, int *result )
 {
   shared_ptr<FileNode> node = findOrCreate( plainName );
@@ -735,16 +784,17 @@ shared_ptr<FileNode>
 DirNode::openNode( const char *plainName, const char * requestor,
                    bool requestWrite, bool createFile, int *result )
 {
-  (void)requestor;
   rAssert( result != NULL );
   Lock _lock( mutex );
 
-  return _openNode( plainName, requestor, requestWrite, createFile, result );
+  auto p = pathFromString( plainName );
+
+  return _openNode( p, requestor, requestWrite, createFile, result );
 }
 
 int DirNode::unlink( const char *plaintextName )
 {
-  string cyName = naming->encodePath( plaintextName );
+  auto cyName = apiToInternal( plaintextName );
   VLOG(1) << "unlink " << cyName;
 
   Lock _lock( mutex );
@@ -760,10 +810,9 @@ int DirNode::unlink( const char *plaintextName )
     res = -(int) std::errc::device_or_resource_busy;
   } else
   {
-    auto fullName = appendToRoot( cyName );
     res = withExceptionCatcherNoRet( (int) std::errc::io_error,
                                      bindMethod( fs_io, &FsIO::unlink ),
-                                     fullName );
+                                     cyName );
   }
 
   return res;
@@ -772,7 +821,7 @@ int DirNode::unlink( const char *plaintextName )
 int DirNode::mkdir( const char *plaintextName )
 {
   Lock _lock( mutex );
-  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto fullName = apiToInternal( plaintextName );
   return withExceptionCatcherNoRet( (int) std::errc::io_error,
                                     bindMethod( fs_io, &FsIO::mkdir ), fullName );
 }
@@ -781,7 +830,7 @@ int DirNode::get_attrs(FsFileAttrs *attrs, const char *plaintextName) const
 {
   Lock _lock( mutex );
 
-  auto cyName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto cyName = apiToInternal( plaintextName );
   VLOG(1) << "get_attrs " << cyName;
 
   return withExceptionCatcher( (int) std::errc::io_error,
@@ -793,7 +842,7 @@ int DirNode::posix_stat(FsFileAttrs *attrs, const char *plaintextName, bool foll
 {
   Lock _lock( mutex );
 
-  auto cyName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto cyName = apiToInternal( plaintextName );
   VLOG(1) << "posix_stat " << cyName;
 
   int ret = withExceptionCatcher( (int) std::errc::io_error,
@@ -824,9 +873,9 @@ int DirNode::posix_stat(FsFileAttrs *attrs, const char *plaintextName, bool foll
   return ret;
 }
 
-PosixSymlinkData DirNode::_posix_readlink(const std::string &cyPath)
+PosixSymlinkData DirNode::_posix_readlink(const Path &cyPath)
 {
-  auto link_buf = fs_io->posix_readlink( fs_io->pathFromString( cyPath ) );
+  auto link_buf = fs_io->posix_readlink( cyPath );
   // decrypt link buf
   return decryptLinkPath( std::move( link_buf ) );
 }
@@ -835,7 +884,7 @@ int DirNode::posix_readlink(PosixSymlinkData *buf, const char *plaintextName)
 {
   Lock _lock( mutex );
 
-  auto cyName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto cyName = apiToInternal( plaintextName );
   return withExceptionCatcher( (int) std::errc::io_error,
                                bindMethod( this, &DirNode::_posix_readlink ),
                                buf, cyName );
@@ -844,14 +893,14 @@ int DirNode::posix_readlink(PosixSymlinkData *buf, const char *plaintextName)
 int DirNode::posix_symlink(const char *path, const char *data)
 {
   // allow fully qualified names in symbolic links.
-  string toCName = cipherPath( path );
-  string fromCName = relativeCipherPath( data );
+  auto toCName = apiToInternal( path );
+  auto fromCName = relativeCipherPathPosix( data );
 
   VLOG(1) << "symlink " << fromCName << " -> " << toCName;
 
   return withExceptionCatcherNoRet( (int) std::errc::io_error,
                                     bindMethod( fs_io, &FsIO::posix_symlink ),
-                                    fs_io->pathFromString( std::move( toCName ) ),
+                                    std::move( toCName ),
                                     PosixSymlinkData( std::move( fromCName ) ) );
 }
 
@@ -872,7 +921,7 @@ int DirNode::posix_create( shared_ptr<FileNode> *fnode,
   Lock _lock( mutex );
 
   // first call posix_create to clear node and whatever else
-  auto cyName = appendToRoot( naming->encodePath( plainName ) );
+  auto cyName = apiToInternal( plainName );
   int ret = withExceptionCatcherNoRet( (int) std::errc::io_error,
                                        bindMethod( fs_io, &FsIO::posix_create ),
                                        cyName, mode );
@@ -881,7 +930,8 @@ int DirNode::posix_create( shared_ptr<FileNode> *fnode,
   // then open node as usual, this is fine since the fs is locked during this
   const bool requestWrite = true;
   const bool createFile = true;
-  *fnode = _openNode( plainName, "posix_create", requestWrite, createFile, &ret );
+  *fnode = _openNode( fs_io->pathFromString( plainName ), "posix_create",
+                      requestWrite, createFile, &ret );
   if (!*fnode) return ret;
   return 0;
 }
@@ -891,7 +941,7 @@ int DirNode::posix_mknod(const char *plaintextName,
 {
   Lock _lock( mutex );
 
-  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto fullName = apiToInternal( plaintextName );
   return withExceptionCatcherNoRet( (int) std::errc::io_error,
                                     bindMethod( fs_io, &FsIO::posix_mknod ),
                                     fullName, mode, dev );
@@ -918,7 +968,7 @@ int DirNode::posix_setfsuid( fs_posix_uid_t *olduid, fs_posix_uid_t newuid)
 int DirNode::rmdir( const char *plaintextName )
 {
   Lock _lock( mutex );
-  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto fullName = apiToInternal( plaintextName );
   return withExceptionCatcherNoRet( (int) std::errc::io_error,
                                     bindMethod( fs_io, &FsIO::rmdir ),
                                     fullName );
@@ -929,7 +979,7 @@ int DirNode::set_times( const char *plaintextName,
                         opt::optional<fs_time_t> mtime )
 {
   Lock _lock( mutex );
-  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto fullName = apiToInternal( plaintextName );
   return withExceptionCatcherNoRet( (int) std::errc::io_error,
                                     bindMethod( fs_io, &FsIO::set_times ),
                                     fullName, std::move( atime ), std::move( mtime ) );
@@ -940,7 +990,7 @@ int DirNode::posix_chmod( const char *plaintextName, bool follow, fs_posix_mode_
 {
   Lock _lock( mutex );
 
-  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto fullName = apiToInternal( plaintextName );
   return withExceptionCatcherNoRet( (int) std::errc::io_error,
                                     bindMethod( fs_io, &FsIO::posix_chmod ),
                                     fullName, follow, mode );
@@ -951,7 +1001,7 @@ int DirNode::posix_chown( const char *plaintextName, bool follow, fs_posix_uid_t
 {
   Lock _lock( mutex );
 
-  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto fullName = apiToInternal( plaintextName );
   return withExceptionCatcherNoRet( (int) std::errc::io_error,
                                     bindMethod( fs_io, &FsIO::posix_chown ),
                                     fullName, follow, uid, gid );
@@ -963,7 +1013,7 @@ int DirNode::posix_setxattr( const char *plaintextName, bool follow, std::string
 {
   Lock _lock( mutex );
 
-  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto fullName = apiToInternal( plaintextName );
   return withExceptionCatcherNoRet( (int) std::errc::io_error,
                                     bindMethod( fs_io, &FsIO::posix_setxattr ),
                                     std::move( fullName ), follow, std::move( name ),
@@ -976,7 +1026,7 @@ int DirNode::posix_getxattr( opt::optional<std::vector<byte>> *ret,
 {
   Lock _lock( mutex );
 
-  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto fullName = apiToInternal( plaintextName );
   return withExceptionCatcher( (int) std::errc::io_error,
                                bindMethod( fs_io, &FsIO::posix_getxattr ),
                                ret,
@@ -989,7 +1039,7 @@ int DirNode::posix_listxattr( opt::optional<PosixXattrList> *ret,
 {
   Lock _lock( mutex );
 
-  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto fullName = apiToInternal( plaintextName );
   return withExceptionCatcher( (int) std::errc::io_error,
                                bindMethod( fs_io, &FsIO::posix_listxattr ),
                                ret,
@@ -1000,7 +1050,7 @@ int DirNode::posix_removexattr( const char *plaintextName, bool follow, std::str
 {
   Lock _lock( mutex );
 
-  auto fullName = appendToRoot( naming->encodePath( plaintextName ) );
+  auto fullName = apiToInternal( plaintextName );
   return withExceptionCatcherNoRet( (int) std::errc::io_error,
                                     bindMethod( fs_io, &FsIO::posix_removexattr ),
                                     std::move( fullName ), follow, std::move( name ) );

@@ -186,70 +186,57 @@ bool NameIO::getReverseEncryption() const
 }
 
 
-std::string NameIO::recodePath( const char *path, 
+NameIOPath NameIO::recodePath( const NameIOPath &path,
     int (NameIO::*_length)(int) const,
     int (NameIO::*_code)(const char*, int, uint64_t *, char*) const,
     uint64_t *iv ) const
 {
-  string output;
+  NameIOPath output;
 
-  while( *path )
+  for (const std::string &component : path)
   {
-    if( *path == '/' )
+    if(component == "." || component == "..")
     {
-      if( !output.empty() ) // don't start the string with '/'
-        output += '/';
-      ++path;
-    } else
-    {
-      bool isDotFile = (*path == '.');
-      const char *next = strchr( path, '/' );
-      int len = next ? next - path : strlen( path );
-
-      // at this point we know that len > 0
-      if( isDotFile && (path[len-1] == '.') && (len <= 2) )
-      {
-        output.append(len, '.'); // append [len] copies of '.'
-        path += len;
-        continue;
-      }
-
-      // figure out buffer sizes
-      int approxLen = (this->*_length)( len );
-      if(approxLen <= 0)
-        throw Error("Filename too small to decode");
-
-      BUFFER_INIT( codeBuf, 32, (unsigned int)approxLen+1 );
-
-      // code the name
-      int codedLen = (this->*_code)( path, len, iv, codeBuf );
-      rAssert( codedLen <= approxLen );
-      rAssert( codeBuf[codedLen] == '\0' );
-      path += len;
-
-      // append result to string
-      output += (char*)codeBuf;
-
-      BUFFER_RESET( codeBuf );
+      output.push_back(component);
+      continue;
     }
+
+    int len = component.size();
+
+    // figure out buffer sizes
+    int approxLen = (this->*_length)( len );
+    if(approxLen <= 0) throw Error("Filename too small to decode");
+
+    BUFFER_INIT( codeBuf, 32, (unsigned int)approxLen+1 );
+
+    // code the name
+    int codedLen = (this->*_code)( component.data(), component.size(),
+                                   iv, codeBuf );
+    rAssert( codedLen <= approxLen );
+    rAssert( codeBuf[codedLen] == '\0' );
+
+    // append result
+    output.push_back(codeBuf);
+
+    BUFFER_RESET( codeBuf );
   }
 
-  return output;
+  return std::move( output );
 }
 
-std::string NameIO::encodePath( const char *plaintextPath ) const
+NameIOPath NameIO::encodePath( const NameIOPath &plaintextPath ) const
 {
   uint64_t iv = 0;
   return encodePath( plaintextPath, &iv);
 }
 
-std::string NameIO::decodePath( const char *cipherPath ) const
+NameIOPath NameIO::decodePath( const NameIOPath &cipherPath ) const
 {
   uint64_t iv = 0;
   return decodePath( cipherPath, &iv );
 }
 
-std::string NameIO::_encodePath( const char *plaintextPath, uint64_t *iv ) const
+NameIOPath NameIO::_encodePath( const NameIOPath &plaintextPath, uint64_t *iv ) const
 {
     // if chaining is not enabled, then the iv pointer is not used..
   if(!chainedNameIV)
@@ -258,7 +245,7 @@ std::string NameIO::_encodePath( const char *plaintextPath, uint64_t *iv ) const
       &NameIO::maxEncodedNameLen, &NameIO::encodeName, iv);
 }
 
-std::string NameIO::_decodePath( const char *cipherPath, uint64_t *iv ) const
+NameIOPath NameIO::_decodePath( const NameIOPath &cipherPath, uint64_t *iv ) const
 {
   // if chaining is not enabled, then the iv pointer is not used..
   if(!chainedNameIV)
@@ -267,14 +254,14 @@ std::string NameIO::_decodePath( const char *cipherPath, uint64_t *iv ) const
       &NameIO::maxDecodedNameLen, &NameIO::decodeName, iv);
 }
 
-std::string NameIO::encodePath( const char *path, uint64_t *iv ) const
+NameIOPath NameIO::encodePath( const NameIOPath &path, uint64_t *iv ) const
 {
   return getReverseEncryption() ? 
     _decodePath( path, iv ) :
     _encodePath( path, iv );
 } 
 
-std::string NameIO::decodePath( const char *path, uint64_t *iv ) const
+NameIOPath NameIO::decodePath( const NameIOPath &path, uint64_t *iv ) const
 {
   return getReverseEncryption() ? 
     _encodePath( path, iv ) :

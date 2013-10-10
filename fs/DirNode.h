@@ -52,8 +52,8 @@ public:
     DirTraverse(Directory && dir_io,
                 uint64_t iv,
 	        const std::shared_ptr<NameIO> &naming);
-    DirTraverse(DirTraverse && src);
-    DirTraverse& operator=(DirTraverse && other);
+    DirTraverse(DirTraverse && src) = default;
+    DirTraverse& operator=(DirTraverse && other) = default;
 
     DirTraverse(const DirTraverse &src) = delete;
     DirTraverse &operator = (const DirTraverse &src) = delete;
@@ -89,30 +89,31 @@ public:
     ~DirNode();
 
     // return the path to the root directory
-    std::string rootDirectory();
+    std::string rootDirectory() const;
 
     // find files
-    std::shared_ptr<FileNode> lookupNode( const char *plaintextName, 
-	                      const char *requestor );
+    std::shared_ptr<FileNode> lookupNode( const char *plaintextName,
+                                          const char *requestor );
 
     /*
 	Combined lookupNode + node->open() call.  If the open fails, then the
 	node is not retained.  If the open succeeds, then the node is returned.
     */
     std::shared_ptr<FileNode> openNode( const char *plaintextName,
-                                   const char *requestor,
-                                   bool requestWrite, bool createNode,
-                                   int *openResult );
+                                        const char *requestor,
+                                        bool requestWrite, bool createNode,
+                                        int *openResult );
 
-    std::string cipherPath( const char *plaintextPath );
-    std::string cipherPathWithoutRoot( const char *plaintextPath );
-    std::string plaintextParent(const std::string &path);
+    std::string cipherPath( const char *plaintextPath ) const;
+    std::string cipherPathWithoutRootPosix(std::string plaintextPath) const;
+    Path cipherPath(const Path & plaintextPath, uint64_t *iv = 0) const;
+    NameIOPath pathToRelativeNameIOPath(const Path & plaintextPath) const;
 
     // relative cipherPath is the same as cipherPath except that it doesn't
     // prepent the mount point.  That it, it doesn't return a fully qualified
     // name, just a relative path within the encrypted filesystem.
-    std::string relativeCipherPath( const char *plaintextPath );
-    std::string plainPath( const char *cipherPath );
+    std::string relativeCipherPathPosix( const char *plaintextPath );
+    std::string plainPathPosix( const char *cipherPath );
 
     /*
 	Returns true if file names are dependent on the parent directory name.
@@ -163,31 +164,31 @@ protected:
 	this call has no effect.
 	Returns the FileNode if it was found.
     */
-    std::shared_ptr<FileNode> renameNode( const char *from, const char *to );
-    std::shared_ptr<FileNode> renameNode( const char *from, const char *to, 
-	                             bool forwardMode );
-
+    std::shared_ptr<FileNode> renameNode( const Path &from, const Path &to,
+                                          bool forwardMode = true );
     /*
 	when directory IV chaining is enabled, a directory can't be renamed
 	without renaming all its contents as well.  recursiveRename should be
 	called after renaming the directory, passing in the plaintext from and
 	to paths.
     */
-    std::shared_ptr<RenameOp> newRenameOp( const char *from, const char *to );
+    std::shared_ptr<RenameOp> newRenameOp( const Path &from, const Path &to );
 
 private:
     friend class RenameOp;
     friend class DirTraverse;
 
-    bool genRenameList( std::list<RenameEl> &list, const char *fromP,
-                        const char *toP );
+    bool genRenameList( std::list<RenameEl> &list,
+                        const Path &fromP,
+                        const Path &toP );
 
-    std::shared_ptr<FileNode> findOrCreate( const char *plainName);
+    std::shared_ptr<FileNode> findOrCreate( const Path &plainName);
+    Path appendToRoot(const NameIOPath &path) const;
+    Path apiToInternal(const char *plaintextPath, uint64_t *iv = 0) const;
 
-    Path appendToRoot(const std::string &path) const;
     PosixSymlinkData decryptLinkPath(PosixSymlinkData in);
-    PosixSymlinkData _posix_readlink(const std::string &cyPath);
-    std::shared_ptr<FileNode> _openNode( const char *plainName, const char * requestor,
+    PosixSymlinkData _posix_readlink(const Path &cyPath);
+    std::shared_ptr<FileNode> _openNode( const Path &plainName, const char * requestor,
                                          bool requestWrite, bool createFile, int *result );
 
     mutable Mutex mutex;

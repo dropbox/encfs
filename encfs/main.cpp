@@ -16,23 +16,19 @@
  *
  */
 
-#include <sys/time.h>
-#include <unistd.h>
+#include "encfs/EncFS_Args.h"
+#include "encfs/EncfsPasswordReader.h"
+#include "encfs/PosixFsIO.h"
+#include "encfs/RootPathPrependFs.h"
+#include "encfs/encfs.h"
 
-#include <cassert>
-#include <cerrno>
-#include <clocale>
-#include <cstdio>
-#include <cstring>
+#include "fs/EncfsFsIO.h"
+// TODO: get rid of the following import
+#include "fs/FileUtils.h"
+#include "fs/FsIO.h"
+#include "fs/PasswordReader.h"
 
-#include <iostream>
-#include <string>
-#include <sstream>
-#include <thread>
-
-#include <getopt.h>
-
-#include <glog/logging.h>
+#include "cipher/CipherV1.h"
 
 #include "base/config.h"
 #include "base/autosprintf.h"
@@ -41,19 +37,23 @@
 #include "base/Interface.h"
 #include "base/i18n.h"
 
-#include "cipher/CipherV1.h"
+#include <glog/logging.h>
 
-#include "fs/EncfsFsIO.h"
-// TODO: get rid of the following import
-#include "fs/FileUtils.h"
-#include "fs/FsIO.h"
-#include "fs/PasswordReader.h"
+#include <getopt.h>
 
-#include "encfs/EncFS_Args.h"
-#include "encfs/EncfsPasswordReader.h"
-#include "encfs/PosixFsIO.h"
-#include "encfs/encfs.h"
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <thread>
 
+#include <cassert>
+#include <cerrno>
+#include <clocale>
+#include <cstdio>
+#include <cstring>
+
+#include <sys/time.h>
+#include <unistd.h>
 
 // Fuse version >= 26 requires another argument to fuse_unmount, which we
 // don't have.  So use the backward compatible call instead..
@@ -568,15 +568,22 @@ int main(int argc, char *argv[])
   {
     auto encryptedFS = std::make_shared<EncfsFsIO>();
 
-    // TODO: separate fuse args from encrypted fs opts
     encryptedFS->initFS( encfsArgs->opts, opt::nullopt );
+
+    // wrap encryptedFS around a file system that adds
+    // a root path as a prefix to each path
+    auto oldRoot = encryptedFS->pathFromString( "/" );
+    auto newRoot = encryptedFS->pathFromString( encfsArgs->opts->rootDir );
+    auto wrappedEncryptedFS = std::make_shared<RootPathPrependFs>( std::move( encryptedFS ),
+                                                                   std::move( oldRoot ),
+                                                                   std::move( newRoot ) );
 
     // resources will get freed after block is exited
     // TODO: separate fuse args from encrypted fs opts
     // TODO: because the fuse layer can delete and recreate backend file systems
     //       but is still file system agnostic, we should pass a FsIO "Factory"
     //       object to it
-    EncFSFuseContext ctx( encfsArgs, encfsArgs->opts, std::move( encryptedFS ) );
+    EncFSFuseContext ctx( encfsArgs, encfsArgs->opts, std::move( wrappedEncryptedFS ) );
 
     if(encfsArgs->isThreaded == false && encfsArgs->idleTimeout > 0)
     {

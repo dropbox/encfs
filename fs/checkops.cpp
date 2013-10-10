@@ -131,13 +131,13 @@ bool testNameCoding( DirNode &dirNode, bool verbose,
     if(verbose)
       cerr << "   coding name \"" << *orig << "\"";
 
-    string encName = dirNode.relativeCipherPath( *orig );
+    string encName = dirNode.relativeCipherPathPosix( *orig );
 
     if(verbose)
       cerr << " -> \"" << encName.c_str() << "\"";
 
     // decrypt name
-    string decName = dirNode.plainPath( encName.c_str() );
+    string decName = dirNode.plainPathPosix( encName.c_str() );
 
     if(decName == *orig)
     {
@@ -163,7 +163,7 @@ bool testNameCoding( DirNode &dirNode, bool verbose,
     for (long i=0; i < 10000000; i++) 
     {
       snprintf(buf, sizeof(buf), "%li", i);
-      string encName = dirNode.relativeCipherPath( buf );
+      string encName = dirNode.relativeCipherPathPosix( buf );
       // simulate a case-insisitive filesystem..
       std::transform(encName.begin(), encName.end(), encName.begin(),
           ::toupper);

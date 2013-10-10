@@ -27,11 +27,13 @@
 #include <string>
 
 #include "base/Mutex.h"
+#include "base/optional.h"
 
 #include "cipher/CipherKey.h"
 
 #include "fs/Context.h"
 #include "fs/CipherFileIO.h"
+#include "fs/NameIO.h"
 #include "fs/FileUtils.h"
 
 namespace encfs {
@@ -45,23 +47,21 @@ class FileNode
 public:
     FileNode(const std::shared_ptr<EncFS_Context> &ctx,
              const FSConfigPtr &cfg,
-             const char *plaintextName,
-             const char *cipherName);
+             Path plaintextName,
+             Path cipherName);
     ~FileNode();
 
     FileNode(const FileNode &src) = delete;
     FileNode &operator = (const FileNode &src) = delete;
 
-    const char *plaintextName() const;
-    const char *cipherName() const;
-
-    // directory portion of plaintextName
-    std::string plaintextParent() const;
+    const Path &plaintextName() const;
+    const Path &cipherName() const;
 
     // if setIVFirst is true, then the IV is changed before the name is changed
     // (default).  The reverse is also supported for special cases..
-    bool setName( const char *plaintextName, const char *cipherName,
-	    uint64_t iv, bool setIVFirst = true);
+    bool setName( opt::optional<Path> plaintextName,
+                  opt::optional<Path> cipherName,
+                  uint64_t iv, bool setIVFirst = true);
 
     // Returns < 0 on error (-errno)
     int open(bool requestWrite, bool create);
@@ -94,8 +94,8 @@ private:
 
     std::shared_ptr<FileIO> io;
     std::shared_ptr<CipherFileIO> cipher_io;
-    std::string _pname; // plaintext name
-    std::string _cname; // encrypted name
+    Path _pname; // plaintext name
+    Path _cname; // encrypted name
     std::shared_ptr<EncFS_Context> _ctx;
 };
 

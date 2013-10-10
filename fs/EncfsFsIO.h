@@ -21,8 +21,6 @@
 #ifndef _EncfsFsIO_incl_
 #define _EncfsFsIO_incl_
 
-#include <sys/stat.h>
-
 #include <cstdint>
 
 #include <memory>

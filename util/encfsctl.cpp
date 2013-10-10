@@ -383,7 +383,7 @@ static int cmd_decode( int argc, char **argv )
   {
     for(int i=0; i<argc; ++i)
     {
-      string name = rootInfo->root->plainPath( argv[i] );
+      string name = rootInfo->root->plainPathPosix( argv[i] );
       cout << name << "\n";
     }
   } else
@@ -391,7 +391,7 @@ static int cmd_decode( int argc, char **argv )
     char buf[PATH_MAX+1];
     while(cin.getline(buf,PATH_MAX))
     {
-      cout << rootInfo->root->plainPath( buf ) << "\n";
+      cout << rootInfo->root->plainPathPosix( buf ) << "\n";
     }
   }
   return EXIT_SUCCESS;
@@ -407,7 +407,7 @@ static int cmd_encode( int argc, char **argv )
   {
     for(int i=0; i<argc; ++i)
     {
-      string name = rootInfo->root->cipherPathWithoutRoot(argv[i]);
+      string name = rootInfo->root->cipherPathWithoutRootPosix(argv[i]);
       cout << name << "\n";
     }
   } else
@@ -415,7 +415,7 @@ static int cmd_encode( int argc, char **argv )
     char buf[PATH_MAX+1];
     while(cin.getline(buf,PATH_MAX))
     {
-      cout << rootInfo->root->cipherPathWithoutRoot( buf ) << "\n";
+      cout << rootInfo->root->cipherPathWithoutRootPosix( buf ) << "\n";
     }
   }
   return EXIT_SUCCESS;
@@ -432,14 +432,16 @@ static int cmd_ls( int argc, char **argv )
 
   // show files in directory
   {
-    DirTraverse dt = rootInfo->root->openDir("/");
+    auto root = rootInfo->root->rootDirectory();
+    DirTraverse dt = rootInfo->root->openDir(root.c_str());
     if(dt.valid())
     {
       for(string name = dt.nextPlaintextName(); !name.empty(); 
           name = dt.nextPlaintextName())
       {
+        auto fullpath = root + '/' + name;
         shared_ptr<FileNode> fnode = 
-          rootInfo->root->lookupNode( name.c_str(), "encfsctl-ls" );
+          rootInfo->root->lookupNode( fullpath.c_str(), "encfsctl-ls" );
         FsFileAttrs attrs;
         fnode->getAttr( attrs );
 
@@ -469,14 +471,15 @@ int processContents( const shared_ptr<EncFS_Root> &rootInfo,
   int errCode = 0;
   bool requestWrite = false;
   bool createFile = false;
-  shared_ptr<FileNode> node = rootInfo->root->openNode( path, "encfsctl",
-                                                        requestWrite, createFile,
-                                                        &errCode );
+  auto node = rootInfo->root->openNode( path, "encfsctl",
+                                        requestWrite, createFile,
+                                        &errCode );
 
   if(!node)
   {
     // try treating filename as an enciphered path
-    string plainName = rootInfo->root->plainPath( path );
+    string plainName = (rootInfo->root->rootDirectory() + '/' +
+                        rootInfo->root->plainPathPosix( path ));
     node = rootInfo->root->lookupNode( plainName.c_str(), "encfsctl" );
     if(node)
     {
@@ -529,9 +532,11 @@ static int cmd_cat( int argc, char **argv )
   if(!rootInfo)
     return EXIT_FAILURE;
 
-  const char *path = argv[2];
+  string path = rootInfo->root->rootDirectory();
+  if (argv[2][0] != '/') path += '/';
+  path += argv[2];
   WriteOutput output(STDOUT_FILENO);
-  int errCode = processContents( rootInfo, path, output );
+  int errCode = processContents( rootInfo, path.c_str(), output );
 
   return errCode;
 }
@@ -549,7 +554,7 @@ static int copyLink(const struct stat &stBuf,
   }
 
   buf[res] = '\0';
-  string decodedLink = rootInfo->root->plainPath(&buf[0]);
+  string decodedLink = rootInfo->root->plainPathPosix(&buf[0]);
 
   res = ::symlink( decodedLink.c_str(), destName.c_str() );
   if(res == -1)
@@ -589,7 +594,7 @@ static int copyContents(const shared_ptr<EncFS_Root> &rootInfo,
         cerr << "unable to read link " << encfsName << "\n";
         return EXIT_FAILURE;
       }
-      symlink(rootInfo->root->plainPath(linkContents).c_str(), 
+      symlink(rootInfo->root->plainPathPosix(linkContents).c_str(), 
           targetName);
     } else
     {
@@ -693,7 +698,7 @@ static int cmd_export( int argc, char **argv )
   if(!checkDir(destDir) && !userAllowMkdir(g_fs_io, destDir.c_str(), 0700))
     return EXIT_FAILURE;
 
-  return traverseDirs(rootInfo, "/", destDir);
+  return traverseDirs(rootInfo, rootInfo->root->rootDirectory(), destDir);
 }
 
 int showcruft( const shared_ptr<EncFS_Root> &rootInfo, const char *dirName )
@@ -758,7 +763,7 @@ static int cmd_showcruft( int argc, char **argv )
   if(!rootInfo)
     return EXIT_FAILURE;
 
-  int filesFound = showcruft( rootInfo, "/" );
+  int filesFound = showcruft( rootInfo, rootInfo->root->rootDirectory().c_str() );
 
   cout << autosprintf("Found %i invalid file(s).", filesFound) << "\n";
 
