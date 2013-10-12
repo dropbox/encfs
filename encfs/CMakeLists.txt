@@ -19,6 +19,8 @@ add_library (encfs-app
     StdinPasswordReader.cpp
 )
 
+if (FUSE_FOUND)
+
 add_executable (encfs
     EncFSFuseContext.cpp
     encfs.cpp
@@ -44,4 +46,6 @@ if (POD2MAN)
 endif (POD2MAN)
 
 install (TARGETS encfs DESTINATION bin)
+
+endif (FUSE_FOUND)
 

@@ -107,11 +107,12 @@ MemBlock::~MemBlock()
 
 #ifdef WITH_BOTAN
 SecureMem::SecureMem(int len) 
-  : data_(len ? new Botan::SecureVector<unsigned char>(len) : nullptr)
+  : data_(len > 0? new Botan::SecureVector<unsigned char>(len) : nullptr)
 {
+  rAssert(len >= 0);
 }
 
-SecureMem::~SecureMem()
+void SecureMem::_kill_data()
 {
   if(data_)
   {
@@ -120,6 +121,11 @@ SecureMem::~SecureMem()
 # endif
     delete data_;
   }
+}
+
+SecureMem::~SecureMem()
+{
+  _kill_data();
 }
 
 byte* SecureMem::data() const {
@@ -136,16 +142,9 @@ SecureMem &SecureMem::operator=(const SecureMem & sm)
   if(&sm == this) return *this;
 
   /* first destroy our data */
-  if(data_)
-  {
-# if BOTAN_VERSION_CODE >= BOTAN_VERSION_CODE_FOR(1,11,0)
-    data_->destroy();
-# endif
-    delete data_;
-  }
+  _kill_data();
 
   data_ = new Botan::SecureVector<unsigned char>(sm.size());
-
   memmove(this->data(), sm.data(), sm.size());
 
   return *this;
@@ -160,13 +159,7 @@ SecureMem &SecureMem::operator=(SecureMem && sm) {
   if (&sm == this) return *this;
 
   /* first destroy our data */
-  if(data_)
-  {
-# if BOTAN_VERSION_CODE >= BOTAN_VERSION_CODE_FOR(1,11,0)
-    data_->destroy();
-# endif
-    delete data_;
-  }
+  _kill_data();
 
   /* then take the pointer from the other one */
   data_ = sm.data_;
@@ -179,12 +172,24 @@ SecureMem::SecureMem(SecureMem && sm) : data_(nullptr) {
   *this = std::move(sm);
 }
 
-
 #else
+
+void SecureMem::_kill_data()
+{
+  if (size_)
+  {
+    freeBlock(data_, size_);
+    munlock(data_, size_);
+
+    data_ = NULL;
+    size_ = 0;
+  }
+}
+
 SecureMem::SecureMem(int len)
 {
-  rAssert(len > 0);
-  data_ = allocBlock(len);
+  rAssert(len >= 0);
+  data_ = len ? allocBlock(len) : nullptr;
   if (data_)
   {
     size_ = len;
@@ -197,15 +202,59 @@ SecureMem::SecureMem(int len)
 
 SecureMem::~SecureMem()
 {
-  if (size_)
-  {
-    freeBlock(data_, size_);
-    munlock(data_, size_);
-
-    data_ = NULL;
-    size_ = 0;
-  }
+  _kill_data();
 }         
+
+SecureMem &SecureMem::operator=(const SecureMem & sm)
+{
+  /* same poitner, no need to copy */
+  if(&sm == this) return *this;
+
+  /* first destroy our data */
+  _kill_data();
+
+  if(sm.data_)
+  {
+    rAssert( sm.size_ );
+    data_ = allocBlock( sm.size_ );
+    if(!data_) throw std::runtime_error( "bad alloc" );
+    size_ = sm.size_;
+    mlock( data_, size_ );
+    memmove( this->data(), sm.data_, size_ );
+  }
+
+  return *this;
+}
+
+SecureMem::SecureMem(const SecureMem & sm) : data_(nullptr), size_(0)
+{
+  *this = sm;
+}
+
+SecureMem &SecureMem::operator=(SecureMem && sm)
+{
+  /* same poitner, no need to copy */
+  if(&sm == this) return *this;
+
+  /* first destroy our data */
+  _kill_data();
+
+  if(sm.data_)
+  {
+    data_ = sm.data_;
+    size_ = sm.size_;
+    sm.data_ = NULL;
+    sm.size_ = 0;
+  }
+
+  return *this;
+}
+
+SecureMem::SecureMem(SecureMem && sm) : data_(nullptr), size_(0)
+{
+  *this = std::move(sm);
+}
+
 #endif
 
 bool operator == (const SecureMem &a, const SecureMem &b) {

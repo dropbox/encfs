@@ -52,8 +52,10 @@ elseif (HAVE_CXX0x_FLAG)
 endif (HAVE_CXX11_FLAG)
 
 # Flume specific flags.
-find_package (FUSE REQUIRED)
-include_directories (${FUSE_INCLUDE_DIR})
+find_package (FUSE)
+if (FUSE_FOUND)
+   include_directories (${FUSE_INCLUDE_DIR})
+endif (FUSE_FOUND)
 
 add_definitions (-DFUSE_USE_VERSION=26)
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
