@@ -17,30 +17,31 @@
 
 #include "base/config.h"
 
-#include <dirent.h>
+#include "encfs/encfs.h"
 
-#include "encfs/xattr.h"
+#include "fs/FsIO.h"
+
+#include "cipher/MemoryPool.h"
+
+#include "base/Mutex.h"
+#include "base/Error.h"
+
+#include <glog/logging.h>
+
+#include <algorithm>
+#include <functional>
+#include <limits>
+#include <map>
+#include <memory>
+#include <string>
 
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
 
-#include <algorithm>
-#include <functional>
-#include <map>
-#include <memory>
-#include <string>
+#include "encfs/xattr.h"
 
-#include <glog/logging.h>
-
-#include "base/Mutex.h"
-#include "base/Error.h"
-
-#include "cipher/MemoryPool.h"
-
-#include "fs/FsIO.h"
-
-#include "encfs/encfs.h"
+#include <dirent.h>
 
 using std::map;
 using std::string;
@@ -436,7 +437,7 @@ int encfs_read(const char *path, char *buf, size_t size, off_t offset,
                                   &amt_read, (fs_off_t) offset, (byte *) buf, size );
   if(ret < 0) return ret;
 
-  assert( amt_read <= INT_MAX );
+  assert( amt_read <= std::numeric_limits<int>::max() );
   return amt_read;
 }
 
@@ -457,7 +458,7 @@ int encfs_write(const char *path, const char *buf, size_t size,
                                        (fs_off_t) offset, (byte *) buf, size );
   if(ret < 0) return ret;
 
-  assert( size <= INT_MAX );
+  assert( size <= std::numeric_limits<int>::max() );
   return size;
 }
 

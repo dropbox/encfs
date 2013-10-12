@@ -208,6 +208,13 @@ public:
       return read( IORequest( offset, data, dataLen ) );
     }
 
+    std::string read( fs_off_t offset, size_t amt )
+    {
+      auto data = std::unique_ptr<byte[]>( new byte[amt] );
+      auto amt_read = read( IORequest( offset, data.get(), amt ) );
+      return std::string( (char *) data.get(), amt_read );
+    }
+
     void write( const IORequest &req )
     {
       return _impl->write( req );
@@ -216,6 +223,11 @@ public:
     void write( fs_off_t offset, const byte *data, size_t dataLen )
     {
       return write( IORequest( offset, (byte *) data, dataLen ) );
+    }
+
+    void write( fs_off_t offset, const std::string &data )
+    {
+      return write( IORequest( offset, (byte *) data.data(), data.size() ) );
     }
 
     void truncate( off_t size )

@@ -25,6 +25,7 @@
 
 #include <new>
 #include <stdexcept>
+#include <type_traits>
 
 //#include "base/config.h"
 
@@ -191,7 +192,14 @@ constexpr bool operator==(optional<T> a, optional<T> b)
   return a && b ? *a == *b : !a && !b;
 }
 
+template< class T >
+constexpr optional<typename std::decay<T>::type>
+make_optional( T&& value ) {
+  return optional<typename std::decay<T>::type>(std::forward<T>(value));
 }
+
+}
+
 #endif
 
 #endif

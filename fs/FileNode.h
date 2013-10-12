@@ -73,7 +73,7 @@ public:
     fs_off_t getSize() const;
 
     ssize_t read(fs_off_t offset, byte *data, size_t size) const;
-    bool write(fs_off_t offset, byte *data, size_t size);
+    bool write(fs_off_t offset, const byte *data, size_t size);
 
     // truncate the file to a particular size
     int truncate( fs_off_t size );

@@ -52,8 +52,10 @@
 #include <cstdio>
 #include <cstring>
 
-#include <sys/time.h>
 #include <unistd.h>
+
+#include <sys/param.h>
+#include <sys/time.h>
 
 // Fuse version >= 26 requires another argument to fuse_unmount, which we
 // don't have.  So use the backward compatible call instead..
@@ -649,10 +651,10 @@ int main(int argc, char *argv[])
   {
     LOG(ERROR) << "Internal error: Caught exception from main loop: "
                << ex.what();
-  } catch(...)
+  }/* catch(...)
   {
     LOG(ERROR) << "Internal error: Caught unexpected exception";
-  }
+    }*/
 
   CipherV1::shutdown( encfsArgs->isThreaded );
 

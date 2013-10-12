@@ -231,15 +231,21 @@ ssize_t FileNode::read( fs_off_t offset, byte *data, size_t size ) const
   return (ssize_t) amount_read;
 }
 
-bool FileNode::write(fs_off_t offset, byte *data, size_t size)
+bool FileNode::write(fs_off_t offset, const byte *data, size_t size)
 {
   VLOG(1) << "FileNode::write offset " << offset
     << ", data size " << size;
 
+  // since the cipher io's modify data in place,
+  // we make a copy of our buf
+  // TODO: change FileIO::write() to not modify data in-place
+  auto ptr = std::unique_ptr<byte[]>( new byte[size] );
+  memmove( ptr.get(), data, size );
+
   IORequest req;
   req.offset = offset;
   req.dataLen = size;
-  req.data = data;
+  req.data = ptr.get();
 
   Lock _lock( mutex );
 

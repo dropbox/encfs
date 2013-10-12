@@ -107,26 +107,78 @@ MemBlock::~MemBlock()
 
 #ifdef WITH_BOTAN
 SecureMem::SecureMem(int len) 
-    : data_(new Botan::SecureVector<unsigned char>(len))
+  : data_(len ? new Botan::SecureVector<unsigned char>(len) : nullptr)
 {
-  rAssert(len > 0);
 }
 
 SecureMem::~SecureMem()
 {
+  if(data_)
+  {
 # if BOTAN_VERSION_CODE >= BOTAN_VERSION_CODE_FOR(1,11,0)
-  data_->destroy();
+    data_->destroy();
 # endif
-  delete data_;
+    delete data_;
+  }
 }
 
 byte* SecureMem::data() const {
-  return const_cast<byte*>(data_->begin());
+  return data_ ? const_cast<byte*>(data_->begin()) : nullptr;
 }
 
 int SecureMem::size() const {
-  return data_->size();
+  return data_ ? data_->size() : 0;
 }
+
+SecureMem &SecureMem::operator=(const SecureMem & sm)
+{
+  /* same poitner, no need to copy */
+  if(&sm == this) return *this;
+
+  /* first destroy our data */
+  if(data_)
+  {
+# if BOTAN_VERSION_CODE >= BOTAN_VERSION_CODE_FOR(1,11,0)
+    data_->destroy();
+# endif
+    delete data_;
+  }
+
+  data_ = new Botan::SecureVector<unsigned char>(sm.size());
+
+  memmove(this->data(), sm.data(), sm.size());
+
+  return *this;
+}
+
+SecureMem::SecureMem(const SecureMem & sm) : data_(nullptr) {
+  *this = sm;
+}
+
+SecureMem &SecureMem::operator=(SecureMem && sm) {
+  /* same poitner, no need to move */
+  if (&sm == this) return *this;
+
+  /* first destroy our data */
+  if(data_)
+  {
+# if BOTAN_VERSION_CODE >= BOTAN_VERSION_CODE_FOR(1,11,0)
+    data_->destroy();
+# endif
+    delete data_;
+  }
+
+  /* then take the pointer from the other one */
+  data_ = sm.data_;
+  sm.data_ = nullptr;
+
+  return *this;
+}
+
+SecureMem::SecureMem(SecureMem && sm) : data_(nullptr) {
+  *this = std::move(sm);
+}
+
 
 #else
 SecureMem::SecureMem(int len)

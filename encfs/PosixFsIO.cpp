@@ -38,6 +38,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <iostream>
 #include <limits>
 #include <map>
 #include <memory>
@@ -96,7 +97,9 @@ protected:
 public:
   PosixPath(std::string str)
     : StringPath( std::move( str ) )
-  {}
+  {
+    if (((const std::string &) *this).empty()) throw std::runtime_error("EMPTY STRING IS BAD");
+  }
 
   virtual std::shared_ptr<PathPoly> dirname() const override
   {
@@ -105,7 +108,7 @@ public:
     auto slash_pos = str.rfind('/');
 
     if (!slash_pos) {
-      return std::make_shared<PosixPath>( "/" );
+      return std::make_shared<PosixPath>( POSIX_PATH_SEP );
     }
 
     return std::make_shared<PosixPath>( str.substr( 0, slash_pos ) );
@@ -199,11 +202,12 @@ const std::string &PosixFsIO::path_sep() const
 
 Path PosixFsIO::pathFromString(const std::string &path) const
 {
+  if (path.empty()) throw std::runtime_error("EMPTY STRING IS NOT ALLOWED");
+
   /* TODO: throw exception if path is not a UTF-8 posix path */
-  if(path[0] != '/')
-  {
-    throw std::runtime_error( "Not absolute path: \"" + path + "\"" );
-  }
+  if(path[0] != '/') throw std::runtime_error( "Not absolute path: \"" + path + "\"" );
+
+  if (path == "/") return std::make_shared<PosixPath>( path );
 
   std::string newpath = path;
   while(endswith( newpath, "/" ))

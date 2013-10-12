@@ -69,6 +69,21 @@ class SecureMem
   explicit SecureMem(int len);
   ~SecureMem();
 
+#ifdef WITH_BOTAN
+  SecureMem(const SecureMem & sm);
+  SecureMem &operator=(const SecureMem & sm);
+
+  SecureMem(SecureMem && sm);
+  SecureMem &operator=(SecureMem && sm);
+#else
+  // TODO: define these
+  SecureMem(const SecureMem & sm) = delete;
+  SecureMem &operator=(const SecureMem & sm) = delete;
+
+  SecureMem(SecureMem && sm) = delete;
+  SecureMem &operator=(SecureMem && sm) = delete;
+#endif
+
  private:
 #ifdef WITH_BOTAN
   Botan::SecureVector<unsigned char> *data_;

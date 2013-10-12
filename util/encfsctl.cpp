@@ -15,31 +15,8 @@
  * more details.
  */
 
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-#include <cstdio>
-
-#include <iostream>
-#include <list>
-#include <memory>
-#include <string>
-
-#include <getopt.h>
-#include <glog/logging.h>
-
-#include "base/autosprintf.h"
-#include "base/config.h"
-#include "base/Error.h"
-#include "base/i18n.h"
-
-#include "cipher/CipherV1.h"
-#include "cipher/BlockCipher.h"
-#include "cipher/MAC.h"
-#include "cipher/StreamCipher.h"
-
+#include "encfs/EncfsPasswordReader.h"
+#include "encfs/PosixFsIO.h"
 
 // TODO: get rid of all the following includes
 // in preference of use EncfsFsIO.h only
@@ -48,8 +25,32 @@
 #include "fs/FileNode.h"
 #include "fs/DirNode.h"
 
-#include "encfs/EncfsPasswordReader.h"
-#include "encfs/PosixFsIO.h"
+#include "cipher/CipherV1.h"
+#include "cipher/BlockCipher.h"
+#include "cipher/MAC.h"
+#include "cipher/StreamCipher.h"
+
+#include "base/autosprintf.h"
+#include "base/config.h"
+#include "base/Error.h"
+#include "base/i18n.h"
+
+#include <getopt.h>
+
+#include <glog/logging.h>
+
+#include <iostream>
+#include <list>
+#include <memory>
+#include <string>
+
+#include <cstdio>
+
+#include <fcntl.h>
+
+#include <sys/param.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 using namespace encfs;
 using gnu::autosprintf;

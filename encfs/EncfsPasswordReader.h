@@ -46,8 +46,9 @@ public:
                       std::string passProg_,
                       std::string rootDir_)
   : useStdin( std::move( useStdin_ ) )
-  , optProgramPasswordReader( ProgramPasswordReader( std::move( passProg_ ),
-                                                     std::move( rootDir_ ) ) )
+  , optProgramPasswordReader( passProg_.empty() ? opt::nullopt :
+                              opt::make_optional( ProgramPasswordReader( std::move( passProg_ ),
+                                                                         std::move( rootDir_ ) ) ) )
   {}
 
   EncfsPasswordReader(bool useStdin_)

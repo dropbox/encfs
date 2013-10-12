@@ -212,6 +212,12 @@ ConfigType readConfig_load( const shared_ptr<FsIO> &fs_io, ConfigInfo *nm, const
   }
 }
 
+static bool endswith(const std::string & haystack, const std::string & needle) {
+  if (haystack.size() < needle.size()) return false;
+  return haystack.substr(haystack.size() - needle.size(), needle.size()) == needle;
+}
+
+
 ConfigType readConfig( const shared_ptr<FsIO> &fs_io, const string &rootDir, EncfsConfig &config )
 {
   ConfigInfo *nm = ConfigFileMapping;
@@ -225,7 +231,11 @@ ConfigType readConfig( const shared_ptr<FsIO> &fs_io, const string &rootDir, Enc
         return readConfig_load( fs_io, nm, envFile, config );
     }
     // the standard place to look is in the root directory
-    string path = rootDir + nm->fileName;
+    auto root = rootDir;
+    if (!endswith(root, fs_io->path_sep())) {
+      root += fs_io->path_sep();
+    }
+    string path = root + nm->fileName;
     if( fileExists( fs_io, path.c_str() ) )
       return readConfig_load( fs_io, nm, path.c_str(), config);
 
@@ -1349,6 +1359,7 @@ CipherKey getUserKey(const EncfsConfig &config, shared_ptr<PasswordReader> passw
   CipherKey userKey;
   if(password)
   {
+    assert(password->data());
     userKey = decryptKey(config, (char*)password->data(),
                          strlen((char*)password->data()));
     delete password;
@@ -1365,6 +1376,7 @@ CipherKey getNewUserKey(EncfsConfig &config, shared_ptr<PasswordReader> password
   CipherKey result;
   if(password)
   {
+    assert(password->data());
     result = makeNewKey(config, (char*)password->data(),
                         strlen((char*)password->data()));
     delete password;
