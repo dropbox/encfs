@@ -84,7 +84,7 @@ Interface MACFileIO::interface() const
   return MACFileIO_iface;
 }
 
-inline static off_t roundUpDivide( off_t numerator, int denominator )
+inline static fs_off_t roundUpDivide( fs_off_t numerator, int denominator )
 {
   // integer arithmetic always rounds down, so we can round up by adding
   // enough so that any value other then a multiple of denominator gets
@@ -102,9 +102,9 @@ inline static off_t roundUpDivide( off_t numerator, int denominator )
 //   ... blockNum = 1
 //   ... partialBlock = 0
 //   ... adjLoc = 1 * blockSize
-static off_t locWithHeader( off_t offset, int blockSize, int headerSize )
+static fs_off_t locWithHeader( fs_off_t offset, int blockSize, int headerSize )
 {
-  off_t blockNum = roundUpDivide( offset , blockSize - headerSize );
+  fs_off_t blockNum = roundUpDivide( offset , blockSize - headerSize );
   return offset + blockNum * headerSize;
 }
 
@@ -113,9 +113,9 @@ static off_t locWithHeader( off_t offset, int blockSize, int headerSize )
 // The output value will always be less then the input value, because the
 // headers are stored at the beginning of the block, so even the first data is
 // offset by the size of the header.
-static off_t locWithoutHeader( off_t offset, int blockSize, int headerSize )
+static fs_off_t locWithoutHeader( fs_off_t offset, int blockSize, int headerSize )
 {
-  off_t blockNum = roundUpDivide( offset , blockSize );
+  fs_off_t blockNum = roundUpDivide( offset , blockSize );
   return offset - blockNum * headerSize;
 }
 

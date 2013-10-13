@@ -31,9 +31,23 @@
 static const char rcsid[] = "$OpenBSD: readpassphrase.c,v 1.12 2001/12/15 05:41:00 millert Exp $";
 #endif /* LIBC_SCCS and not lint */
 
-//#include "includes.h"
+#include "cipher/readpassphrase.h"
+
+#include <cstddef>
 
 #ifndef HAVE_READPASSPHRASE
+
+#ifdef _WIN32
+
+char *
+readpassphrase(const char */*prompt*/, char */*buf*/,
+               size_t /*bufsiz*/, int /*flags*/)
+{
+  // not currently defined for _WIN32
+  return nullptr;
+}
+
+#else
 
 #include <csignal>
 #include <cstdio>
@@ -62,7 +76,10 @@ static const char rcsid[] = "$OpenBSD: readpassphrase.c,v 1.12 2001/12/15 05:41:
 
 static volatile sig_atomic_t signo;
 
-static void handler(int);
+static void handler(int s)
+{
+	signo = s;
+}
 
 char *
 readpassphrase(const char *prompt, char *buf, size_t bufsiz, int flags)
@@ -176,20 +193,7 @@ restart:
 	errno = save_errno;
 	return(nr == -1 ? NULL : buf);
 }
+
+#endif /* _WIN32 */
+
 #endif /* HAVE_READPASSPHRASE */
-  
-#if 0
-char *
-getpass(const char *prompt)
-{
-	static char buf[_PASSWORD_LEN + 1];
-
-	return(readpassphrase(prompt, buf, sizeof(buf), RPP_ECHO_OFF));
-}
-#endif
-
-static void handler(int s)
-{
-
-	signo = s;
-}

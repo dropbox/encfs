@@ -28,7 +28,11 @@
 
 #include <pthread.h>
 
+// for our custom SecureMem implementation
+// (only implemented for posix machines currently)
+#ifndef WITH_BOTAN
 #include <sys/mman.h>
+#endif
 
 #include <glog/logging.h>
 

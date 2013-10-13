@@ -112,7 +112,7 @@ size_t BlockFileIO::read( const IORequest &req ) const
   rAssert( _blockSize != 0 );
 
   int partialOffset = req.offset % _blockSize;
-  off_t blockNum = req.offset / _blockSize;
+  fs_off_t blockNum = req.offset / _blockSize;
   ssize_t result = 0;
 
   if(partialOffset == 0 && req.dataLen <= (size_t) _blockSize)
@@ -296,10 +296,10 @@ int BlockFileIO::blockSize() const
   return _blockSize;
 }
 
-void BlockFileIO::padFile( off_t oldSize, off_t newSize, bool forceWrite )
+void BlockFileIO::padFile( fs_off_t oldSize, fs_off_t newSize, bool forceWrite )
 {
-  off_t oldLastBlock = oldSize / _blockSize;
-  off_t newLastBlock = newSize / _blockSize;
+  fs_off_t oldLastBlock = oldSize / _blockSize;
+  fs_off_t newLastBlock = newSize / _blockSize;
   int lastBlockSize = newSize % _blockSize;
 
   IORequest req;
@@ -375,7 +375,7 @@ void BlockFileIO::padFile( off_t oldSize, off_t newSize, bool forceWrite )
   }
 }
 
-int BlockFileIO::blockTruncate( off_t size, FileIO *base )
+int BlockFileIO::blockTruncate( fs_off_t size, FileIO *base )
 {
   rAssert(size >= 0);
 
@@ -408,7 +408,7 @@ int BlockFileIO::blockTruncate( off_t size, FileIO *base )
         // partial block after truncate.  Need to read in the block being
         // truncated before the truncate.  Then write it back out afterwards,
         // since the encoding will change..
-        off_t blockNum = size / _blockSize;
+        fs_off_t blockNum = size / _blockSize;
         MemBlock mb;
         mb.allocate( _blockSize );
 

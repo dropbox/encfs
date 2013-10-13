@@ -23,10 +23,18 @@
 
 #include "base/config.h"
 
-#ifdef CMAKE_USE_PTHREADS_INIT
+#include <stdexcept>
+
+
+#if 0 && defined(CMAKE_USE_PTHREADS_INIT)
+#define _USE_PTHREADS
+#endif
+
+
+#ifdef _USE_PTHREADS
 #include <pthread.h>
 #else
-#warning No thread support.
+//#warning No thread support.
 #endif
 
 namespace encfs
@@ -35,13 +43,17 @@ namespace encfs
 class Mutex
 {
  public:
-#ifdef CMAKE_USE_PTHREADS_INIT
+#ifdef _USE_PTHREADS
   pthread_mutex_t _mutex;
   Mutex() {
     pthread_mutex_init( &_mutex, 0 );
   }
   ~Mutex() {
     pthread_mutex_destroy( &_mutex );
+  }
+#else
+  Mutex() {
+    throw std::runtime_error("Mutex's are not supported!");
   }
 #endif
 
@@ -68,14 +80,14 @@ private:
 
 inline void Mutex::lock() 
 {
-#ifdef CMAKE_USE_PTHREADS_INIT
+#ifdef _USE_PTHREADS
   pthread_mutex_lock( &_mutex );
 #endif
 }
 
 inline void Mutex::unlock()
 {
-#ifdef CMAKE_USE_PTHREADS_INIT
+#ifdef _USE_PTHREADS
   pthread_mutex_unlock( &_mutex );
 #endif
 }
@@ -99,6 +111,8 @@ inline void Lock::leave()
 }
 
 }  // namespace encfs
+
+#undef _USE_PTHREADS
 
 #endif
 

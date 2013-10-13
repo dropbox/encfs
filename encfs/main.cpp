@@ -30,6 +30,7 @@
 
 #include "cipher/CipherV1.h"
 
+#include "base/c_support.h"
 #include "base/config.h"
 #include "base/autosprintf.h"
 #include "base/ConfigReader.h"
@@ -146,15 +147,6 @@ static std::string makeAbsolute(std::string a)
   char buf[PATH_MAX];
   std::string cwd = getcwd( buf, sizeof(buf) );
   return cwd + '/' + a;
-}
-
-static char *strdup_x(const char *x)
-{
-  size_t len = strlen(x);
-  char *toret = (char *) malloc(len + 1);
-  memcpy(toret, x, len);
-  toret[len] = '\0';
-  return toret;
 }
 
 static 

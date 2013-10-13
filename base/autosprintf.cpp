@@ -27,10 +27,11 @@
 /* Specification.  */
 #include "base/autosprintf.h"
 
+#include "base/libc_support.h"
+
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-//#include "lib-asprintf.h"
 #include <stdio.h>
 
 namespace gnu
@@ -41,7 +42,7 @@ namespace gnu
   {
     va_list args;
     va_start (args, format);
-    if (vasprintf (&str, format, args) < 0)
+    if (vasprintf_x (&str, format, args) < 0)
       str = NULL;
     va_end (args);
   }
@@ -49,7 +50,7 @@ namespace gnu
   /* Copy constructor.  Necessary because the destructor is nontrivial.  */
   autosprintf::autosprintf (const autosprintf& src)
   {
-    str = (src.str != NULL ? strdup (src.str) : NULL);
+    str = (src.str != NULL ? strdup_x (src.str) : NULL);
   }
 
   /* Destructor: frees the temporarily allocated string.  */

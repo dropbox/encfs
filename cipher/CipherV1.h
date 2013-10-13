@@ -31,6 +31,10 @@
 #include "cipher/MAC.h"
 #include "cipher/PBKDF.h"
 
+#ifdef interface
+#error "interface is defined as a macro" interface
+#endif
+
 namespace encfs {
 
 class SecureMem;

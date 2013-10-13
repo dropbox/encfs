@@ -20,6 +20,7 @@ add_library (encfs-base
     Range.h
     Registry.h
     XmlReader.cpp
+    libc_support.cpp
     ${PROTO_SRCS}
     ${PROTO_HDRS}
 )

@@ -230,7 +230,7 @@ public:
       return write( IORequest( offset, (byte *) data.data(), data.size() ) );
     }
 
-    void truncate( off_t size )
+    void truncate( fs_off_t size )
     {
       return _impl->truncate( size );
     }

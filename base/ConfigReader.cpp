@@ -22,10 +22,8 @@
 
 #include <glog/logging.h>
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
+#include <fstream>
+
 #include <cstring>
 
 #include "base/types.h"
@@ -33,6 +31,10 @@
 using std::make_pair;
 using std::map;
 using std::string;
+
+#if __cplusplus != 201103L
+#error "FUCK"
+#endif
 
 namespace encfs {
 
@@ -48,33 +50,17 @@ ConfigReader::~ConfigReader()
 // into mapped variables.
 bool ConfigReader::load(const char *fileName)
 {
-  struct stat stbuf;
-  memset( &stbuf, 0, sizeof(struct stat));
-  if( lstat( fileName, &stbuf ) != 0)
-    return false;
+  std::fstream f( fileName, std::ios::binary );
+  if (!f) return false;
 
-  int size = stbuf.st_size;
+  std::ostringstream os;
+  os << f.rdbuf();
+  if (!f.eof()) return false;
 
-  int fd = open( fileName, O_RDONLY );
-  if(fd < 0)
-    return false;
-
-  char *buf = new char[size];
-
-  int res = ::read( fd, buf, size );
-  close( fd );
-
-  if( res != size )
-  {
-    LOG(WARNING) << "Partial read of config file, expecting " 
-      << size << " bytes, got " << res;
-    delete[] buf;
-    return false;
-  }
+  auto str = os.str();
 
   ConfigVar in;
-  in.write( (byte *)buf, size );
-  delete[] buf;
+  in.write( (byte *)str.data(), str.size() );
 
   return loadFromVar( in );
 }
@@ -108,23 +94,12 @@ bool ConfigReader::save(const char *fileName) const
   // write everything to a ConfigVar, then output to disk
   ConfigVar out = toVar();
 
-  int fd = ::open( fileName, O_RDWR | O_CREAT, 0640 );
-  if(fd >= 0)
-  {
-    int retVal = ::write( fd, out.buffer(), out.size() );
-    close( fd );
-    if(retVal != out.size())
-    {
-      LOG(ERROR) << "Error writing to config file " << fileName;
-      return false;
-    }
-  } else
-  {
-    LOG(ERROR) << "Unable to open or create file " << fileName;
-    return false;
-  }
+  // TODO: unix perms used to be 0650
+  std::ofstream f(fileName, std::ios::binary | std::ios::out );
+  if (!f) return false;
 
-  return true;
+  f.write( out.buffer(), out.size() );
+  return f;
 }
 
 ConfigVar ConfigReader::toVar() const

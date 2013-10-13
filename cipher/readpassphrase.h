@@ -30,8 +30,7 @@
 #ifndef _READPASSPHRASE_H_
 #define _READPASSPHRASE_H_
 
-//#include "includes.h"
-#include <sys/types.h>
+#include <stddef.h>
 
 #ifndef HAVE_READPASSPHRASE
 

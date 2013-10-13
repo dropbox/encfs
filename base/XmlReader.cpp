@@ -18,25 +18,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
+#include "base/XmlReader.h"
 
-#include <cstring>
-
-#include <algorithm>
-#include <map>
-#include <memory>
+#include "base/base64.h"
+#include "base/Interface.h"
 
 #include <glog/logging.h>
 
 #include <tinyxml.h>
 
-#include "base/base64.h"
-#include "base/Interface.h"
+#include <algorithm>
+#include <map>
+#include <memory>
 
-#include "base/XmlReader.h"
+#include <cstring>
 
 using std::shared_ptr;
 

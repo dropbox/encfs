@@ -24,9 +24,9 @@
 #include <cstring>
 #include <ctime>
 
-#include <sys/mman.h>
 #include <sys/time.h>
 
+#define GLOG_NO_ABBREVIATED_SEVERITIES
 #include <glog/logging.h>
 
 #ifdef HAVE_VALGRIND_MEMCHECK_H

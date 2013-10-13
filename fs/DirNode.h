@@ -52,11 +52,11 @@ public:
     DirTraverse(Directory && dir_io,
                 uint64_t iv,
 	        const std::shared_ptr<NameIO> &naming);
-    DirTraverse(DirTraverse && src) = default;
-    DirTraverse& operator=(DirTraverse && other) = default;
+    DirTraverse(DirTraverse &&) = default;
+    DirTraverse& operator=(DirTraverse &&) = default;
 
-    DirTraverse(const DirTraverse &src) = delete;
-    DirTraverse &operator = (const DirTraverse &src) = delete;
+    DirTraverse(const DirTraverse &) = delete;
+    DirTraverse &operator = (const DirTraverse &) = delete;
 
     // returns FALSE to indicate an invalid DirTraverse (such as when
     // an invalid directory is requested for traversal)
