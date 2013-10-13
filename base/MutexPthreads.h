@@ -18,59 +18,44 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _Mutex_incl_
-#define _Mutex_incl_
+#ifndef _MutexPthreads_incl_
+#define _MutexPthreads_incl_
 
-#include "base/config.h"
+#include <stdexcept>
 
-#ifdef _WIN32
-#error No thread support.
-#elif defined(CMAKE_USE_PTHREADS_INIT)
-#include "base/MutexPthreads.h"
-namespace encfs { typedef MutexPthreads Mutex; }
-#else
-#error No thread support.
-#endif
+#include <pthread.h>
 
 namespace encfs
 {
 
-class Lock
+class MutexPthreads
 {
-public:
-  explicit Lock( Mutex &mutex );
-  ~Lock();
+ public:
+  pthread_mutex_t _mutex;
+  MutexPthreads()
+  {
+    pthread_mutex_init( &_mutex, 0 );
+  }
 
-  // leave the lock as it is.  When the Lock wrapper is destroyed, it
-  // will do nothing with the pthread mutex.
-  void leave();
+  ~MutexPthreads()
+  {
+    pthread_mutex_destroy( &_mutex );
+  }
 
-private:
-  Lock(const Lock &src); // not allowed
-  Lock &operator = (const Lock &src); // not allowed
+  void lock()
+  {
+    const int ret = pthread_mutex_lock( &_mutex );
+    if (ret) throw std::runtime_error( "could not lock mutex" );
+  }
 
-  Mutex *_mutex;
+  void unlock()
+  {
+    const int ret = pthread_mutex_lock( &_mutex );
+    if (ret) throw std::runtime_error( "could not lock mutex" );
+  }
 };
 
-inline Lock::Lock( Mutex &mutex )
-    : _mutex( &mutex )
-{
-  if (_mutex) _mutex->lock();
-}
-
-inline Lock::~Lock( )
-{
-  if(_mutex) _mutex->unlock();
-}
-
-inline void Lock::leave()
-{
-  _mutex = NULL;
-}
-
 }  // namespace encfs
-
-#undef _USE_PTHREADS
 
 #endif
 
