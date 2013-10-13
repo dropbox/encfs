@@ -30,7 +30,7 @@
 
 #include "cipher/CipherV1.h"
 
-#include "base/c_support.h"
+#include "base/libc_support.h"
 #include "base/config.h"
 #include "base/autosprintf.h"
 #include "base/ConfigReader.h"

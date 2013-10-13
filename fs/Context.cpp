@@ -18,18 +18,19 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// TODO: rename to FileNode tracker
+#define GLOG_NO_ABBREVIATED_SEVERITIES
+
+#include "fs/Context.h"
+
+#include "fs/FileNode.h"
+#include "fs/FileUtils.h"
+#include "fs/DirNode.h"
+
+#include "base/Error.h"
 
 #include <iostream>
 #include <string>
 #include <stdexcept>
-
-#include "fs/Context.h"
-
-#include "base/Error.h"
-#include "fs/FileNode.h"
-#include "fs/FileUtils.h"
-#include "fs/DirNode.h"
 
 using std::shared_ptr;
 

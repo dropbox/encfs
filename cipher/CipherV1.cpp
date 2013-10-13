@@ -18,26 +18,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "cipher/CipherV1.h"
+#define GLOG_NO_ABBREVIATED_SEVERITIES
+
 #include "base/config.h"
 
-#include <cstring>
-#include <ctime>
-
-#include <sys/time.h>
-
-#define GLOG_NO_ABBREVIATED_SEVERITIES
-#include <glog/logging.h>
-
-#ifdef HAVE_VALGRIND_MEMCHECK_H
-#include <valgrind/memcheck.h>
-#endif
-
-#include "base/base64.h"
-#include "base/Error.h"
-#include "base/i18n.h"
-#include "base/Mutex.h"
-#include "base/Range.h"
+#include "cipher/CipherV1.h"
 
 #include "cipher/MemoryPool.h"
 #include "cipher/MAC.h"
@@ -52,6 +37,23 @@
 #ifdef WITH_BOTAN
 #include "cipher/botan.h"
 #endif
+
+#include "base/base64.h"
+#include "base/Error.h"
+#include "base/i18n.h"
+#include "base/Mutex.h"
+#include "base/Range.h"
+
+#include <glog/logging.h>
+
+#ifdef HAVE_VALGRIND_MEMCHECK_H
+#include <valgrind/memcheck.h>
+#endif
+
+#include <cstring>
+#include <ctime>
+
+#include <sys/time.h>
 
 using std::list;
 using std::string;

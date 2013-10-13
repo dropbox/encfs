@@ -18,16 +18,18 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <cerrno>
-
-#include <glog/logging.h>
-
-#include "base/Error.h"
-#include "cipher/CipherV1.h"
-#include "cipher/MemoryPool.h"
-#include "fs/fsconfig.pb.h"
+#define GLOG_NO_ABBREVIATED_SEVERITIES
 
 #include "fs/CipherFileIO.h"
+
+#include "fs/fsconfig.pb.h"
+
+#include "cipher/CipherV1.h"
+#include "cipher/MemoryPool.h"
+
+#include "base/Error.h"
+
+#include <glog/logging.h>
 
 using std::shared_ptr;
 

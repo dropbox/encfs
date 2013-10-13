@@ -24,7 +24,8 @@
 #include "base/config.h"
 
 #ifdef _WIN32
-#error No thread support.
+#include "base/MutexWin32CS.h"
+namespace encfs { typedef MutexWin32CS Mutex; }
 #elif defined(CMAKE_USE_PTHREADS_INIT)
 #include "base/MutexPthreads.h"
 namespace encfs { typedef MutexPthreads Mutex; }

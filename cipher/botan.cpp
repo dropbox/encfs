@@ -19,13 +19,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <memory>
+#define GLOG_NO_ABBREVIATED_SEVERITIES
 
-#include "cipher/botan.h"
 #include "base/config.h"
 
-#include <glog/logging.h>
-#include <botan/botan.h>
+#include "cipher/botan.h"
 
 #include "base/Error.h"
 #include "base/Mutex.h"
@@ -41,7 +39,13 @@
 #include <valgrind/memcheck.h>
 #endif
 
+#include <glog/logging.h>
+
+#include <botan/botan.h>
+
+#include <memory>
 #include <string>
+
 
 using namespace Botan;
 using std::string;
