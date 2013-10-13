@@ -32,10 +32,6 @@ using std::make_pair;
 using std::map;
 using std::string;
 
-#if __cplusplus != 201103L
-#error "FUCK"
-#endif
-
 namespace encfs {
 
 ConfigReader::ConfigReader()
@@ -99,7 +95,7 @@ bool ConfigReader::save(const char *fileName) const
   if (!f) return false;
 
   f.write( out.buffer(), out.size() );
-  return f;
+  return (bool) f;
 }
 
 ConfigVar ConfigReader::toVar() const
