@@ -120,11 +120,18 @@ bool fileExists( const shared_ptr<FsIO> &fs_io, const char * fileName )
 
 bool isDirectory( const shared_ptr<FsIO> &fs_io, const char *fileName )
 {
+  return isDirectory( fs_io, fs_io->pathFromString( fileName ) );
+}
+
+bool isDirectory( const shared_ptr<FsIO> &fs_io, const Path &p )
+{
   try
   {
-    return get_attrs( fs_io, fs_io->pathFromString( fileName ) ).type == FsFileType::DIRECTORY;
-  } catch ( ... )
+    fs_io->opendir( p );
+    return true;
+  } catch ( const std::system_error & err )
   {
+    if (err.code() != std::errc::not_a_directory) throw;
     return false;
   }
 }
@@ -190,7 +197,7 @@ bool userAllowMkdir( const shared_ptr<FsIO> &fs_io, int promptno, const char *pa
 }
 
 ConfigType readConfig_load( const shared_ptr<FsIO> &fs_io, ConfigInfo *nm, const char *path, 
-    EncfsConfig &config )
+                            EncfsConfig &config, bool throw_exception )
 {
   if( nm->loadFunc )
   {
@@ -203,10 +210,14 @@ ConfigType readConfig_load( const shared_ptr<FsIO> &fs_io, ConfigInfo *nm, const
       LOG(WARNING) << "readConfig failed: " << err.what();
     }
 
+    if (throw_exception) throw ConfigurationFileIsCorrupted();
+
     LOG(ERROR) << "Found config file " << path << ", but failed to load";
     return Config_None;
   } else
   {
+    if (throw_exception) throw std::runtime_error( "no load function?" );
+
     // No load function - must be an unsupported type..
     return Config_None;
   }
@@ -217,30 +228,45 @@ static bool endswith(const std::string & haystack, const std::string & needle) {
   return haystack.substr(haystack.size() - needle.size(), needle.size()) == needle;
 }
 
+std::string ensure_endswith(std::string path, std::string term) {
+  if (!endswith( path, term )) path += term;
+  return std::move(path);
+}
 
-ConfigType readConfig( const shared_ptr<FsIO> &fs_io, const string &rootDir, EncfsConfig &config )
+EncfsConfig
+read_config(std::shared_ptr<FsIO> fs_io,
+            const Path & encrypted_folder_path) {
+  EncfsConfig config;
+  const bool throw_exception = true;
+  readConfig(fs_io, encrypted_folder_path, config, throw_exception);
+  return std::move(config);
+}
+
+ConfigType readConfig( const shared_ptr<FsIO> &fs_io, const string &rootDir, EncfsConfig &config,
+                       bool throw_exception)
 {
   ConfigInfo *nm = ConfigFileMapping;
   while(nm->fileName)
   {
     // allow environment variable to override default config path
+    // TODO: MOVE THIS OUT OF libencf-fs
     if( nm->environmentOverride != NULL )
     {
       char *envFile = getenv( nm->environmentOverride );
       if( envFile != NULL )
-        return readConfig_load( fs_io, nm, envFile, config );
+        return readConfig_load( fs_io, nm, envFile, config, throw_exception );
     }
     // the standard place to look is in the root directory
-    auto root = rootDir;
-    if (!endswith(root, fs_io->path_sep())) {
-      root += fs_io->path_sep();
-    }
-    string path = root + nm->fileName;
+    auto path = ensure_endswith(rootDir, fs_io->path_sep()) + nm->fileName;
     if( fileExists( fs_io, path.c_str() ) )
-      return readConfig_load( fs_io, nm, path.c_str(), config);
+    {
+      return readConfig_load( fs_io, nm, path.c_str(), config, throw_exception);
+    }
 
     ++nm;
   }
+
+  if (throw_exception) throw ConfigurationFileDoesNotExist();
 
   return Config_None;
 }
@@ -481,14 +507,22 @@ static bool writeTextConfig( const shared_ptr<FsIO> &fs_io, const char *fileName
   return true;
 }
 
+void
+write_config(std::shared_ptr<FsIO> fs_io,
+             const Path & encrypted_directory_path,
+             const EncfsConfig & cfg) {
+  auto save_success = saveConfig(fs_io, encrypted_directory_path, cfg);
+  if (!save_success) throw std::runtime_error("bad config");
+}
+
 bool saveConfig( const shared_ptr<FsIO> &fs_io, const string &rootDir, const EncfsConfig &config )
 {
   bool ok = false;
 
   ConfigInfo *nm = ConfigFileMapping;
-    
+
   // TODO(vgough): remove old config after saving a new one?
-  string path = rootDir + ConfigFileName;
+  string path = ensure_endswith(rootDir, fs_io->path_sep()) + ConfigFileName;
   if( nm->environmentOverride != NULL )
   {
     // use environment file if specified..
@@ -906,16 +940,82 @@ bool selectZeroBlockPassThrough()
         "This avoids writing encrypted blocks when file holes are created."));
 }
 
-RootPtr createConfig( const shared_ptr<EncFS_Context> &ctx,
-    const shared_ptr<EncFS_Opts> &opts )
-{
-  const std::string rootDir = opts->rootDir;
-  bool annotate = opts->annotate;
-  bool forceDecode = opts->forceDecode;
-  bool reverseEncryption = opts->reverseEncryption;
-  ConfigMode configMode = opts->configMode;
+CipherKey getNewUserKey(EncfsConfig &config, const SecureMem & secure_password);
+CipherKey getUserKey(const EncfsConfig &config, const SecureMem & passwordReader);
 
-  std::shared_ptr<EncFS_Root> rootInfo;
+EncfsConfig create_paranoid_config(const SecureMem & secure_passwowrd)
+{
+  // look for AES with 256 bit key..
+  // Use block filename encryption mode.
+  // Enable per-block HMAC headers at substantial performance penalty..
+  // Enable per-file initialization vector headers.
+  // Enable filename initialization vector chaning
+  int keySize = 256;
+  int blockSize = DefaultBlockSize;
+  auto alg = findCipherAlgorithm("AES", keySize);
+  Interface nameIOIface = BlockNameIO::CurrentInterface();
+  int blockMACBytes = 8;
+  int blockMACRandBytes = 0; // using uniqueIV, so this isn't necessary
+  bool uniqueIV = true;
+  bool chainedIV = true;
+  bool externalIV = true;
+  bool allowHoles = true;
+  long desiredKDFDuration = ParanoiaKDFDuration;
+
+  shared_ptr<CipherV1> cipher = CipherV1::New( alg.iface, keySize );
+  // should never happen
+  if(!cipher) throw std::runtime_error("Unable to instantiate cipher");
+
+  EncfsConfig config;
+
+  config.mutable_cipher()->MergeFrom( cipher->interface() );
+  config.set_block_size( blockSize );
+  config.mutable_naming()->MergeFrom( nameIOIface );
+  config.set_creator( "EncFS " VERSION );
+  config.set_revision( ProtoSubVersion );
+  config.set_block_mac_bytes( blockMACBytes );
+  config.set_block_mac_rand_bytes( blockMACRandBytes );
+  config.set_unique_iv( uniqueIV );
+  config.set_chained_iv( chainedIV );
+  config.set_external_iv( externalIV );
+  config.set_allow_holes( allowHoles );
+
+  EncryptedKey *key = config.mutable_key();
+  key->clear_salt();
+  key->clear_kdf_iterations(); // filled in by keying function
+  key->set_kdf_duration( desiredKDFDuration );
+  key->set_size(keySize / 8);
+
+  int encodedKeySize = cipher->encodedKeySize();
+  auto encodedKey = std::unique_ptr<unsigned char[]>(new unsigned char[ encodedKeySize ]);
+
+  CipherKey volumeKey = cipher->newRandomKey();
+
+  // get user key and use it to encode volume key
+  auto userKey = getNewUserKey( config, secure_passwowrd );
+
+  cipher->setKey( userKey );
+  cipher->writeKey( volumeKey, encodedKey.get() );
+  userKey.reset();
+
+  key->set_ciphertext(encodedKey.get(), encodedKeySize);
+
+  // should never happen
+  if(!volumeKey.valid()) throw std::runtime_error("Failure generating new volume key!");
+
+  cipher->setKey( volumeKey );
+
+  return std::move(config);
+}
+
+// XXX: this probably shouldn't be in encfs-fs
+EncfsConfig create_config_interactively(const std::shared_ptr<PasswordReader> & passwordReader)
+{
+  bool annotate = true;
+  // TODO: should probably ask for this interactively
+  // since it's part of the config
+  bool reverseEncryption = false;
+  ConfigMode configMode = ConfigMode::Prompt;
 
   // creating new volume key.. should check that is what the user is
   // expecting...
@@ -965,8 +1065,7 @@ RootPtr createConfig( const shared_ptr<EncFS_Context> &ctx,
   {
     if (reverseEncryption)
     {
-      LOG(ERROR) << "Paranoia configuration not supported for --reverse";
-      return rootInfo;
+      throw std::runtime_error( "Paranoia configuration not supported for --reverse" );
     }
 
     // xgroup(setup)
@@ -1056,13 +1155,16 @@ RootPtr createConfig( const shared_ptr<EncFS_Context> &ctx,
   shared_ptr<CipherV1> cipher = CipherV1::New( alg.iface, keySize );
   if(!cipher)
   {
-    LOG(ERROR) << "Unable to instanciate cipher " << alg.name
-      << ", key size " << keySize << ", block size " << blockSize;
-    return rootInfo;
+    std::ostringstream os;
+    os << "Unable to instanciate cipher " << alg.name
+       << ", key size " << keySize << ", block size " << blockSize;
+    throw std::runtime_error(os.str());
   } else
   {
-    VLOG(1) << "Using cipher " << alg.name
-      << ", key size " << keySize << ", block size " << blockSize;
+    std::ostringstream os;
+    os << "Using cipher " << alg.name
+       << ", key size " << keySize << ", block size " << blockSize;
+    throw std::runtime_error(os.str());
   }
 
   EncfsConfig config;
@@ -1118,7 +1220,7 @@ RootPtr createConfig( const shared_ptr<EncFS_Context> &ctx,
   CipherKey volumeKey = cipher->newRandomKey();
 
   // get user key and use it to encode volume key
-  auto userKey = getNewUserKey( config, opts->passwordReader );
+  auto userKey = getNewUserKey( config, passwordReader );
 
   cipher->setKey( userKey );
   cipher->writeKey( volumeKey, encodedKey );
@@ -1129,14 +1231,11 @@ RootPtr createConfig( const shared_ptr<EncFS_Context> &ctx,
 
   if(!volumeKey.valid())
   {
-    LOG(ERROR) << "Failure generating new volume key! "
-      << "Please report this error.";
-    return rootInfo;
+    throw std::runtime_error("Failure generating new volume key! "
+                             "Please report this error.");
   }
 
   cipher->setKey( volumeKey );
-  if(!saveConfig( opts->fs_io, rootDir, config ))
-    return rootInfo;
 
   // fill in config struct
   shared_ptr<NameIO> nameCoder = NameIO::New( config.naming(), cipher );
@@ -1145,27 +1244,14 @@ RootPtr createConfig( const shared_ptr<EncFS_Context> &ctx,
     LOG(WARNING) << "Name coding interface not supported";
     cout << _("The filename encoding interface requested is not available") 
       << endl;
-    return rootInfo;
+    // XXX: should this every really happen?
+    throw std::runtime_error("name coder not supported");
   }
 
   nameCoder->setChainedNameIV( config.chained_iv() );
   nameCoder->setReverseEncryption( reverseEncryption );
 
-  auto fsConfig = std::make_shared<FSConfig>();
-  fsConfig->cipher = cipher;
-  fsConfig->key = volumeKey;
-  fsConfig->nameCoding = nameCoder;
-  fsConfig->config = std::make_shared<EncfsConfig>( config );
-  fsConfig->forceDecode = forceDecode;
-  fsConfig->reverseEncryption = reverseEncryption;
-  fsConfig->opts = opts;
-
-  rootInfo = std::make_shared<EncFS_Root>();
-  rootInfo->cipher = cipher;
-  rootInfo->volumeKey = volumeKey;
-  rootInfo->root = std::make_shared<DirNode>( ctx, rootDir, fsConfig );
-
-  return rootInfo;
+  return std::move(config);
 }
 
 void showFSInfo( const EncfsConfig &config )
@@ -1351,6 +1437,8 @@ CipherKey decryptKey(const EncfsConfig &config, const char *password, int passwd
   return userKey;
 }
 
+
+
 CipherKey getUserKey(const EncfsConfig &config, shared_ptr<PasswordReader> passwordReader)
 {
   const bool newPass = false;
@@ -1359,13 +1447,18 @@ CipherKey getUserKey(const EncfsConfig &config, shared_ptr<PasswordReader> passw
   CipherKey userKey;
   if(password)
   {
-    assert(password->data());
-    userKey = decryptKey(config, (char*)password->data(),
-                         strlen((char*)password->data()));
+    userKey = getUserKey(config, *password);
     delete password;
   }
 
   return userKey;
+}
+
+CipherKey getUserKey(const EncfsConfig &config, const SecureMem & secure_password)
+{
+  assert(secure_password.data());
+  auto c_str = (char *) secure_password.data();
+  return decryptKey(config, c_str, strlen(c_str));
 }
 
 CipherKey getNewUserKey(EncfsConfig &config, shared_ptr<PasswordReader> passwordReader)
@@ -1376,13 +1469,39 @@ CipherKey getNewUserKey(EncfsConfig &config, shared_ptr<PasswordReader> password
   CipherKey result;
   if(password)
   {
-    assert(password->data());
-    result = makeNewKey(config, (char*)password->data(),
-                        strlen((char*)password->data()));
+    result = getNewUserKey(config, *password);
     delete password;
   }
 
   return result;
+}
+
+CipherKey getNewUserKey(EncfsConfig &config, const SecureMem & secure_password)
+{
+  assert(secure_password.data());
+  auto c_str = (char *) secure_password.data();
+  return makeNewKey( config, c_str, strlen(c_str) );
+}
+
+bool
+verify_password(const encfs::EncfsConfig & config,
+                const encfs::SecureMem & secure_password) {
+  // first, instantiate the cipher.
+  auto cipher = getCipher(config);
+  if(!cipher) throw std::runtime_error("Bad cipher: " + config.cipher().name());
+
+  // get user key
+  auto userKey = getUserKey( config, secure_password );
+  // TODO: check while it wouldn't be valid
+  if(!userKey.valid()) return false;
+
+  cipher->setKey(userKey);
+  auto volumeKey =
+    cipher->readKey((const unsigned char *) config.key().ciphertext().data(),
+                    true);
+  userKey.reset();
+
+  return volumeKey.valid();
 }
 
 RootPtr initFS( const shared_ptr<EncFS_Context> &ctx,
@@ -1401,88 +1520,86 @@ RootPtr initFS( const shared_ptr<EncFS_Context> &ctx,
     }
   }
 
-  if(maybeConfig)
+  // if we don't have a config then we can't initialize
+  // this file system
+  if (!maybeConfig) return rootInfo;
+
+  EncfsConfig &config = *maybeConfig;
+  if(opts->reverseEncryption)
   {
-    EncfsConfig &config = *maybeConfig;
-    if(opts->reverseEncryption)
+    if (config.block_mac_bytes() != 0 || config.block_mac_rand_bytes() != 0
+        || config.unique_iv() || config.external_iv()
+        || config.chained_iv() )
     {
-      if (config.block_mac_bytes() != 0 || config.block_mac_rand_bytes() != 0
-          || config.unique_iv() || config.external_iv()
-          || config.chained_iv() )
-      {  
-        cout << _("The configuration loaded is not compatible with --reverse\n");
-        return rootInfo;
-      }
-    }
-
-    // first, instanciate the cipher.
-    shared_ptr<CipherV1> cipher = getCipher(config);
-    if(!cipher)
-    {
-      Interface iface = config.cipher();
-      LOG(ERROR) << "Unable to find cipher " << iface.name()
-          << ", version " << iface.major()
-          << ":" << iface.minor() << ":" << iface.age();
-      // xgroup(diag)
-      cout << _("The requested cipher interface is not available\n");
+      cout << _("The configuration loaded is not compatible with --reverse\n");
       return rootInfo;
     }
-
-    // get user key
-    CipherKey userKey = getUserKey( config, opts->passwordReader );
-    if(!userKey.valid()) return rootInfo;
-
-    cipher->setKey(userKey);
-
-    VLOG(1) << "cipher encoded key size = " << cipher->encodedKeySize();
-    // decode volume key..
-    CipherKey volumeKey = cipher->readKey(
-        (const unsigned char *)config.key().ciphertext().data(), opts->checkKey);
-    userKey.reset();
-
-    if(!volumeKey.valid())
-    {
-      // xgroup(diag)
-      cout << _("Error decoding volume key, password incorrect\n");
-      return rootInfo;
-    }
-
-    cipher->setKey(volumeKey);
-
-    shared_ptr<NameIO> nameCoder = NameIO::New( config.naming(), cipher );
-    if(!nameCoder)
-    {
-      Interface iface = config.naming();
-      LOG(ERROR) << "Unable to find nameio interface " << iface.name()
-          << ", version " << iface.major()
-          << ":" << iface.minor() << ":" << iface.age();
-      // xgroup(diag)
-      cout << _("The requested filename coding interface is "
-          "not available\n");
-      return rootInfo;
-    }
-
-    nameCoder->setChainedNameIV( config.chained_iv() );
-    nameCoder->setReverseEncryption( opts->reverseEncryption );
-
-    auto fsConfig = std::make_shared<FSConfig>();
-    fsConfig->cipher = cipher;
-    fsConfig->key = volumeKey;
-    fsConfig->nameCoding = nameCoder;
-    fsConfig->config = std::make_shared<EncfsConfig>( config );
-    fsConfig->forceDecode = opts->forceDecode;
-    fsConfig->reverseEncryption = opts->reverseEncryption;
-    fsConfig->opts = opts;
-
-    rootInfo = std::make_shared<EncFS_Root>();
-    rootInfo->cipher = cipher;
-    rootInfo->volumeKey = volumeKey;
-    rootInfo->root = std::make_shared<DirNode>( ctx, opts->rootDir, fsConfig );
-  } else if(opts->createIfNotFound)
-  {
-    // creating a new encrypted filesystem
-    rootInfo = createConfig( ctx, opts );
   }
+
+  // first, instantiate the cipher.
+  shared_ptr<CipherV1> cipher = getCipher(config);
+  if(!cipher)
+  {
+    Interface iface = config.cipher();
+    LOG(ERROR) << "Unable to find cipher " << iface.name()
+               << ", version " << iface.major()
+               << ":" << iface.minor() << ":" << iface.age();
+    // xgroup(diag)
+    cout << _("The requested cipher interface is not available\n");
+    return rootInfo;
+  }
+
+  // get user key
+  CipherKey userKey = getUserKey( config, opts->passwordReader );
+  if(!userKey.valid()) return rootInfo;
+
+  cipher->setKey(userKey);
+
+  VLOG(1) << "cipher encoded key size = " << cipher->encodedKeySize();
+  // decode volume key..
+  CipherKey volumeKey =
+    cipher->readKey((const unsigned char *) config.key().ciphertext().data(),
+                    opts->checkKey);
+  userKey.reset();
+
+  if(!volumeKey.valid())
+  {
+    // xgroup(diag)
+    cout << _("Error decoding volume key, password incorrect\n");
+    return rootInfo;
+  }
+
+  cipher->setKey(volumeKey);
+
+  shared_ptr<NameIO> nameCoder = NameIO::New( config.naming(), cipher );
+  if(!nameCoder)
+  {
+    Interface iface = config.naming();
+    LOG(ERROR) << "Unable to find nameio interface " << iface.name()
+               << ", version " << iface.major()
+               << ":" << iface.minor() << ":" << iface.age();
+    // xgroup(diag)
+    cout << _("The requested filename coding interface is "
+              "not available\n");
+    return rootInfo;
+  }
+
+  nameCoder->setChainedNameIV( config.chained_iv() );
+  nameCoder->setReverseEncryption( opts->reverseEncryption );
+
+  auto fsConfig = std::make_shared<FSConfig>();
+  fsConfig->cipher = cipher;
+  fsConfig->key = volumeKey;
+  fsConfig->nameCoding = nameCoder;
+  fsConfig->config = std::make_shared<EncfsConfig>( config );
+  fsConfig->forceDecode = opts->forceDecode;
+  fsConfig->reverseEncryption = opts->reverseEncryption;
+  fsConfig->opts = opts;
+
+  rootInfo = std::make_shared<EncFS_Root>();
+  rootInfo->cipher = cipher;
+  rootInfo->volumeKey = volumeKey;
+  rootInfo->root = std::make_shared<DirNode>( ctx, opts->rootDir, fsConfig );
 
   return rootInfo;
 }

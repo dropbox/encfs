@@ -65,6 +65,7 @@ FileNode::FileNode(const shared_ptr<EncFS_Context> &ctx,
                    Path plaintextName_,
                    Path cipherName_)
   : fsConfig(cfg)
+  , _iv(0)
   , _pname(plaintextName_)
   , _cname(cipherName_)
   , _ctx(ctx)
@@ -78,6 +79,7 @@ FileNode::~FileNode()
   _cname.zero();
   cipher_io = nullptr;
   io = nullptr;
+  _iv = 0;
 }
 
 const Path &FileNode::cipherName() const
@@ -90,14 +92,17 @@ const Path &FileNode::plaintextName() const
   return _pname;
 }
 
-static bool setIV(const shared_ptr<FileIO> &io,
+static bool setIV(uint64_t & _iv,
                   const shared_ptr<CipherFileIO> &cipher_io,
                   uint64_t iv)
 {
+  _iv = iv;
+  if (!cipher_io) return true;
+
   bool do_set_iv = false;
   try
   {
-    FsFileAttrs attrs = io->get_attrs();
+    FsFileAttrs attrs = cipher_io->get_attrs();
     do_set_iv = attrs.type == FsFileType::REGULAR;
   } catch ( const Error &err )
   {
@@ -120,7 +125,7 @@ bool FileNode::setName( opt::optional<Path> plaintextName_,
   VLOG(1) << "calling setIV on " << _cname;
   if(setIVFirst)
   {
-    if(fsConfig->config->external_iv() && !setIV(io, cipher_io, iv))
+    if(fsConfig->config->external_iv() && !setIV(_iv, cipher_io, iv))
       return false;
 
     // now change the name..
@@ -137,7 +142,7 @@ bool FileNode::setName( opt::optional<Path> plaintextName_,
     if(cipherName_)
       this->_cname = *cipherName_;
 
-    if(fsConfig->config->external_iv() && !setIV(io, cipher_io, iv))
+    if(fsConfig->config->external_iv() && !setIV(_iv, cipher_io, iv))
     {
       _pname = oldPName;
       _cname = oldCName;
@@ -185,7 +190,8 @@ int FileNode::open(bool requestWrite, bool create)
   {
     // chain RawFileIO & CipherFileIO
     io = cipher_io = std::make_shared<CipherFileIO>( std::move( rawfile ), fsConfig );
-
+    // now that we have a cipher_io, initialize the iv
+    if(fsConfig->config->external_iv()) cipher_io->setIV( _iv );
     if(fsConfig->config->block_mac_bytes() || fsConfig->config->block_mac_rand_bytes())
     {
       io = std::make_shared<MACFileIO>( io, fsConfig );

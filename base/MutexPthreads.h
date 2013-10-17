@@ -50,7 +50,7 @@ class MutexPthreads
 
   void unlock()
   {
-    const int ret = pthread_mutex_lock( &_mutex );
+    const int ret = pthread_mutex_unlock( &_mutex );
     if (ret) throw std::runtime_error( "could not lock mutex" );
   }
 };

@@ -94,6 +94,7 @@ private:
 
     std::shared_ptr<FileIO> io;
     std::shared_ptr<CipherFileIO> cipher_io;
+    uint64_t _iv;
     Path _pname; // plaintext name
     Path _cname; // encrypted name
     std::shared_ptr<EncFS_Context> _ctx;

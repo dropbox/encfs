@@ -33,6 +33,7 @@ namespace encfs {
 
 // true if path is a directory
 bool isDirectory( const std::shared_ptr<FsIO> &fs_io, const char *fileName );
+bool isDirectory( const std::shared_ptr<FsIO> &fs_io, const Path &path );
 
 // true if the path points to an existing node (of any type)
 bool fileExists( const std::shared_ptr<FsIO> &fs_io, const char *fileName );
@@ -97,12 +98,9 @@ struct EncFS_Opts
   }
 };
 
-/*
-    Read existing config file.  Looks for any supported configuration version.
- */
-ConfigType readConfig( const std::shared_ptr<FsIO> &fs_io,
-                       const std::string &rootDir,
-                       EncfsConfig &config ); 
+void write_config(std::shared_ptr<encfs::FsIO> fs_io,
+                  const Path & encrypted_folder_path,
+                  const EncfsConfig & cfg);
 
 /*
     Save the configuration.  Saves back as the same configuration type as was
@@ -112,14 +110,45 @@ bool saveConfig( const std::shared_ptr<FsIO> &fs_io, const std::string &rootdir,
 
 class EncFS_Context;
 
+bool verify_password(const EncfsConfig & cfg,
+                     const SecureMem & password);
+
 RootPtr initFS( const std::shared_ptr<EncFS_Context> &ctx,
                 const std::shared_ptr<EncFS_Opts> &opts,
                 opt::optional<EncfsConfig> oCfg = opt::nullopt );
 
-RootPtr createConfig( EncFS_Context *ctx, 
-    const std::shared_ptr<EncFS_Opts> &opts );
+EncfsConfig create_config_interactively(const std::shared_ptr<PasswordReader> &);
+EncfsConfig create_paranoid_config(const SecureMem & secure_password);
+
+class ConfigurationFileDoesNotExist : public std::runtime_error
+{
+ public:
+ ConfigurationFileDoesNotExist() :
+  std::runtime_error("Configuration file does not exist")
+    {}
+
+};
+class ConfigurationFileIsCorrupted : public std::runtime_error
+{
+ public:
+ ConfigurationFileIsCorrupted() :
+  std::runtime_error("Configuration file is corrupted")
+    {}
+
+};
+
+EncfsConfig read_config(std::shared_ptr<encfs::FsIO> fs_io,
+                        const Path & encrypted_folder_path);
 
 void showFSInfo( const EncfsConfig &config );
+
+/*
+    Read existing config file.  Looks for any supported configuration version.
+ */
+ConfigType readConfig( const std::shared_ptr<FsIO> &fs_io,
+                       const std::string &rootDir,
+                       EncfsConfig &config,
+                       bool throw_exception = false );
 
 bool readV4Config( const std::shared_ptr<FsIO> &fs_io, const char *configFile, EncfsConfig &config, 
     struct ConfigInfo *);
