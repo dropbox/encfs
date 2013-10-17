@@ -38,13 +38,15 @@ std::system_error create_errno_system_error(int e);
 
 static inline int get_errno_or_default(const std::system_error &err, int nomatch)
 {
-  if(err.code().default_error_condition().category() == std::generic_category()) return err.code().value();
+  auto err_cond = err.code().default_error_condition();
+  if(err_cond.category() == std::generic_category()) return err_cond.value();
   return nomatch;
 }
 
 static inline int get_errno_or_abort(const std::system_error &err)
 {
-  if(err.code().default_error_condition().category() == std::generic_category()) return err.code().value();
+  auto err_cond = err.code().default_error_condition();
+  if(err_cond.category() == std::generic_category()) return err_cond.value();
   throw err;
 }
 

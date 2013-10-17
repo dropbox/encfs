@@ -87,11 +87,11 @@ static void current_fs_error(int thiserror = -1) {
 }
 
 extern const char POSIX_PATH_SEP[] = "/";
-class PosixPath final : public StringPath<POSIX_PATH_SEP> {
+class PosixPath final : public StringPath<PosixPath, POSIX_PATH_SEP> {
 protected:
-  virtual std::shared_ptr<PathPoly> _from_string(std::string str) const
+  virtual std::unique_ptr<PathPoly> _from_string(std::string str) const
   {
-    return std::make_shared<PosixPath>( std::move( str ) );
+    return std::unique_ptr<PosixPath>( new PosixPath( std::move( str ) ) );
   }
 
 public:
@@ -101,17 +101,17 @@ public:
     if (((const std::string &) *this).empty()) throw std::runtime_error("EMPTY STRING IS BAD");
   }
 
-  virtual std::shared_ptr<PathPoly> dirname() const override
+  virtual std::unique_ptr<PathPoly> dirname() const override
   {
     const auto &str = (const std::string &) *this;
 
     auto slash_pos = str.rfind('/');
 
     if (!slash_pos) {
-      return std::make_shared<PosixPath>( POSIX_PATH_SEP );
+      return _from_string( POSIX_PATH_SEP );
     }
 
-    return std::make_shared<PosixPath>( str.substr( 0, slash_pos ) );
+    return _from_string( str.substr( 0, slash_pos ) );
   }
 
   virtual bool is_root() const
@@ -207,7 +207,7 @@ Path PosixFsIO::pathFromString(const std::string &path) const
   /* TODO: throw exception if path is not a UTF-8 posix path */
   if(path[0] != '/') throw std::runtime_error( "Not absolute path: \"" + path + "\"" );
 
-  if (path == "/") return std::make_shared<PosixPath>( path );
+  if (path == "/") return std::unique_ptr<PosixPath>( new PosixPath( path ) );
 
   std::string newpath = path;
   while(endswith( newpath, "/" ))
@@ -215,7 +215,7 @@ Path PosixFsIO::pathFromString(const std::string &path) const
     newpath = path.substr( 0, path.length() - 1 );
   }
 
-  return std::make_shared<PosixPath>( std::move( newpath ) );
+  return std::unique_ptr<PosixPath>( new PosixPath( std::move( newpath ) ) );
 }
 
 Directory PosixFsIO::opendir(const Path &path) const

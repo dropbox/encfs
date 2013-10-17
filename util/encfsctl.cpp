@@ -47,6 +47,7 @@
 #include <cstdio>
 
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <sys/param.h>
 #include <sys/stat.h>

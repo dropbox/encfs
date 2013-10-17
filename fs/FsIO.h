@@ -61,15 +61,18 @@ public:
 
     virtual operator const std::string & () const =0;
     virtual const char *c_str() const =0;
-    virtual std::shared_ptr<PathPoly> join(std::string path) const =0;
+    virtual std::unique_ptr<PathPoly> join(std::string path) const =0;
     virtual std::string basename() const =0;
-    virtual std::shared_ptr<PathPoly> dirname() const =0;
+    virtual std::unique_ptr<PathPoly> dirname() const =0;
     virtual bool is_root() const =0;
-    virtual bool operator==(const std::shared_ptr<PathPoly> &p) const =0;
-    virtual bool operator!=(const std::shared_ptr<PathPoly> &p) const
+    virtual bool operator==(const PathPoly &p) const =0;
+    virtual bool operator!=(const PathPoly &p) const
     {
       return !(*this == p);
     }
+
+    // paths support copying
+    virtual std::unique_ptr<PathPoly> copy() =0;
 };
 
 class DirectoryIO
@@ -79,20 +82,52 @@ public:
     virtual opt::optional<FsDirEnt> readdir() =0;
 };
 
-/* wraps a polymorphic PathPoly pointer */
-class Path
-{
-private:
-    std::shared_ptr<PathPoly> _impl;
 
+template<class T>
+class _UniqueWrapper
+{
+protected:
+    typedef T element_type;
+    std::unique_ptr<T> _impl;
+
+public:
+    _UniqueWrapper(std::unique_ptr<T> from)
+    : _impl( std::move( from ) )
+    {
+      assert( _impl );
+    }
+
+    operator std::unique_ptr<T> () &&
+    {
+      return std::move( _impl );
+    }
+};
+
+/* wraps a polymorphic PathPoly pointer */
+class Path : public _UniqueWrapper<PathPoly>
+{
 public:
     template<class T,
       typename std::enable_if<std::is_convertible<T *, PathPoly *>::value, int>::type = 0>
-    Path(std::shared_ptr<T> from)
-      : _impl( std::move( from ) )
+    Path(std::unique_ptr<T> from)
+      : _UniqueWrapper( std::move( from ) )
+    {}
+
+    // Paths support copying
+    Path &operator=(const Path &p)
     {
-      assert(_impl);
+      if(this != &p)
+      {
+        // reuse copy constructor
+        this->~Path();
+        new (this) Path(p);
+      }
+      return *this;
     }
+
+    Path(const Path &p)
+    : _UniqueWrapper( p._impl->copy() )
+    {}
 
     operator const std::string & () const
     {
@@ -124,19 +159,14 @@ public:
       return _impl->is_root();
     }
 
-    bool operator==(const std::shared_ptr<PathPoly> &p) const
+    bool operator==(const Path &p) const
     {
-      return *_impl == p;
+      return *_impl == *p._impl;
     }
 
-    bool operator!=(const std::shared_ptr<PathPoly> &p) const
+    bool operator!=(const Path &p) const
     {
-      return *_impl != p;
-    }
-
-    operator std::shared_ptr<PathPoly> () const
-    {
-      return _impl;
+      return *_impl != *p._impl;
     }
 
     void zero()
@@ -146,26 +176,6 @@ public:
 };
 
 std::ostream& operator << (std::ostream& os, const Path& s);
-
-template<class T>
-class _UniqueWrapper
-{
-protected:
-    typedef T element_type;
-    std::unique_ptr<T> _impl;
-
-public:
-    _UniqueWrapper(std::unique_ptr<T> from)
-    : _impl( std::move( from ) )
-    {
-      assert( _impl );
-    }
-
-    operator std::unique_ptr<T> () &&
-    {
-      return std::move( _impl );
-    }
-};
 
 /* wraps a polymorphic DirectoryIO pointer */
 class Directory : public _UniqueWrapper<DirectoryIO>
@@ -183,7 +193,7 @@ public:
     }
 };
 
-/* wraps a polymorphic FileIO pointer */
+// wraps a polymorphic FileIO pointer
 class File : public _UniqueWrapper<FileIO>
 {
 public:
@@ -295,6 +305,7 @@ public:
 };
 
 // path helper
+template <class T>
 class StringPathDynamicSep : public PathPoly
 {
 protected:
@@ -306,7 +317,7 @@ protected:
     , _path( std::move( path ) )
     {}
 
-    virtual std::shared_ptr<PathPoly> _from_string(std::string str) const =0;
+    virtual std::unique_ptr<PathPoly> _from_string(std::string str) const =0;
 
 public:
     virtual operator const std::string &() const override
@@ -319,7 +330,7 @@ public:
       return _path.c_str();
     }
 
-    virtual std::shared_ptr<PathPoly> join(std::string name) const override
+    virtual std::unique_ptr<PathPoly> join(std::string name) const override
     {
       return _from_string( _path + _sep + name );
     }
@@ -331,20 +342,25 @@ public:
       return _path.substr( slash_pos );
     }
 
-    virtual bool operator==(const std::shared_ptr<PathPoly> &p) const override
+    virtual bool operator==(const PathPoly &p) const override
     {
-      auto p2 = std::dynamic_pointer_cast<StringPathDynamicSep>( p );
+      auto p2 = dynamic_cast<const StringPathDynamicSep *>( &p );
       if(!p2) return false;
       return ((const std::string &) *p2 == (const std::string &) *this);
     }
+
+    virtual std::unique_ptr<PathPoly> copy() override
+    {
+      return _from_string( _path );
+    }
 };
 
-template<const char *SEP>
-class StringPath : public StringPathDynamicSep
+template<class T, const char *SEP>
+class StringPath : public StringPathDynamicSep<T>
 {
 protected:
     StringPath(std::string path)
-    : StringPathDynamicSep( SEP, std::move( path ) )
+    : StringPathDynamicSep<T>( SEP, std::move( path ) )
     {}
 };
 

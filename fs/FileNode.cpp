@@ -66,8 +66,8 @@ FileNode::FileNode(const shared_ptr<EncFS_Context> &ctx,
                    Path cipherName_)
   : fsConfig(cfg)
   , _iv(0)
-  , _pname(plaintextName_)
-  , _cname(cipherName_)
+  , _pname(std::move(plaintextName_))
+  , _cname(std::move(cipherName_))
   , _ctx(ctx)
 {}
 
@@ -130,22 +130,22 @@ bool FileNode::setName( opt::optional<Path> plaintextName_,
 
     // now change the name..
     if(plaintextName_)
-      this->_pname = *plaintextName_;
+      this->_pname = std::move( *plaintextName_ );
     if(cipherName_)
-      this->_cname = *cipherName_;
+      this->_cname = std::move( *cipherName_ );
   } else
   {
     auto oldCName = _cname;
 
     if(plaintextName_)
-      this->_pname = *plaintextName_;
+      this->_pname = std::move( *plaintextName_ );
     if(cipherName_)
-      this->_cname = *cipherName_;
+      this->_cname = std::move( *cipherName_ );
 
     if(fsConfig->config->external_iv() && !setIV(_iv, cipher_io, iv))
     {
-      _pname = oldPName;
-      _cname = oldCName;
+      _pname = std::move( oldPName );
+      _cname = std::move( oldCName );
       return false;
     }
   }
