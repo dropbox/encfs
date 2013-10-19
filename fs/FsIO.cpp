@@ -33,11 +33,13 @@ std::ostream& operator << (std::ostream& os, const Path& s)
 bool path_is_parent(Path potential_parent, Path potential_child)
 {
   auto cur_path = potential_child.dirname();
-  while (!cur_path.is_root()) {
+  while (!cur_path.is_root())
+  {
     if (potential_parent == cur_path) return true;
+    cur_path = cur_path.dirname();
   }
 
-  return false;
+  return cur_path == potential_parent;
 }
 
 PathPoly::~PathPoly()

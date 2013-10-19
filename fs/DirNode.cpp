@@ -304,9 +304,13 @@ std::string DirNode::cipherPath(const char *plaintextPath) const
 
 NameIOPath DirNode::pathToRelativeNameIOPath(const Path & plaintextPath) const
 {
-  if(!path_is_parent( rootDir, plaintextPath ))
+  if(!path_is_parent( rootDir, plaintextPath ) &&
+     rootDir != plaintextPath)
   {
-    throw std::runtime_error("bad path!");
+    throw std::runtime_error("bad path! \"" +
+                             (const std::string &) plaintextPath +
+                             "\" is not a child of \"" +
+                             (const std::string &) rootDir + "\"");
   }
 
   // turn those components of `plaintextPath` that come after `rootDir`
