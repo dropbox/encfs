@@ -339,7 +339,7 @@ public:
     {
       if(is_root()) throw std::logic_error( "basename on root path is undefined" );
       auto slash_pos = _path.rfind( _sep );
-      return _path.substr( slash_pos );
+      return _path.substr( slash_pos + _sep.size() );
     }
 
     virtual bool operator==(const PathPoly &p) const override

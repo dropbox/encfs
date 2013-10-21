@@ -65,11 +65,17 @@ FileNode::FileNode(const shared_ptr<EncFS_Context> &ctx,
                    Path plaintextName_,
                    Path cipherName_)
   : fsConfig(cfg)
-  , _iv(0)
   , _pname(std::move(plaintextName_))
   , _cname(std::move(cipherName_))
   , _ctx(ctx)
-{}
+{
+  io = cipher_io = std::make_shared<CipherFileIO>( nullptr, fsConfig );
+  if(fsConfig->config->block_mac_bytes() ||
+     fsConfig->config->block_mac_rand_bytes())
+  {
+    io = std::make_shared<MACFileIO>( io, fsConfig );
+  }
+}
 
 FileNode::~FileNode()
 {
@@ -79,7 +85,6 @@ FileNode::~FileNode()
   _cname.zero();
   cipher_io = nullptr;
   io = nullptr;
-  _iv = 0;
 }
 
 const Path &FileNode::cipherName() const
@@ -92,40 +97,39 @@ const Path &FileNode::plaintextName() const
   return _pname;
 }
 
-static bool setIV(uint64_t & _iv,
-                  const shared_ptr<CipherFileIO> &cipher_io,
-                  uint64_t iv)
+bool FileNode::_setIV(uint64_t iv)
 {
-  _iv = iv;
-  if (!cipher_io) return true;
-
-  bool do_set_iv = false;
-  try
+  // external iv only matters
+  // if the file writes out ivs
+  if(!(fsConfig->config->external_iv() &&
+       fsConfig->config->unique_iv()))
   {
-    FsFileAttrs attrs = cipher_io->get_attrs();
-    do_set_iv = attrs.type == FsFileType::REGULAR;
-  } catch ( const Error &err )
-  {
-    do_set_iv = true;
+    return true;
   }
 
-  if(do_set_iv)
-    return cipher_io->setIV( iv );
-  else
-    return true;
+  // open the file
+  // if this fails it's fine
+  // setIV will just fail
+  auto ret = _unlocked_open( true, false );
+  if(ret < 0)
+  {
+    LOG(WARNING) << "unlocked open failed...";
+  }
+
+  return cipher_io->setIV( iv );
 }
 
 bool FileNode::setName( opt::optional<Path> plaintextName_,
                         opt::optional<Path> cipherName_,
                         uint64_t iv, bool setIVFirst )
 {
+  Lock _lock( mutex );
   auto oldPName = _pname;
 
-  //Lock _lock( mutex );
   VLOG(1) << "calling setIV on " << _cname;
   if(setIVFirst)
   {
-    if(fsConfig->config->external_iv() && !setIV(_iv, cipher_io, iv))
+    if(!_setIV(iv))
       return false;
 
     // now change the name..
@@ -142,7 +146,7 @@ bool FileNode::setName( opt::optional<Path> plaintextName_,
     if(cipherName_)
       this->_cname = std::move( *cipherName_ );
 
-    if(fsConfig->config->external_iv() && !setIV(_iv, cipher_io, iv))
+    if(!_setIV(iv))
     {
       _pname = std::move( oldPName );
       _cname = std::move( oldCName );
@@ -155,16 +159,15 @@ bool FileNode::setName( opt::optional<Path> plaintextName_,
   return true;
 }
 
-int FileNode::open(bool requestWrite, bool create)
+int FileNode::_unlocked_open(bool requestWrite, bool create)
 {
   // This method will re-open the file for writing
   // if it was opened previously without write access
 
-  Lock _lock( mutex );
-
   // if we've already opened the file in the right
   // access mode
-  if(io && (io->isWritable() || !requestWrite)) return 0;
+  if(cipher_io->getBase() &&
+     (cipher_io->getBase()->isWritable() || !requestWrite)) return 0;
 
   // NB: it would be great to check that _cname matches the
   //     file name of the currently opened file from the kernel's POV.
@@ -182,23 +185,18 @@ int FileNode::open(bool requestWrite, bool create)
 
   assert( rawfile );
 
-  if(cipher_io)
-  {
-    // the file was already opened, just reset the base of cipher_io
-    cipher_io->setBase( std::move( rawfile ) );
-  } else
-  {
-    // chain RawFileIO & CipherFileIO
-    io = cipher_io = std::make_shared<CipherFileIO>( std::move( rawfile ), fsConfig );
-    // now that we have a cipher_io, initialize the iv
-    if(fsConfig->config->external_iv()) cipher_io->setIV( _iv );
-    if(fsConfig->config->block_mac_bytes() || fsConfig->config->block_mac_rand_bytes())
-    {
-      io = std::make_shared<MACFileIO>( io, fsConfig );
-    }
-  }
+  cipher_io->setBase( std::move( rawfile ) );
 
   return 0;
+}
+
+int FileNode::open(bool requestWrite, bool create)
+{
+  // This method will re-open the file for writing
+  // if it was opened previously without write access
+
+  Lock _lock( mutex );
+  return _unlocked_open(requestWrite, create);
 }
 
 int FileNode::getAttr(FsFileAttrs &stbuf) const

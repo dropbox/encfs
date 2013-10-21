@@ -85,7 +85,7 @@ bool CipherFileIO::setIV( uint64_t iv )
     // we're just being told about which IV to use.  since we haven't
     // initialized the fileIV, there is no need to just yet..
     externalIV = iv;
-    LOG_IF(WARNING, fileIV != 0) 
+    LOG_IF(WARNING, fileIV != 0)
       << "fileIV initialized before externalIV! (" << fileIV
       << ", " << externalIV << ")";
   } else if(perFileIV)
@@ -94,13 +94,13 @@ bool CipherFileIO::setIV( uint64_t iv )
     // on disk.
 
     // ensure the file is open for read/write..
-    if(!base->isWritable())
+    if(!isWritable())
     {
       VLOG(1) << "writeHeader failed to re-open for write";
       return false;
     }
 
-    if(fileIV == 0) initHeader();
+    initHeader();
 
     uint64_t oldIV = externalIV;
     externalIV = iv;
@@ -123,6 +123,12 @@ void CipherFileIO::setBase( const shared_ptr<FileIO> &base_ )
   fileIV = 0;
 }
 
+std::shared_ptr<FileIO> CipherFileIO::getBase() const
+{
+  return base;
+}
+
+
 FsFileAttrs CipherFileIO::wrapAttrs(int headerLen, FsFileAttrs attrs)
 {
   // adjust size if we have a file header
@@ -142,8 +148,15 @@ FsFileAttrs CipherFileIO::wrapAttrs(const FSConfigPtr &cfg,
   return wrapAttrs(headerLen, std::move( attrs ));
 }
 
+void CipherFileIO::ensureBase() const
+{
+  if(!base) throw std::system_error( (int) std::errc::io_error,
+                                     std::generic_category() );
+}
+
 FsFileAttrs CipherFileIO::get_attrs() const
 {
+  ensureBase();
   return wrapAttrs( headerLen, base->get_attrs() );
 }
 
@@ -151,6 +164,8 @@ FsFileAttrs CipherFileIO::get_attrs() const
    when initializing the file header fails */
 void CipherFileIO::initHeader( )
 {
+  ensureBase();
+
   int cbs = cipher->cipherBlockSize();
 
   MemBlock mb;
@@ -228,7 +243,8 @@ bool CipherFileIO::writeHeader( )
   {
     unsigned char *buf = mb.data;
 
-    for(int i=sizeof(buf)-1; i>=0; --i)
+    assert(headerLen == sizeof(fileIV));
+    for(int i=headerLen-1; i>=0; --i)
     {
       buf[i] = (unsigned char)(fileIV & 0xff);
       fileIV >>= 8;
@@ -250,6 +266,8 @@ bool CipherFileIO::writeHeader( )
 
 ssize_t CipherFileIO::readOneBlock( const IORequest &req ) const
 {
+  ensureBase();
+
   // read raw data, then decipher it..
   auto bs = blockSize();
   assert(bs >= 0);
@@ -302,6 +320,8 @@ ssize_t CipherFileIO::readOneBlock( const IORequest &req ) const
 
 bool CipherFileIO::writeOneBlock( const IORequest &req )
 {
+  ensureBase();
+
   auto bs = blockSize();
   fs_off_t blockNum = req.offset / bs;
 
@@ -403,8 +423,10 @@ bool CipherFileIO::streamRead( byte *buf, size_t size,
 
 void CipherFileIO::truncate( fs_off_t size )
 {
+  ensureBase();
+
   rAssert(size >= 0);
-  if(!base->isWritable())
+  if(!isWritable())
   {
     VLOG(1) << "writeHeader failed to re-open for write";
     throw std::runtime_error("file not opened for writing");
@@ -430,11 +452,13 @@ void CipherFileIO::truncate( fs_off_t size )
 
 bool CipherFileIO::isWritable() const
 {
+  if (!base) return false;
   return base->isWritable();
 }
 
 void CipherFileIO::sync(bool a)
 {
+  ensureBase();
   return base->sync( a );
 }
 

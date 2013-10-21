@@ -624,8 +624,6 @@ DirNode::rename(const char *cfromPlaintext, const char *ctoPlaintext)
 
   VLOG(1) << "rename " << fromCName << " -> " << toCName;
 
-  shared_ptr<FileNode> toNode = findOrCreate( toPlaintext );
-
   shared_ptr<RenameOp> renameOp;
   if(hasDirectoryNameDependency() && isDirectory( fs_io, fromCName.c_str() ))
   {
@@ -714,6 +712,12 @@ int DirNode::posix_link(const char *from, const char *to)
 shared_ptr<FileNode> DirNode::renameNode(const Path &from, const Path &to,
                                          bool forwardMode)
 {
+  if(ctx && ctx->lookupNode( to.c_str() ))
+  {
+    LOG(WARNING) << "Refusing to rename over open file";
+    throw Error("won't rename over open file");
+  }
+
   shared_ptr<FileNode> node = findOrCreate( from );
 
   if(node)
@@ -748,10 +752,10 @@ shared_ptr<FileNode> DirNode::findOrCreate(const Path &plainName)
                                        plainName,
                                        cipherName );
 
+    node->setName( opt::nullopt, opt::nullopt, iv );
+
     // add weak reference to node
     ctx->trackNode( plainName.c_str(), node );
-
-    if(fsConfig->config->external_iv()) node->setName( opt::nullopt, opt::nullopt, iv );
 
     VLOG(1) << "created FileNode for " << node->cipherName();
   }

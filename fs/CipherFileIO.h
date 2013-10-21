@@ -44,6 +44,7 @@ public:
 
     bool setIV( uint64_t iv );
     void setBase( const std::shared_ptr<FileIO> &base );
+    std::shared_ptr<FileIO> getBase() const;
 
     virtual ~CipherFileIO();
 
@@ -67,6 +68,7 @@ private:
     virtual ssize_t readOneBlock( const IORequest &req ) const override;
     virtual bool writeOneBlock( const IORequest &req ) override;
 
+    void ensureBase() const;
     void initHeader();
     bool writeHeader();
     bool blockRead( byte *buf, size_t size, 
