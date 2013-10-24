@@ -187,6 +187,7 @@ bool processArgs(int argc, char *argv[],
     {"anykey", 0, 0, 'k'}, // skip key checks
     {"no-default-flags", 0, 0, 'N'}, // don't use default fuse flags
     {"ondemand", 0, 0, 'm'}, // mount on-demand
+    {"delaymount", 0, 0, 'M'}, // delay initial mount until use
     {"public", 0, 0, 'P'}, // public mode
     {"extpass", 1, 0, 'p'}, // external password program
     // {"single-thread", 0, 0, 's'}, // single-threaded mode
@@ -260,6 +261,9 @@ bool processArgs(int argc, char *argv[],
       break;
     case 'm':
       out->mountOnDemand = true;
+      break;
+    case 'M':
+      out->opts->delayMount = true;
       break;
     case 'N':
       useDefaultFlags = false;
@@ -376,7 +380,16 @@ bool processArgs(int argc, char *argv[],
     }
   }
 
-  if(out->mountOnDemand && out->passwordProgram.empty())
+  if(out->opts->delayMount && !out->opts->mountOnDemand)
+  {
+    cerr <<
+      // xgroup(usage)
+      _("You must use mount-on-demand with delay-mount")
+      << endl;
+    return false;
+  }
+
+  if(out->opts->mountOnDemand && out->opts->passwordProgram.empty())
   {
     cerr << 
       // xgroup(usage)
@@ -459,6 +472,15 @@ void encfs_destroy( void *_ctx )
 
 int main(int argc, char *argv[])
 {
+  cerr << "\n\n";
+  cerr << "====== WARNING ======= WARNING ======== WARNING ========\n";
+  cerr << "NOTE: this version of Encfs comes from SVN mainline and is\n"
+      "an unreleased 2.x BETA. It is known to have issues!\n";
+  cerr << "               USE AT YOUR OWN RISK!\n";
+  cerr << "Stable releases are available from the Encfs website, or look\n"
+      "for the 1.x branch in SVN for the stable 1.x series.";
+  cerr << "\n\n";
+
   // log to stderr by default..
   FLAGS_logtostderr = 1; 
   FLAGS_minloglevel = 1; // WARNING and above.
@@ -571,6 +593,9 @@ int main(int argc, char *argv[])
     auto wrappedEncryptedFS = std::make_shared<RootPathPrependFs>( std::move( encryptedFS ),
                                                                    std::move( oldRoot ),
                                                                    std::move( newRoot ) );
+    // turn off delayMount, as our prior call to initFS has already
+    // respected any delay, and we want future calls to actually mount.
+    encfsArgs->opts->delayMount = false;
 
     // resources will get freed after block is exited
     // TODO: separate fuse args from encrypted fs opts

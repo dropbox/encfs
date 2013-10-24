@@ -45,6 +45,7 @@
 
 #include <memory>
 #include <string>
+#include <sstream>
 
 
 using namespace Botan;

@@ -66,6 +66,8 @@ struct EncFS_Args
     if(opts->annotate) ss << "(annotate) ";
     if(opts->reverseEncryption) ss << "(reverseEncryption) ";
     if(mountOnDemand) ss << "(mountOnDemand) ";
+    if(opts->delayMount) ss << "(delayMount) ";
+
     for(int i=0; i<fuseArgc; ++i)
       ss << fuseArgv[i] << ' ';
 

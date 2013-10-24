@@ -74,6 +74,7 @@ struct EncFS_Opts
 {
   std::string rootDir;
   bool createIfNotFound;  // create filesystem if not found
+  bool delayMount;    // delay initial mount
 
   bool checkKey;  // check crypto key decoding
   bool forceDecode; // force decode on MAC block failures
@@ -89,6 +90,7 @@ struct EncFS_Opts
 
   EncFS_Opts()
   : createIfNotFound(true)
+  , delayMount(false)
   , checkKey(true)
   , forceDecode(false)
   , annotate(false)

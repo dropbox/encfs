@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(Encfs)
+project(Encfs C CXX)
 
 set (ENCFS_MAJOR 2)
 set (ENCFS_MINOR 0)
@@ -98,6 +98,12 @@ include_directories (${PROTOBUF_INCLUDE_DIR})
 
 find_package (GLog REQUIRED)
 include_directories (${GLOG_INCLUDE_DIRS})
+
+find_package (GFlags)
+if (GFLAGS_FOUND)
+    include_directories (${GFLAGS_INCLUDE_DIRS})
+    set (GLOG_LIBRARIES ${GLOG_LIBRARIES} ${GFLAGS_LIBRARIES})
+endif (GFLAGS_FOUND)
 
 find_package (Threads)
 

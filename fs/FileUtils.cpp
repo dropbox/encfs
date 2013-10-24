@@ -1549,6 +1549,14 @@ RootPtr initFS( const shared_ptr<EncFS_Context> &ctx,
     return rootInfo;
   }
 
+  if(opts->delayMount)
+  {
+    rootInfo = std::make_shared<EncFS_Root>();
+    rootInfo->cipher = cipher;
+    rootInfo->root = std::shared_ptr<DirNode>();
+    return rootInfo;
+  }
+
   // get user key
   CipherKey userKey = getUserKey( config, opts->passwordReader );
   if(!userKey.valid()) return rootInfo;
