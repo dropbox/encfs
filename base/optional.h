@@ -33,67 +33,48 @@
 #include <optional>
 namespace opt = std;
 #else
-namespace opt
-{
+namespace opt {
 
-class nullopt_t
-{
+class nullopt_t {
  public:
-  constexpr nullopt_t()
-  {}
+  constexpr nullopt_t() {}
 };
 
 constexpr nullopt_t nullopt;
 
-class bad_optional_access : public std::logic_error
-{
-public:
-  bad_optional_access(const char *a)
-  : std::logic_error(a)
-  {}
+class bad_optional_access : public std::logic_error {
+ public:
+  bad_optional_access(const char *a) : std::logic_error(a) {}
 };
 
-template<class T, typename std::enable_if<!std::is_reference<T>::value, int>::type = 0>
-class optional
-{
-private:
-  union
-  {
+template <class T,
+          typename std::enable_if<!std::is_reference<T>::value, int>::type = 0>
+class optional {
+ private:
+  union {
     char _null_state;
     T _val;
   };
   bool _engaged;
 
-public:
-  constexpr optional()
-  : _null_state('\0')
-  , _engaged( false )
-  {}
+ public:
+  constexpr optional() : _null_state('\0'), _engaged(false) {}
 
-  constexpr optional(nullopt_t)
-  : optional()
-  {}
+  constexpr optional(nullopt_t) : optional() {}
 
-  constexpr optional(T val)
-  : _val( std::move( val ) )
-  , _engaged( true )
-  {}
+  constexpr optional(T val) : _val(std::move(val)), _engaged(true) {}
 
-  optional &operator=(const optional &val)
-  {
-    if(val._engaged)
-    {
-      if (_engaged) _val = val._val;
-      else
-      {
+  optional &operator=(const optional &val) {
+    if (val._engaged) {
+      if (_engaged)
+        _val = val._val;
+      else {
         // construct in place
-        new (&_val) T( val._val );
+        new (&_val) T(val._val);
         _engaged = true;
       }
-    } else
-    {
-      if(_engaged)
-      {
+    } else {
+      if (_engaged) {
         _val.~T();
         _engaged = false;
       }
@@ -101,27 +82,19 @@ public:
     return *this;
   }
 
-  optional(const optional & val)
-  : optional()
-  {
-    *this = val;
-  }
+  optional(const optional &val) : optional() { *this = val; }
 
-  optional &operator=(optional && val)
-  {
-    if(val._engaged)
-    {
-      if(_engaged) _val = std::move( val._val );
-      else
-      {
+  optional &operator=(optional &&val) {
+    if (val._engaged) {
+      if (_engaged)
+        _val = std::move(val._val);
+      else {
         // construct in place
-        new (&_val) T( std::move( val._val ) );
+        new (&_val) T(std::move(val._val));
         _engaged = true;
       }
-    } else
-    {
-      if(_engaged)
-      {
+    } else {
+      if (_engaged) {
         _val.~T();
         _engaged = false;
       }
@@ -129,75 +102,61 @@ public:
     return *this;
   }
 
-  optional(optional && val)
-  : optional()
-  {
-    *this = std::move( val );
-  }
+  optional(optional &&val) : optional() { *this = std::move(val); }
 
-  ~optional()
-  {
-    if(_engaged)
-    {
+  ~optional() {
+    if (_engaged) {
       _val.~T();
       _engaged = false;
     }
   }
 
-  constexpr const T &operator *() const
-  {
+  constexpr const T &operator*() const {
     //    static_assert( _engaged, "bad optional access");
     return _val;
   }
 
-  T &operator *()
-  {
-    if(!_engaged) { throw bad_optional_access( "bad optional access" ); }
+  T &operator*() {
+    if (!_engaged) {
+      throw bad_optional_access("bad optional access");
+    }
     return _val;
   }
 
-  constexpr const T *operator ->() const
-  {
+  constexpr const T *operator->() const {
     //    static_assert( _engaged, "bad optional access");
     return &_val;
   }
 
-  T *operator ->()
-  {
-    if(!_engaged) { throw bad_optional_access( "bad optional access" ); }
+  T *operator->() {
+    if (!_engaged) {
+      throw bad_optional_access("bad optional access");
+    }
     return &_val;
   }
 
-  constexpr explicit operator bool() const
-  {
-    return _engaged;
-  }
+  constexpr explicit operator bool() const { return _engaged; }
 };
 
-template<class T>
-constexpr bool operator==(optional<T> f, nullopt_t)
-{
+template <class T>
+constexpr bool operator==(optional<T> f, nullopt_t) {
   return !f;
 }
 
-template<class T>
-constexpr bool operator==(nullopt_t, optional<T> f)
-{
+template <class T>
+constexpr bool operator==(nullopt_t, optional<T> f) {
   return !f;
 }
 
-template<class T>
-constexpr bool operator==(optional<T> a, optional<T> b)
-{
+template <class T>
+constexpr bool operator==(optional<T> a, optional<T> b) {
   return a && b ? *a == *b : !a && !b;
 }
 
-template< class T >
-constexpr optional<typename std::decay<T>::type>
-make_optional( T&& value ) {
+template <class T>
+constexpr optional<typename std::decay<T>::type> make_optional(T &&value) {
   return optional<typename std::decay<T>::type>(std::forward<T>(value));
 }
-
 }
 
 #endif

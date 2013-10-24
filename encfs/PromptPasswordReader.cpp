@@ -32,42 +32,37 @@ using std::cerr;
 
 namespace encfs {
 
-SecureMem *PromptPasswordReader::readPassword(size_t maxLen, bool newPass)
-{
+SecureMem *PromptPasswordReader::readPassword(size_t maxLen, bool newPass) {
   SecureMem *buf = new SecureMem(maxLen);
 
-  if(newPass)
-  {
+  if (newPass) {
     SecureMem *buf2 = new SecureMem(maxLen);
 
-    do
-    {
+    do {
       // xgroup(common)
-      char *res1 = readpassphrase(_("New Encfs Password: "), 
-                                  (char *)buf->data(), buf->size()-1, RPP_ECHO_OFF);
+      char *res1 =
+          readpassphrase(_("New Encfs Password: "), (char *)buf->data(),
+                         buf->size() - 1, RPP_ECHO_OFF);
       // xgroup(common)
-      char *res2 = readpassphrase(_("Verify Encfs Password: "), 
-                                  (char *)buf2->data(), buf2->size()-1, RPP_ECHO_OFF);
+      char *res2 =
+          readpassphrase(_("Verify Encfs Password: "), (char *)buf2->data(),
+                         buf2->size() - 1, RPP_ECHO_OFF);
 
-      if(res1 && res2
-         && !strncmp((char*)buf->data(), (char*)buf2->data(), maxLen))
-      {
-        break; 
-      } else
-      {
+      if (res1 && res2 &&
+          !strncmp((char *)buf->data(), (char *)buf2->data(), maxLen)) {
+        break;
+      } else {
         // xgroup(common) -- probably not common, but group with the others
         cerr << _("Passwords did not match, please try again\n");
       }
-    } while(1);
+    } while (1);
 
     delete buf2;
-  } else
-  {
+  } else {
     // xgroup(common)
-    char *res = readpassphrase( _("EncFS Password: "),
-                                (char *)buf->data(), buf->size()-1, RPP_ECHO_OFF );
-    if(!res)
-    {
+    char *res = readpassphrase(_("EncFS Password: "), (char *)buf->data(),
+                               buf->size() - 1, RPP_ECHO_OFF);
+    if (!res) {
       delete buf;
       buf = NULL;
     }
@@ -75,5 +70,4 @@ SecureMem *PromptPasswordReader::readPassword(size_t maxLen, bool newPass)
 
   return buf;
 }
-
 }

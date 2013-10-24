@@ -43,52 +43,56 @@ namespace encfs {
 /* forward declaration */
 class PosixFsIO;
 
-class PosixFsIO : public FsIO
-{
-public:
-    virtual const std::string &path_sep() const override;
-    virtual Path pathFromString(const std::string &path) const override;
+class PosixFsIO : public FsIO {
+ public:
+  virtual const std::string &path_sep() const override;
+  virtual Path pathFromString(const std::string &path) const override;
 
-    virtual Directory opendir(const Path &path) const override;
-    virtual File openfile(const Path &path,
-                          bool open_for_write = false,
-                          bool create = false) override;
+  virtual Directory opendir(const Path &path) const override;
+  virtual File openfile(const Path &path, bool open_for_write = false,
+                        bool create = false) override;
 
-    virtual void mkdir(const Path &path) override;
+  virtual void mkdir(const Path &path) override;
 
-    virtual void rename(const Path &pathSrc, const Path &pathDst) override;
+  virtual void rename(const Path &pathSrc, const Path &pathDst) override;
 
-    virtual void unlink(const Path &path) override;
-    virtual void rmdir(const Path &path) override;
+  virtual void unlink(const Path &path) override;
+  virtual void rmdir(const Path &path) override;
 
-    virtual void set_times(const Path &path,
-                           const opt::optional<fs_time_t> &atime,
-                           const opt::optional<fs_time_t> &mtime) override;
+  virtual void set_times(const Path &path,
+                         const opt::optional<fs_time_t> &atime,
+                         const opt::optional<fs_time_t> &mtime) override;
 
-    // we support all the optional posix methods, duh!
-    virtual fs_posix_uid_t posix_setfsuid(fs_posix_uid_t uid) override;
-    virtual fs_posix_gid_t posix_setfsgid(fs_posix_gid_t gid) override;
-    virtual File posix_create(const Path &pathSrc, fs_posix_mode_t mode) override;
-    virtual void posix_mkdir(const Path &path, fs_posix_mode_t mode) override;
-    virtual void posix_mknod(const Path &path, fs_posix_mode_t mode, fs_posix_dev_t dev) override;
-    virtual void posix_link(const Path &pathSrc, const Path &pathDst) override;
-    virtual void posix_symlink(const Path &path, PosixSymlinkData link_data) override;
-    virtual PosixSymlinkData posix_readlink(const Path &path) const override;
-    virtual void posix_chmod(const Path &pathSrc, bool follow, fs_posix_mode_t mode) override;
-    virtual void posix_chown(const Path &pathSrc, bool follow, fs_posix_uid_t uid, fs_posix_gid_t gid) override;
-    virtual FsFileAttrs posix_stat(const Path &path, bool follow) const override;
+  // we support all the optional posix methods, duh!
+  virtual fs_posix_uid_t posix_setfsuid(fs_posix_uid_t uid) override;
+  virtual fs_posix_gid_t posix_setfsgid(fs_posix_gid_t gid) override;
+  virtual File posix_create(const Path &pathSrc, fs_posix_mode_t mode) override;
+  virtual void posix_mkdir(const Path &path, fs_posix_mode_t mode) override;
+  virtual void posix_mknod(const Path &path, fs_posix_mode_t mode,
+                           fs_posix_dev_t dev) override;
+  virtual void posix_link(const Path &pathSrc, const Path &pathDst) override;
+  virtual void posix_symlink(const Path &path,
+                             PosixSymlinkData link_data) override;
+  virtual PosixSymlinkData posix_readlink(const Path &path) const override;
+  virtual void posix_chmod(const Path &pathSrc, bool follow,
+                           fs_posix_mode_t mode) override;
+  virtual void posix_chown(const Path &pathSrc, bool follow, fs_posix_uid_t uid,
+                           fs_posix_gid_t gid) override;
+  virtual FsFileAttrs posix_stat(const Path &path, bool follow) const override;
 
 #ifdef HAVE_XATTR
-    virtual void posix_setxattr(const Path &path, bool follow,
-                                std::string name, size_t offset,
-                                std::vector<byte> buf, PosixSetxattrFlags flags) override;
-    virtual std::vector<byte> posix_getxattr(const Path &path, bool follow,
-                                             std::string name, size_t offset, size_t amt) const override;
-    virtual PosixXattrList posix_listxattr(const Path &path, bool follow) const override;
-    virtual void posix_removexattr(const Path &path, bool follow, std::string name) override;
+  virtual void posix_setxattr(const Path &path, bool follow, std::string name,
+                              size_t offset, std::vector<byte> buf,
+                              PosixSetxattrFlags flags) override;
+  virtual std::vector<byte> posix_getxattr(const Path &path, bool follow,
+                                           std::string name, size_t offset,
+                                           size_t amt) const override;
+  virtual PosixXattrList posix_listxattr(const Path &path, bool follow) const
+      override;
+  virtual void posix_removexattr(const Path &path, bool follow,
+                                 std::string name) override;
 #endif
 };
 
 }  // namespace encfs
 #endif
-

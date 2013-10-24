@@ -7,7 +7,7 @@
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.  
+ * option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -43,59 +43,46 @@ namespace encfs {
 */
 static Interface CipherFileIO_iface = makeInterface("FileIO/Cipher", 3, 0, 2);
 
-CipherFileIO::CipherFileIO( const shared_ptr<FileIO> &_base, 
-                            const FSConfigPtr &cfg)
-    : BlockFileIO( cfg->config->block_size(), cfg )
-    , base( _base )
-    , headerLen( 0 )
-    , perFileIV( cfg->config->unique_iv() )
-    , externalIV( 0 )
-    , fileIV( 0 )
-{
+CipherFileIO::CipherFileIO(const shared_ptr<FileIO> &_base,
+                           const FSConfigPtr &cfg)
+    : BlockFileIO(cfg->config->block_size(), cfg),
+      base(_base),
+      headerLen(0),
+      perFileIV(cfg->config->unique_iv()),
+      externalIV(0),
+      fileIV(0) {
   fsConfig = cfg;
   cipher = cfg->cipher;
 
-  if ( perFileIV )
-    headerLen += sizeof(uint64_t); // 64bit IV per file
+  if (perFileIV) headerLen += sizeof(uint64_t);  // 64bit IV per file
 
-  int blockBoundary = fsConfig->config->block_size() % 
-    fsConfig->cipher->cipherBlockSize();
-  if(blockBoundary != 0)
-  {
-    LOG_FIRST_N(ERROR, 1) 
-      << "CipherFileIO: blocks should be multiple of cipher block size";
+  int blockBoundary =
+      fsConfig->config->block_size() % fsConfig->cipher->cipherBlockSize();
+  if (blockBoundary != 0) {
+    LOG_FIRST_N(ERROR, 1)
+        << "CipherFileIO: blocks should be multiple of cipher block size";
   }
 }
 
-CipherFileIO::~CipherFileIO()
-{
-}
+CipherFileIO::~CipherFileIO() {}
 
-Interface CipherFileIO::interface() const
-{
-  return CipherFileIO_iface;
-}
+Interface CipherFileIO::interface() const { return CipherFileIO_iface; }
 
-bool CipherFileIO::setIV( uint64_t iv )
-{
-  VLOG(1) << "in setIV, current IV = " << externalIV
-    << ", new IV = " << iv << ", fileIV = " << fileIV;
-  if(externalIV == 0)
-  {
+bool CipherFileIO::setIV(uint64_t iv) {
+  VLOG(1) << "in setIV, current IV = " << externalIV << ", new IV = " << iv
+          << ", fileIV = " << fileIV;
+  if (externalIV == 0) {
     // we're just being told about which IV to use.  since we haven't
     // initialized the fileIV, there is no need to just yet..
     externalIV = iv;
-    LOG_IF(WARNING, fileIV != 0)
-      << "fileIV initialized before externalIV! (" << fileIV
-      << ", " << externalIV << ")";
-  } else if(perFileIV)
-  {
+    LOG_IF(WARNING, fileIV != 0) << "fileIV initialized before externalIV! ("
+                                 << fileIV << ", " << externalIV << ")";
+  } else if (perFileIV) {
     // we have an old IV, and now a new IV, so we need to update the fileIV
     // on disk.
 
     // ensure the file is open for read/write..
-    if(!isWritable())
-    {
+    if (!isWritable()) {
       VLOG(1) << "writeHeader failed to re-open for write";
       return false;
     }
@@ -104,8 +91,7 @@ bool CipherFileIO::setIV( uint64_t iv )
 
     uint64_t oldIV = externalIV;
     externalIV = iv;
-    if(!writeHeader())
-    {
+    if (!writeHeader()) {
       externalIV = oldIV;
       return false;
     }
@@ -114,8 +100,7 @@ bool CipherFileIO::setIV( uint64_t iv )
   return true;
 }
 
-void CipherFileIO::setBase( const shared_ptr<FileIO> &base_ )
-{
+void CipherFileIO::setBase(const shared_ptr<FileIO> &base_) {
   base = base_;
   // NB: base must refer to the same underlying file
   //     since we can't check that, we signal to
@@ -123,47 +108,35 @@ void CipherFileIO::setBase( const shared_ptr<FileIO> &base_ )
   fileIV = 0;
 }
 
-std::shared_ptr<FileIO> CipherFileIO::getBase() const
-{
-  return base;
-}
+std::shared_ptr<FileIO> CipherFileIO::getBase() const { return base; }
 
-
-FsFileAttrs CipherFileIO::wrapAttrs(int headerLen, FsFileAttrs attrs)
-{
+FsFileAttrs CipherFileIO::wrapAttrs(int headerLen, FsFileAttrs attrs) {
   // adjust size if we have a file header
-  if(attrs.type == FsFileType::REGULAR &&
-     attrs.size >= headerLen) attrs.size -= headerLen;
+  if (attrs.type == FsFileType::REGULAR && attrs.size >= headerLen)
+    attrs.size -= headerLen;
 
-  return std::move( attrs );
+  return std::move(attrs);
 }
 
-FsFileAttrs CipherFileIO::wrapAttrs(const FSConfigPtr &cfg,
-                                    FsFileAttrs attrs)
-{
-  const fs_off_t headerLen = cfg->config->unique_iv()
-    ? sizeof(uint64_t)
-    : 0;
+FsFileAttrs CipherFileIO::wrapAttrs(const FSConfigPtr &cfg, FsFileAttrs attrs) {
+  const fs_off_t headerLen = cfg->config->unique_iv() ? sizeof(uint64_t) : 0;
 
-  return wrapAttrs(headerLen, std::move( attrs ));
+  return wrapAttrs(headerLen, std::move(attrs));
 }
 
-void CipherFileIO::ensureBase() const
-{
-  if(!base) throw std::system_error( (int) std::errc::io_error,
-                                     std::generic_category() );
+void CipherFileIO::ensureBase() const {
+  if (!base)
+    throw std::system_error((int)std::errc::io_error, std::generic_category());
 }
 
-FsFileAttrs CipherFileIO::get_attrs() const
-{
+FsFileAttrs CipherFileIO::get_attrs() const {
   ensureBase();
-  return wrapAttrs( headerLen, base->get_attrs() );
+  return wrapAttrs(headerLen, base->get_attrs());
 }
 
 /* TODO: this should really return an error or throw an exception
    when initializing the file header fails */
-void CipherFileIO::initHeader( )
-{
+void CipherFileIO::initHeader() {
   ensureBase();
 
   int cbs = cipher->cipherBlockSize();
@@ -174,83 +147,74 @@ void CipherFileIO::initHeader( )
   // check if the file has a header, and read it if it does..  Otherwise,
   // create one.
   auto rawSize = base->get_attrs().size;
-  if(rawSize >= headerLen)
-  {
+  if (rawSize >= headerLen) {
     VLOG(1) << "reading existing header, rawSize = " << rawSize;
 
     IORequest req;
     req.offset = 0;
     req.data = mb.data;
     req.dataLen = sizeof(uint64_t);
-    base->read( req );
+    base->read(req);
 
-    if (perFileIV)
-    {
-      cipher->streamDecode( mb.data, sizeof(uint64_t), externalIV );
+    if (perFileIV) {
+      cipher->streamDecode(mb.data, sizeof(uint64_t), externalIV);
 
       fileIV = 0;
-      for(unsigned int i=0; i<sizeof(uint64_t); ++i)
+      for (unsigned int i = 0; i < sizeof(uint64_t); ++i)
         fileIV = (fileIV << 8) | (uint64_t)mb.data[i];
 
-      rAssert(fileIV != 0); // 0 is never used..
+      rAssert(fileIV != 0);  // 0 is never used..
     }
-  } else if (perFileIV)
-  {
+  } else if (perFileIV) {
     VLOG(1) << "creating new file IV header";
 
-    do
-    {
-      if(!cipher->pseudoRandomize( mb.data, 8 ))
+    do {
+      if (!cipher->pseudoRandomize(mb.data, 8))
         throw Error("Unable to generate a random file IV");
 
       fileIV = 0;
-      for(unsigned int i=0; i<sizeof(uint64_t); ++i)
+      for (unsigned int i = 0; i < sizeof(uint64_t); ++i)
         fileIV = (fileIV << 8) | (uint64_t)mb.data[i];
 
       LOG_IF(WARNING, fileIV == 0)
-        << "Unexpected result: randomize returned 8 null bytes!";
-    } while(fileIV == 0); // don't accept 0 as an option..
+          << "Unexpected result: randomize returned 8 null bytes!";
+    } while (fileIV == 0);  // don't accept 0 as an option..
 
-    cipher->streamEncode( mb.data, sizeof(uint64_t), externalIV );
+    cipher->streamEncode(mb.data, sizeof(uint64_t), externalIV);
 
     IORequest req;
     req.offset = 0;
     req.data = mb.data;
     req.dataLen = sizeof(uint64_t);
 
-    assert( base->isWritable() );
-    base->write( req );
+    assert(base->isWritable());
+    base->write(req);
   }
   VLOG(1) << "initHeader finished, fileIV = " << fileIV;
 }
 
-bool CipherFileIO::writeHeader( )
-{
-  if( !base->isWritable() )
-  {
+bool CipherFileIO::writeHeader() {
+  if (!base->isWritable()) {
     VLOG(1) << "writeHeader failed to re-open for write";
     return false;
   }
 
-  LOG_IF(ERROR, fileIV == 0)
-    << "Internal error: fileIV == 0 in writeHeader!!!";
+  LOG_IF(ERROR, fileIV == 0) << "Internal error: fileIV == 0 in writeHeader!!!";
   VLOG(1) << "writing fileIV " << fileIV;
 
   MemBlock mb;
   mb.allocate(headerLen);
 
-  if (perFileIV)
-  {
+  if (perFileIV) {
     unsigned char *buf = mb.data;
 
     assert(headerLen == sizeof(fileIV));
-    for(int i=headerLen-1; i>=0; --i)
-    {
+    for (int i = headerLen - 1; i >= 0; --i) {
       buf[i] = (unsigned char)(fileIV & 0xff);
       fileIV >>= 8;
     }
 
-    cipher->streamEncode( buf, sizeof(uint64_t), externalIV );
+    cipher->streamEncode(buf, sizeof(uint64_t), externalIV);
   }
 
   IORequest req;
@@ -259,13 +223,12 @@ bool CipherFileIO::writeHeader( )
   req.dataLen = headerLen;
 
   /* TODO: return failure if write fails */
-  base->write( req );
+  base->write(req);
 
   return true;
 }
 
-ssize_t CipherFileIO::readOneBlock( const IORequest &req ) const
-{
+ssize_t CipherFileIO::readOneBlock(const IORequest &req) const {
   ensureBase();
 
   // read raw data, then decipher it..
@@ -273,7 +236,7 @@ ssize_t CipherFileIO::readOneBlock( const IORequest &req ) const
   assert(bs >= 0);
   assert(req.offset >= 0);
   assert(!(req.offset % bs));
-  rAssert(req.dataLen <= (size_t) bs);
+  rAssert(req.dataLen <= (size_t)bs);
 
   fs_off_t blockNum = req.offset / bs;
 
@@ -284,31 +247,25 @@ ssize_t CipherFileIO::readOneBlock( const IORequest &req ) const
   tmpReq.offset += headerLen;
 
   int maxReadSize = req.dataLen;
-  readSize = base->read( tmpReq );
+  readSize = base->read(tmpReq);
 
   bool ok;
-  if(readSize > 0)
-  {
-    if(headerLen != 0 && fileIV == 0)
-      const_cast<CipherFileIO*>(this)->initHeader();
+  if (readSize > 0) {
+    if (headerLen != 0 && fileIV == 0)
+      const_cast<CipherFileIO *>(this)->initHeader();
 
-    if(readSize == bs)
-    {
-      ok = blockRead( tmpReq.data, bs, blockNum ^ fileIV);
-    } else 
-    {
-      ok = streamRead( tmpReq.data, (int)readSize, blockNum ^ fileIV);
+    if (readSize == bs) {
+      ok = blockRead(tmpReq.data, bs, blockNum ^ fileIV);
+    } else {
+      ok = streamRead(tmpReq.data, (int)readSize, blockNum ^ fileIV);
     }
 
-    if(!ok)
-    {
-      VLOG(1) << "decodeBlock failed for block " << blockNum
-        << ", size " << readSize;
+    if (!ok) {
+      VLOG(1) << "decodeBlock failed for block " << blockNum << ", size "
+              << readSize;
       readSize = -1;
-    } else if (tmpReq.data != req.data) 
-    {
-      if (readSize > maxReadSize)
-        readSize = maxReadSize;
+    } else if (tmpReq.data != req.data) {
+      if (readSize > maxReadSize) readSize = maxReadSize;
       memcpy(req.data, tmpReq.data, readSize);
     }
   } else
@@ -317,41 +274,31 @@ ssize_t CipherFileIO::readOneBlock( const IORequest &req ) const
   return readSize;
 }
 
-
-bool CipherFileIO::writeOneBlock( const IORequest &req )
-{
+bool CipherFileIO::writeOneBlock(const IORequest &req) {
   ensureBase();
 
   auto bs = blockSize();
   fs_off_t blockNum = req.offset / bs;
 
-  if(headerLen != 0 && fileIV == 0)
-    initHeader();
+  if (headerLen != 0 && fileIV == 0) initHeader();
 
   MemBlock mb;
 
   bool ok;
-  assert( bs >= 0 );
-  if (req.dataLen == (size_t) bs)
-  {
-    ok = blockWrite( req.data, bs, blockNum ^ fileIV );
-  } else
-  {
-    ok = streamWrite( req.data, (int)req.dataLen, 
-                     blockNum ^ fileIV );
+  assert(bs >= 0);
+  if (req.dataLen == (size_t)bs) {
+    ok = blockWrite(req.data, bs, blockNum ^ fileIV);
+  } else {
+    ok = streamWrite(req.data, (int)req.dataLen, blockNum ^ fileIV);
   }
 
-  if( ok )
-  {
+  if (ok) {
     IORequest nreq = req;
 
-    if(headerLen != 0)
-    {
-      if (mb.data == NULL)
-      {
+    if (headerLen != 0) {
+      if (mb.data == NULL) {
         nreq.offset += headerLen;
-      } else
-      {
+      } else {
         // Partial block is stored at front of file.
         nreq.offset = 0;
         nreq.data = mb.data;
@@ -360,106 +307,87 @@ bool CipherFileIO::writeOneBlock( const IORequest &req )
       }
     }
 
-    try
-    {
-      base->write( nreq );
-    } catch ( ... )
-    {
+    try {
+      base->write(nreq);
+    }
+    catch (...) {
       ok = false;
     }
-  } else
-  {
-    VLOG(1) << "encodeBlock failed for block " << blockNum
-      << ", size " << req.dataLen;
+  } else {
+    VLOG(1) << "encodeBlock failed for block " << blockNum << ", size "
+            << req.dataLen;
   }
 
   return ok;
 }
 
-bool CipherFileIO::blockWrite( byte *buf, size_t size, 
-                               uint64_t _iv64 ) const
-{
+bool CipherFileIO::blockWrite(byte *buf, size_t size, uint64_t _iv64) const {
   if (!fsConfig->reverseEncryption)
-    return cipher->blockEncode( (byte *) buf, size, _iv64 );
+    return cipher->blockEncode((byte *)buf, size, _iv64);
   else
-    return cipher->blockDecode( (byte *) buf, size, _iv64 );
-} 
+    return cipher->blockDecode((byte *)buf, size, _iv64);
+}
 
-bool CipherFileIO::streamWrite( byte *buf, size_t size, 
-                                uint64_t _iv64 ) const
-{
+bool CipherFileIO::streamWrite(byte *buf, size_t size, uint64_t _iv64) const {
   if (!fsConfig->reverseEncryption)
-    return cipher->streamEncode( buf, size, _iv64 );
+    return cipher->streamEncode(buf, size, _iv64);
   else
-    return cipher->streamDecode( buf, size, _iv64 );
-} 
+    return cipher->streamDecode(buf, size, _iv64);
+}
 
-
-bool CipherFileIO::blockRead( byte *buf, size_t size, 
-                              uint64_t _iv64 ) const
-{
+bool CipherFileIO::blockRead(byte *buf, size_t size, uint64_t _iv64) const {
   if (fsConfig->reverseEncryption)
-    return cipher->blockEncode( buf, size, _iv64 );
-  else if(_allowHoles)
-  {
+    return cipher->blockEncode(buf, size, _iv64);
+  else if (_allowHoles) {
     // special case - leave all 0's alone
-    for(decltype(size) i=0; i<size; ++i)
-      if(buf[i] != 0)
-        return cipher->blockDecode( buf, size, _iv64 );
+    for (decltype(size) i = 0; i < size; ++i)
+      if (buf[i] != 0) return cipher->blockDecode(buf, size, _iv64);
 
     return true;
   } else
-    return cipher->blockDecode( buf, size, _iv64 );
-} 
+    return cipher->blockDecode(buf, size, _iv64);
+}
 
-bool CipherFileIO::streamRead( byte *buf, size_t size, 
-                               uint64_t _iv64 ) const
-{
+bool CipherFileIO::streamRead(byte *buf, size_t size, uint64_t _iv64) const {
   if (fsConfig->reverseEncryption)
-    return cipher->streamEncode( buf, size, _iv64 );
+    return cipher->streamEncode(buf, size, _iv64);
   else
-    return cipher->streamDecode( buf, size, _iv64 );
-} 
+    return cipher->streamDecode(buf, size, _iv64);
+}
 
-void CipherFileIO::truncate( fs_off_t size )
-{
+void CipherFileIO::truncate(fs_off_t size) {
   ensureBase();
 
   rAssert(size >= 0);
-  if(!isWritable())
-  {
+  if (!isWritable()) {
     VLOG(1) << "writeHeader failed to re-open for write";
     throw std::runtime_error("file not opened for writing");
   }
 
-  if(headerLen == 0)
-  {
-    auto res = blockTruncate( size, base.get() );
+  if (headerLen == 0) {
+    auto res = blockTruncate(size, base.get());
     if (res < 0) throw std::runtime_error("blockTruncate() failed");
-  } else if(0 == fileIV)
-  {
+  } else if (0 == fileIV) {
     initHeader();
   }
 
   // can't let BlockFileIO call base->truncate(), since it would be using
   // the wrong size..
-  int res = blockTruncate( size, 0 );
-  if(res == 0)
-    base->truncate( size + headerLen );
+  int res = blockTruncate(size, 0);
+  if (res == 0)
+    base->truncate(size + headerLen);
   else
     throw std::runtime_error("blockTruncate() failed");
 }
 
-bool CipherFileIO::isWritable() const
-{
+bool CipherFileIO::isWritable() const {
   if (!base) return false;
   return base->isWritable();
 }
 
-void CipherFileIO::sync(bool a)
-{
+void CipherFileIO::sync(bool a) {
   ensureBase();
-  return base->sync( a );
+  return base->sync(a);
 }
 
 }  // namespace encfs

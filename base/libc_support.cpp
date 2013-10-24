@@ -30,21 +30,19 @@
 
 extern "C" {
 
-char *strdup_x(const char *x)
-{
+char *strdup_x(const char *x) {
 #ifndef _WIN32
   return strdup(x);
 #else
   size_t len = strlen(x);
-  char *toret = (char *) malloc(len + 1);
+  char *toret = (char *)malloc(len + 1);
   memcpy(toret, x, len);
   toret[len] = '\0';
   return toret;
 #endif
 }
 
-int vasprintf_x(char **ret, const char *format, va_list ap)
-{
+int vasprintf_x(char **ret, const char *format, va_list ap) {
 #ifndef _WIN32
   return vasprintf(ret, format, ap);
 #else
@@ -53,11 +51,10 @@ int vasprintf_x(char **ret, const char *format, va_list ap)
   *ret = NULL;
 
   int ret_vsnprintf;
-  do
-  {
+  do {
     // reallocate buffer
     cur_size *= 2;
-    char *const newp = (char *) realloc(*ret, cur_size);
+    char *const newp = (char *)realloc(*ret, cur_size);
     if (!newp) {
       free(*ret);
       return -1;
@@ -69,11 +66,9 @@ int vasprintf_x(char **ret, const char *format, va_list ap)
       free(*ret);
       return -1;
     }
-  }
-  while((size_t) ret_vsnprintf >= cur_size);
+  } while ((size_t)ret_vsnprintf >= cur_size);
 
   return 0;
 #endif
 }
-
 }

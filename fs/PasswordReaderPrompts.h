@@ -23,12 +23,10 @@
 
 namespace encfs {
 
-class PasswordReaderPrompts
-{
-public:
+class PasswordReaderPrompts {
+ public:
   virtual SecureMem *readPassword() override;
 };
-
 }
 
 #endif

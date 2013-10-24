@@ -7,7 +7,7 @@
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.  
+ * option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -36,62 +36,46 @@ using std::shared_ptr;
 
 namespace encfs {
 
-shared_ptr<DirNode> EncFS_Context::getRoot()
-{
-  return root;
-}
+shared_ptr<DirNode> EncFS_Context::getRoot() { return root; }
 
-void EncFS_Context::setRoot(const shared_ptr<DirNode> &r)
-{
-  root = r;
-}
+void EncFS_Context::setRoot(const shared_ptr<DirNode> &r) { root = r; }
 
-bool EncFS_Context::isMounted()
-{
-  return (bool) root;
-}
+bool EncFS_Context::isMounted() { return (bool)root; }
 
-int EncFS_Context::openFileCount() const
-{
-  return openFiles.size();
-}
+int EncFS_Context::openFileCount() const { return openFiles.size(); }
 
-shared_ptr<FileNode> EncFS_Context::lookupNode(const char *path) const
-{
-  try
-  {
-    const std::weak_ptr<FileNode> &ref = openFiles.at( std::string(path) );
+shared_ptr<FileNode> EncFS_Context::lookupNode(const char *path) const {
+  try {
+    const std::weak_ptr<FileNode> &ref = openFiles.at(std::string(path));
     return ref.lock();
-  } catch ( const std::out_of_range &err )
-  {
+  }
+  catch (const std::out_of_range &err) {
     return nullptr;
   }
 }
 
-void EncFS_Context::renameNode( const char *from, const char *to )
-{
-  auto from_path = std::string( from );
-  auto to_path = std::string( to );
+void EncFS_Context::renameNode(const char *from, const char *to) {
+  auto from_path = std::string(from);
+  auto to_path = std::string(to);
 
-  assert( !openFiles.count( to_path ) );
-  assert( openFiles.count( from_path ) );
+  assert(!openFiles.count(to_path));
+  assert(openFiles.count(from_path));
 
-  auto it = openFiles.find( from_path );
-  openFiles[ to_path ] = it->second;
-  openFiles.erase( it );
+  auto it = openFiles.find(from_path);
+  openFiles[to_path] = it->second;
+  openFiles.erase(it);
 }
 
-void EncFS_Context::trackNode( const char *cpath, const shared_ptr<FileNode> &node)
-{
-  auto path = std::string( cpath );
-  assert( !openFiles.count( path ) );
-  openFiles[ std::move( path ) ] = std::weak_ptr<FileNode>( node );
+void EncFS_Context::trackNode(const char *cpath,
+                              const shared_ptr<FileNode> &node) {
+  auto path = std::string(cpath);
+  assert(!openFiles.count(path));
+  openFiles[std::move(path)] = std::weak_ptr<FileNode>(node);
 }
 
-void EncFS_Context::eraseNode(const char *path)
-{
-  assert( openFiles.count( path ) );
-  openFiles.erase( std::string( path ) );
+void EncFS_Context::eraseNode(const char *path) {
+  assert(openFiles.count(path));
+  openFiles.erase(std::string(path));
 }
 
 }  // namespace encfs

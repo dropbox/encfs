@@ -7,7 +7,7 @@
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.  
+ * option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -32,15 +32,14 @@
 
 namespace encfs {
 
-enum ConfigType
-{
-    Config_None = 0,
-    Config_Prehistoric,
-    Config_V3 = 3,
-    Config_V4 = 4,
-    Config_V5 = 5,
-    Config_V6 = 6,
-    Config_V7 = 7
+enum ConfigType {
+  Config_None = 0,
+  Config_Prehistoric,
+  Config_V3 = 3,
+  Config_V4 = 4,
+  Config_V5 = 5,
+  Config_V6 = 6,
+  Config_V7 = 7
 };
 
 struct EncFS_Opts;
@@ -56,25 +55,22 @@ std::shared_ptr<CipherV1> getCipher(const EncfsConfig &cfg);
 std::shared_ptr<CipherV1> getCipher(const Interface &iface, int keySize);
 
 // helpers for serializing to/from a stream
-std::ostream &operator << (std::ostream &os, const EncfsConfig &cfg);
-std::istream &operator >> (std::istream &os, EncfsConfig &cfg);
+std::ostream &operator<<(std::ostream &os, const EncfsConfig &cfg);
+std::istream &operator>>(std::istream &os, EncfsConfig &cfg);
 
 // Filesystem state
-struct FSConfig
-{
-    std::shared_ptr<EncfsConfig> config;
-    std::shared_ptr<EncFS_Opts> opts;
+struct FSConfig {
+  std::shared_ptr<EncfsConfig> config;
+  std::shared_ptr<EncFS_Opts> opts;
 
-    std::shared_ptr<CipherV1> cipher;
-    CipherKey key;
-    std::shared_ptr<NameIO> nameCoding;
+  std::shared_ptr<CipherV1> cipher;
+  CipherKey key;
+  std::shared_ptr<NameIO> nameCoding;
 
-    bool forceDecode; // force decode on MAC block failures
-    bool reverseEncryption; // reverse encryption operation
+  bool forceDecode;        // force decode on MAC block failures
+  bool reverseEncryption;  // reverse encryption operation
 
-    FSConfig() 
-      : forceDecode(false),
-        reverseEncryption(false) { }
+  FSConfig() : forceDecode(false), reverseEncryption(false) {}
 };
 
 typedef std::shared_ptr<FSConfig> FSConfigPtr;
@@ -82,4 +78,3 @@ typedef std::shared_ptr<FSConfig> FSConfigPtr;
 }  // namespace encfs
 
 #endif
-

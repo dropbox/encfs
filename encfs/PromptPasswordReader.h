@@ -25,12 +25,10 @@
 
 namespace encfs {
 
-class PromptPasswordReader : public PasswordReader
-{
-public:
+class PromptPasswordReader : public PasswordReader {
+ public:
   virtual SecureMem *readPassword(size_t maxLen, bool newPass) override;
 };
-
 }
 
 #endif

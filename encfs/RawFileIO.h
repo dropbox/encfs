@@ -7,7 +7,7 @@
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.  
+ * option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,37 +27,36 @@
 
 namespace encfs {
 
-class RawFileIO : public FileIO
-{
-public:
-    RawFileIO( const std::string &fileName );
+class RawFileIO : public FileIO {
+ public:
+  RawFileIO(const std::string &fileName);
 
-    // can't copy RawFileIO unless we dup fd
-    RawFileIO( const RawFileIO & ) = delete;
-    RawFileIO &operator=( const RawFileIO & ) = delete;
+  // can't copy RawFileIO unless we dup fd
+  RawFileIO(const RawFileIO &) = delete;
+  RawFileIO &operator=(const RawFileIO &) = delete;
 
-    int open( int flags, mode_t mode );
+  int open(int flags, mode_t mode);
 
-    virtual ~RawFileIO() override;
+  virtual ~RawFileIO() override;
 
-    virtual Interface interface() const override;
+  virtual Interface interface() const override;
 
-    virtual FsFileAttrs get_attrs() const override;
+  virtual FsFileAttrs get_attrs() const override;
 
-    virtual size_t read( const IORequest & req ) const override;
-    virtual void write( const IORequest &req ) override;
+  virtual size_t read(const IORequest &req) const override;
+  virtual void write(const IORequest &req) override;
 
-    virtual void truncate( fs_off_t size ) override;
+  virtual void truncate(fs_off_t size) override;
 
-    virtual bool isWritable() const override;
+  virtual bool isWritable() const override;
 
-    virtual void sync(bool datasync) override;
+  virtual void sync(bool datasync) override;
 
-protected:
-    std::string name;
+ protected:
+  std::string name;
 
-    int fd;
-    bool canWrite;
+  int fd;
+  bool canWrite;
 };
 
 FsFileAttrs stat_to_fs_file_attrs(const struct stat &fs);
@@ -65,4 +64,3 @@ FsFileAttrs stat_to_fs_file_attrs(const struct stat &fs);
 }  // namespace encfs
 
 #endif
-

@@ -22,33 +22,29 @@
 
 namespace encfs {
 
-SecureMem *PasswordReaderPrompt::readPassword()
-{
+SecureMem *PasswordReaderPrompt::readPassword() {
   SecureMem *buf = new SecureMem(MaxPassBuf);
   SecureMem *buf2 = new SecureMem(MaxPassBuf);
 
-  do
-  {
+  do {
     // xgroup(common)
-    char *res1 = readpassphrase(_("New Encfs Password: "), 
-        (char *)buf->data(), buf->size()-1, RPP_ECHO_OFF);
+    char *res1 = readpassphrase(_("New Encfs Password: "), (char *)buf->data(),
+                                buf->size() - 1, RPP_ECHO_OFF);
     // xgroup(common)
-    char *res2 = readpassphrase(_("Verify Encfs Password: "), 
-        (char *)buf2->data(), buf2->size()-1, RPP_ECHO_OFF);
+    char *res2 =
+        readpassphrase(_("Verify Encfs Password: "), (char *)buf2->data(),
+                       buf2->size() - 1, RPP_ECHO_OFF);
 
-    if(res1 && res2
-       && !strncmp((char*)buf->data(), (char*)buf2->data(), MaxPassBuf))
-    {
-      break; 
-    } else
-    {
+    if (res1 && res2 &&
+        !strncmp((char *)buf->data(), (char *)buf2->data(), MaxPassBuf)) {
+      break;
+    } else {
       // xgroup(common) -- probably not common, but group with the others
       cerr << _("Passwords did not match, please try again\n");
     }
-  } while(1);
+  } while (1);
 
   delete buf2;
   return buf;
 }
-
 }

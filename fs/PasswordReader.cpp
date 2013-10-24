@@ -22,7 +22,5 @@
 
 namespace encfs {
 
-PasswordReader::~PasswordReader()
-{}
-
+PasswordReader::~PasswordReader() {}
 }

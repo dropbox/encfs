@@ -7,7 +7,7 @@
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.  
+ * option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -70,143 +70,125 @@ static const int DefaultBlockSize = 2048;
 // use the extpass option, as extpass can return arbitrary length binary data.
 static const int MaxPassBuf = 2048;
 
-static const int NormalKDFDuration = 500; // 1/2 a second
-static const int ParanoiaKDFDuration = 3000; // 3 seconds
+static const int NormalKDFDuration = 500;     // 1/2 a second
+static const int ParanoiaKDFDuration = 3000;  // 3 seconds
 
-const int V5Latest = 20040813; // fix MACFileIO block size issues
+const int V5Latest = 20040813;  // fix MACFileIO block size issues
 const int ProtoSubVersion = 20120902;
 
 const char ConfigFileName[] = ".encfs.txt";
 
-struct ConfigInfo
-{
+struct ConfigInfo {
   ConfigType type;
   const char *fileName;
   const char *environmentOverride;
-  bool (*loadFunc)(const shared_ptr<FsIO> &fs_io, const char *fileName, 
-      EncfsConfig &config, ConfigInfo *cfg);
+  bool (*loadFunc)(const shared_ptr<FsIO> &fs_io, const char *fileName,
+                   EncfsConfig &config, ConfigInfo *cfg);
 } ConfigFileMapping[] = {
-  {Config_V7, ConfigFileName, "ENCFS_CONFIG", readProtoConfig },
-  {Config_V6, ".encfs6.xml", "ENCFS6_CONFIG", readV6Config },
-  // backward compatible support for older versions
-  {Config_V5, ".encfs5", "ENCFS5_CONFIG", readV5Config },
-  {Config_V4, ".encfs4", NULL, readV4Config },
-  // prehistoric - no longer support
-  {Config_V3, ".encfs3", NULL, NULL },
-  {Config_Prehistoric, ".encfs2", NULL, NULL },
-  {Config_Prehistoric, ".encfs", NULL, NULL },
-  {Config_None, NULL, NULL, NULL } };
+      {Config_V7, ConfigFileName, "ENCFS_CONFIG", readProtoConfig},
+      {Config_V6, ".encfs6.xml", "ENCFS6_CONFIG", readV6Config},
+      // backward compatible support for older versions
+      {Config_V5, ".encfs5", "ENCFS5_CONFIG", readV5Config},
+      {Config_V4, ".encfs4", NULL, readV4Config},
+      // prehistoric - no longer support
+      {Config_V3, ".encfs3", NULL, NULL},
+      {Config_Prehistoric, ".encfs2", NULL, NULL},
+      {Config_Prehistoric, ".encfs", NULL, NULL},
+      {Config_None, NULL, NULL, NULL}};
 
-EncFS_Root::EncFS_Root()
-{
-}
+EncFS_Root::EncFS_Root() {}
 
-EncFS_Root::~EncFS_Root()
-{
-}
+EncFS_Root::~EncFS_Root() {}
 
-
-bool fileExists( const shared_ptr<FsIO> &fs_io, const char * fileName )
-{
-  try
-  {
-    get_attrs( fs_io, fs_io->pathFromString( fileName ) );
+bool fileExists(const shared_ptr<FsIO> &fs_io, const char *fileName) {
+  try {
+    get_attrs(fs_io, fs_io->pathFromString(fileName));
     return true;
-  } catch ( ... )
-  {
+  }
+  catch (...) {
     return false;
   }
 }
 
-bool isDirectory( const shared_ptr<FsIO> &fs_io, const char *fileName )
-{
-  return isDirectory( fs_io, fs_io->pathFromString( fileName ) );
+bool isDirectory(const shared_ptr<FsIO> &fs_io, const char *fileName) {
+  return isDirectory(fs_io, fs_io->pathFromString(fileName));
 }
 
-bool isDirectory( const shared_ptr<FsIO> &fs_io, const Path &p )
-{
-  try
-  {
-    fs_io->opendir( p );
+bool isDirectory(const shared_ptr<FsIO> &fs_io, const Path &p) {
+  try {
+    fs_io->opendir(p);
     return true;
-  } catch ( const std::system_error & err )
-  {
+  }
+  catch (const std::system_error &err) {
     if (err.code() != std::errc::not_a_directory) throw;
     return false;
   }
 }
 
-std::string lastPathElement( const shared_ptr<FsIO> &fs_io, std::string name )
-{
-  return fs_io->pathFromString( name ).basename();
+std::string lastPathElement(const shared_ptr<FsIO> &fs_io, std::string name) {
+  return fs_io->pathFromString(name).basename();
 }
 
-std::string parentDirectory( const shared_ptr<FsIO> &fs_io, const std::string &path )
-{
-  return fs_io->pathFromString( path ).dirname();
+std::string parentDirectory(const shared_ptr<FsIO> &fs_io,
+                            const std::string &path) {
+  return fs_io->pathFromString(path).dirname();
 }
 
-bool userAllowMkdir( const shared_ptr<FsIO> &fs_io, const char *path, mode_t mode )
-{
+bool userAllowMkdir(const shared_ptr<FsIO> &fs_io, const char *path,
+                    mode_t mode) {
   return userAllowMkdir(fs_io, 0, path, mode);
 }
 
-bool userAllowMkdir( const shared_ptr<FsIO> &fs_io, int promptno, const char *path, mode_t /*mode*/ )
-{
+bool userAllowMkdir(const shared_ptr<FsIO> &fs_io, int promptno,
+                    const char *path, mode_t /*mode*/) {
   // TODO: can we internationalize the y/n names?  Seems strange to prompt in
   // their own language but then have to respond 'y' or 'n'.
   // xgroup(setup)
-  cerr << autosprintf( _("The directory \"%s\" does not exist. "
-                         "Should it be created? (y,n) "), path );
+  cerr << autosprintf(_("The directory \"%s\" does not exist. "
+                        "Should it be created? (y,n) "),
+                      path);
   char answer[10];
   char *res;
 
-  switch (promptno)
-  {
-  case 1:
-    cerr << endl << "$PROMPT$ create_root_dir" << endl;
-    break;
-  case 2:
-    cerr << endl << "$PROMPT$ create_mount_point" << endl;
-    break;
-  default:
-    break;
+  switch (promptno) {
+    case 1:
+      cerr << endl << "$PROMPT$ create_root_dir" << endl;
+      break;
+    case 2:
+      cerr << endl << "$PROMPT$ create_mount_point" << endl;
+      break;
+    default:
+      break;
   }
-  res = fgets( answer, sizeof(answer), stdin );
+  res = fgets(answer, sizeof(answer), stdin);
 
-  if(res != 0 && toupper(answer[0]) == 'Y')
-  {
-    try
-    {
+  if (res != 0 && toupper(answer[0]) == 'Y') {
+    try {
       // TODO: propagate mode in a X-platform way
       // posix_mkdir()?
-      fs_io->mkdir( fs_io->pathFromString( path ) );
-    } catch ( const std::exception &err )
-    {
-      cerr <<  _("Unable to create directory: ") << err.what() << "\n";
+      fs_io->mkdir(fs_io->pathFromString(path));
+    }
+    catch (const std::exception &err) {
+      cerr << _("Unable to create directory: ") << err.what() << "\n";
       return false;
     }
 
     return true;
-  } else
-  {
+  } else {
     // Directory not created, by user request
     cerr << _("Directory not created.") << "\n";
     return false;
   }
 }
 
-ConfigType readConfig_load( const shared_ptr<FsIO> &fs_io, ConfigInfo *nm, const char *path, 
-                            EncfsConfig &config, bool throw_exception )
-{
-  if( nm->loadFunc )
-  {
-    try
-    {
-      if( (*nm->loadFunc)( fs_io, path, config, nm ))
-        return nm->type;
-    } catch( Error &err )
-    {
+ConfigType readConfig_load(const shared_ptr<FsIO> &fs_io, ConfigInfo *nm,
+                           const char *path, EncfsConfig &config,
+                           bool throw_exception) {
+  if (nm->loadFunc) {
+    try {
+      if ((*nm->loadFunc)(fs_io, path, config, nm)) return nm->type;
+    }
+    catch (Error &err) {
       LOG(WARNING) << "readConfig failed: " << err.what();
     }
 
@@ -214,53 +196,48 @@ ConfigType readConfig_load( const shared_ptr<FsIO> &fs_io, ConfigInfo *nm, const
 
     LOG(ERROR) << "Found config file " << path << ", but failed to load";
     return Config_None;
-  } else
-  {
-    if (throw_exception) throw std::runtime_error( "no load function?" );
+  } else {
+    if (throw_exception) throw std::runtime_error("no load function?");
 
     // No load function - must be an unsupported type..
     return Config_None;
   }
 }
 
-static bool endswith(const std::string & haystack, const std::string & needle) {
+static bool endswith(const std::string &haystack, const std::string &needle) {
   if (haystack.size() < needle.size()) return false;
-  return haystack.substr(haystack.size() - needle.size(), needle.size()) == needle;
+  return haystack.substr(haystack.size() - needle.size(), needle.size()) ==
+         needle;
 }
 
 std::string ensure_endswith(std::string path, std::string term) {
-  if (!endswith( path, term )) path += term;
+  if (!endswith(path, term)) path += term;
   return std::move(path);
 }
 
-EncfsConfig
-read_config(std::shared_ptr<FsIO> fs_io,
-            const Path & encrypted_folder_path) {
+EncfsConfig read_config(std::shared_ptr<FsIO> fs_io,
+                        const Path &encrypted_folder_path) {
   EncfsConfig config;
   const bool throw_exception = true;
   readConfig(fs_io, encrypted_folder_path, config, throw_exception);
   return std::move(config);
 }
 
-ConfigType readConfig( const shared_ptr<FsIO> &fs_io, const string &rootDir, EncfsConfig &config,
-                       bool throw_exception)
-{
+ConfigType readConfig(const shared_ptr<FsIO> &fs_io, const string &rootDir,
+                      EncfsConfig &config, bool throw_exception) {
   ConfigInfo *nm = ConfigFileMapping;
-  while(nm->fileName)
-  {
+  while (nm->fileName) {
     // allow environment variable to override default config path
     // TODO: MOVE THIS OUT OF libencf-fs
-    if( nm->environmentOverride != NULL )
-    {
-      char *envFile = getenv( nm->environmentOverride );
-      if( envFile != NULL )
-        return readConfig_load( fs_io, nm, envFile, config, throw_exception );
+    if (nm->environmentOverride != NULL) {
+      char *envFile = getenv(nm->environmentOverride);
+      if (envFile != NULL)
+        return readConfig_load(fs_io, nm, envFile, config, throw_exception);
     }
     // the standard place to look is in the root directory
     auto path = ensure_endswith(rootDir, fs_io->path_sep()) + nm->fileName;
-    if( fileExists( fs_io, path.c_str() ) )
-    {
-      return readConfig_load( fs_io, nm, path.c_str(), config, throw_exception);
+    if (fileExists(fs_io, path.c_str())) {
+      return readConfig_load(fs_io, nm, path.c_str(), config, throw_exception);
     }
 
     ++nm;
@@ -272,14 +249,12 @@ ConfigType readConfig( const shared_ptr<FsIO> &fs_io, const string &rootDir, Enc
 }
 
 // Read a boost::serialization config file using an Xml reader..
-bool readV6Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile, 
-    EncfsConfig &cfg, ConfigInfo *info)
-{
+bool readV6Config(const shared_ptr<FsIO> & /*fs_io*/, const char *configFile,
+                  EncfsConfig &cfg, ConfigInfo *info) {
   (void)info;
 
   XmlReader rdr;
-  if (!rdr.load(configFile))
-  {
+  if (!rdr.load(configFile)) {
     LOG(ERROR) << "Failed to load config file " << configFile;
     return false;
   }
@@ -301,25 +276,19 @@ bool readV6Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile,
     return false;
   }
 
-  // version numbering was complicated by boost::archive 
-  if (version == 20 || version >= 20100713)
-  {
+  // version numbering was complicated by boost::archive
+  if (version == 20 || version >= 20100713) {
     VLOG(1) << "found new serialization format";
     cfg.set_revision(version);
-  } else if (version == 26800)
-  {
+  } else if (version == 26800) {
     VLOG(1) << "found 20080816 version";
     cfg.set_revision(20080816);
-  } else if (version == 26797)
-  {
+  } else if (version == 26797) {
     VLOG(1) << "found 20080813";
     cfg.set_revision(20080813);
-  } else if (version < V5Latest)
-  {
-    LOG(ERROR) << "Invalid version " << version
-      << " - please fix config file";
-  } else
-  {
+  } else if (version < V5Latest) {
+    LOG(ERROR) << "Invalid version " << version << " - please fix config file";
+  } else {
     LOG(INFO) << "Boost <= 1.41 compatibility mode";
     cfg.set_revision(version);
   }
@@ -356,13 +325,12 @@ bool readV6Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile,
   config->readB64("encodedKeyData", key, encodedSize);
   encryptedKey->set_ciphertext(key, encodedSize);
   delete[] key;
-  
+
   int keySize;
   config->read("keySize", &keySize);
-  encryptedKey->set_size(keySize / 8); // save as size in bytes
+  encryptedKey->set_size(keySize / 8);  // save as size in bytes
 
-  if(cfg.revision() >= 20080816)
-  {
+  if (cfg.revision() >= 20080816) {
     int saltLen;
     config->read("saltLen", &saltLen);
     unsigned char *salt = new unsigned char[saltLen];
@@ -375,8 +343,7 @@ bool readV6Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile,
     config->read("desiredKDFDuration", &desiredKDFDuration);
     encryptedKey->set_kdf_iterations(kdfIterations);
     encryptedKey->set_kdf_duration(desiredKDFDuration);
-  } else
-  {
+  } else {
     encryptedKey->clear_salt();
     encryptedKey->set_kdf_iterations(16);
     encryptedKey->clear_kdf_duration();
@@ -386,31 +353,28 @@ bool readV6Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile,
 }
 
 // Read a v5 archive, which is a proprietary binary format.
-bool readV5Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile, 
-    EncfsConfig &config, ConfigInfo *)
-{
+bool readV5Config(const shared_ptr<FsIO> & /*fs_io*/, const char *configFile,
+                  EncfsConfig &config, ConfigInfo *) {
   bool ok = false;
 
   // use Config to parse the file and query it..
   ConfigReader cfgRdr;
-  if(cfgRdr.load( configFile ))
-  {
-    try
-    {
+  if (cfgRdr.load(configFile)) {
+    try {
       config.set_revision(cfgRdr["subVersion"].readInt(0));
-      if(config.revision() > V5Latest)
-      {
+      if (config.revision() > V5Latest) {
         /* config file specifies a version outside our supported
            range..   */
-        LOG(ERROR) << "Config subversion " << config.revision()
-          << " found, but this version of encfs only supports up to version "
-          << V5Latest;
+        LOG(ERROR)
+            << "Config subversion " << config.revision()
+            << " found, but this version of encfs only supports up to version "
+            << V5Latest;
         return false;
       }
-      if( config.revision() < V5Latest )
-      {
-        LOG(ERROR) << "This version of EncFS doesn't support "
-          << "filesystems created with EncFS releases before 2004-08-13";
+      if (config.revision() < V5Latest) {
+        LOG(ERROR)
+            << "This version of EncFS doesn't support "
+            << "filesystems created with EncFS releases before 2004-08-13";
         return false;
       }
 
@@ -428,17 +392,17 @@ bool readV5Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile,
       encryptedKey->set_size(keySize / 8);
       cfgRdr["keyData"] >> (*encryptedKey->mutable_ciphertext());
 
-      config.set_unique_iv( cfgRdr["uniqueIV"].readBool( false ) );
-      config.set_chained_iv( cfgRdr["chainedIV"].readBool( false ) );
-      config.set_external_iv( cfgRdr["externalIV"].readBool( false ) );
-      config.set_block_mac_bytes( cfgRdr["blockMACBytes"].readInt(0) );
-      config.set_block_mac_rand_bytes( cfgRdr["blockMACRandBytes"].readInt(0) );
+      config.set_unique_iv(cfgRdr["uniqueIV"].readBool(false));
+      config.set_chained_iv(cfgRdr["chainedIV"].readBool(false));
+      config.set_external_iv(cfgRdr["externalIV"].readBool(false));
+      config.set_block_mac_bytes(cfgRdr["blockMACBytes"].readInt(0));
+      config.set_block_mac_rand_bytes(cfgRdr["blockMACRandBytes"].readInt(0));
 
       ok = true;
-    } catch( Error &err)
-    {
-      LOG(WARNING) << "Error parsing data in config file " << configFile
-        << "; " << err.what();
+    }
+    catch (Error &err) {
+      LOG(WARNING) << "Error parsing data in config file " << configFile << "; "
+                   << err.what();
       ok = false;
     }
   }
@@ -446,17 +410,14 @@ bool readV5Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile,
   return ok;
 }
 
-bool readV4Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile, 
-    EncfsConfig &config, ConfigInfo *)
-{
+bool readV4Config(const shared_ptr<FsIO> & /*fs_io*/, const char *configFile,
+                  EncfsConfig &config, ConfigInfo *) {
   bool ok = false;
 
   // use Config to parse the file and query it..
   ConfigReader cfgRdr;
-  if(cfgRdr.load( configFile ))
-  {
-    try
-    {
+  if (cfgRdr.load(configFile)) {
+    try {
       cfgRdr["cipher"] >> (*config.mutable_cipher());
       int blockSize;
       cfgRdr["blockSize"] >> blockSize;
@@ -466,14 +427,15 @@ bool readV4Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile,
       cfgRdr["keyData"] >> (*key->mutable_ciphertext());
 
       // fill in default for V4
-      config.mutable_naming()->MergeFrom( makeInterface("nameio/stream", 1, 0, 0) );
-      config.set_creator( "EncFS 1.0.x" );
+      config.mutable_naming()->MergeFrom(
+          makeInterface("nameio/stream", 1, 0, 0));
+      config.set_creator("EncFS 1.0.x");
 
       ok = true;
-    } catch( Error &err)
-    {
-      LOG(WARNING) << "Error parsing config file " << configFile
-        << ": " << err.what();
+    }
+    catch (Error &err) {
+      LOG(WARNING) << "Error parsing config file " << configFile << ": "
+                   << err.what();
       ok = false;
     }
   }
@@ -481,62 +443,58 @@ bool readV4Config( const shared_ptr<FsIO> &/*fs_io*/, const char *configFile,
   return ok;
 }
 
-static bool writeTextConfig( const shared_ptr<FsIO> &fs_io, const char *fileName, const EncfsConfig &cfg )
-{
+static bool writeTextConfig(const shared_ptr<FsIO> &fs_io, const char *fileName,
+                            const EncfsConfig &cfg) {
   /* TODO: maybe optimize and create a ZeroCopyOutputStream from
      a encfs::File object. These text serializations aren't that
      big so I probably wouldn't */
 
   std::string output;
-  google::protobuf::io::StringOutputStream fos( &output );
-  google::protobuf::TextFormat::Print( cfg, &fos );
+  google::protobuf::io::StringOutputStream fos(&output);
+  google::protobuf::TextFormat::Print(cfg, &fos);
 
-  try
-  {
+  try {
     bool open_for_write = true;
     bool create = true;
-    auto f = fs_io->openfile( fs_io->pathFromString( fileName ),
-                              open_for_write, create );
-    f.write( IORequest( 0, (byte *) output.c_str(), output.size() ) );
-  } catch ( const Error &err )
-  {
-    LOG(ERROR) << "Unable to open or create file \"" << fileName << "\": " << err.what();
+    auto f = fs_io->openfile(fs_io->pathFromString(fileName), open_for_write,
+                             create);
+    f.write(IORequest(0, (byte *)output.c_str(), output.size()));
+  }
+  catch (const Error &err) {
+    LOG(ERROR) << "Unable to open or create file \"" << fileName
+               << "\": " << err.what();
     return false;
   }
 
   return true;
 }
 
-void
-write_config(std::shared_ptr<FsIO> fs_io,
-             const Path & encrypted_directory_path,
-             const EncfsConfig & cfg) {
+void write_config(std::shared_ptr<FsIO> fs_io,
+                  const Path &encrypted_directory_path,
+                  const EncfsConfig &cfg) {
   auto save_success = saveConfig(fs_io, encrypted_directory_path, cfg);
   if (!save_success) throw std::runtime_error("bad config");
 }
 
-bool saveConfig( const shared_ptr<FsIO> &fs_io, const string &rootDir, const EncfsConfig &config )
-{
+bool saveConfig(const shared_ptr<FsIO> &fs_io, const string &rootDir,
+                const EncfsConfig &config) {
   bool ok = false;
 
   ConfigInfo *nm = ConfigFileMapping;
 
   // TODO(vgough): remove old config after saving a new one?
   string path = ensure_endswith(rootDir, fs_io->path_sep()) + ConfigFileName;
-  if( nm->environmentOverride != NULL )
-  {
+  if (nm->environmentOverride != NULL) {
     // use environment file if specified..
-    const char *envFile = getenv( nm->environmentOverride );
-    if( envFile != NULL )
-      path.assign( envFile );
+    const char *envFile = getenv(nm->environmentOverride);
+    if (envFile != NULL) path.assign(envFile);
   }
 
-  try
-  {
-    const_cast<EncfsConfig &>(config).set_writer("EncFS " VERSION );
-    ok = writeTextConfig( fs_io, path.c_str(), config );
-  } catch( Error &err )
-  {
+  try {
+    const_cast<EncfsConfig &>(config).set_writer("EncFS " VERSION);
+    ok = writeTextConfig(fs_io, path.c_str(), config);
+  }
+  catch (Error &err) {
     LOG(WARNING) << "saveConfig failed: " << err.what();
     ok = false;
   }
@@ -544,48 +502,39 @@ bool saveConfig( const shared_ptr<FsIO> &fs_io, const string &rootDir, const Enc
   return ok;
 }
 
-bool readProtoConfig( const shared_ptr<FsIO> &fs_io, const char *fileName, EncfsConfig &config,
-    struct ConfigInfo *)
-{
+bool readProtoConfig(const shared_ptr<FsIO> &fs_io, const char *fileName,
+                     EncfsConfig &config, struct ConfigInfo *) {
   opt::optional<File> file;
-  try
-  {
-    file = fs_io->openfile( fs_io->pathFromString( fileName ) );
-  } catch ( const Error &err )
-  {
+  try {
+    file = fs_io->openfile(fs_io->pathFromString(fileName));
+  }
+  catch (const Error &err) {
     LOG(ERROR) << "Unable to open config (" << fileName << "): " << err.what();
     return false;
   }
 
-  assert( file );
+  assert(file);
 
   auto attrs = file->get_attrs();
-  auto buf = std::unique_ptr<byte[]>( new byte[attrs.size] );
+  auto buf = std::unique_ptr<byte[]>(new byte[attrs.size]);
 
   decltype(attrs.size) offset = 0;
-  while(offset != attrs.size)
-  {
-    auto read = file->read( offset, buf.get() + offset, attrs.size - offset );
-    if(read <= 0)
-      break;
+  while (offset != attrs.size) {
+    auto read = file->read(offset, buf.get() + offset, attrs.size - offset);
+    if (read <= 0) break;
     offset += read;
   }
 
-  google::protobuf::io::ArrayInputStream fis( buf.get(), attrs.size );
-  google::protobuf::TextFormat::Parse( &fis, &config );
+  google::protobuf::io::ArrayInputStream fis(buf.get(), attrs.size);
+  google::protobuf::TextFormat::Parse(&fis, &config);
 
   return true;
 }
 
-static
-CipherV1::CipherAlgorithm findCipherAlgorithm(const char *name,
-    int keySize )
-{
-  for (auto &it : CipherV1::GetAlgorithmList()) 
-  {
-    if( !strcmp( name, it.name.c_str() )
-        && it.keyLength.allowed( keySize ))
-    {
+static CipherV1::CipherAlgorithm findCipherAlgorithm(const char *name,
+                                                     int keySize) {
+  for (auto &it : CipherV1::GetAlgorithmList()) {
+    if (!strcmp(name, it.name.c_str()) && it.keyLength.allowed(keySize)) {
       return it;
     }
   }
@@ -594,113 +543,96 @@ CipherV1::CipherAlgorithm findCipherAlgorithm(const char *name,
   return result;
 }
 
-static
-CipherV1::CipherAlgorithm selectCipherAlgorithm()
-{
-  for(;;)
-  {
+static CipherV1::CipherAlgorithm selectCipherAlgorithm() {
+  for (;;) {
     // figure out what cipher they want to use..
     // xgroup(setup)
     cout << _("The following cipher algorithms are available:") << "\n";
     int optNum = 0;
     auto algorithms = CipherV1::GetAlgorithmList();
-    for (auto &it : algorithms)
-    {
-      cout << ++optNum << ". " << it.name
-        << " : " << gettext(it.description.c_str()) << "\n";
-      if(it.keyLength.min() == it.keyLength.max())
-      {
+    for (auto &it : algorithms) {
+      cout << ++optNum << ". " << it.name << " : "
+           << gettext(it.description.c_str()) << "\n";
+      if (it.keyLength.min() == it.keyLength.max()) {
         // shown after algorithm name and description.
         // xgroup(setup)
-        cout << autosprintf(_(" -- key length %i bits")
-            , it.keyLength.min()) << "\n";
-      } else
-      {
+        cout << autosprintf(_(" -- key length %i bits"), it.keyLength.min())
+             << "\n";
+      } else {
         cout << autosprintf(
-            // shown after algorithm name and description.
-            // xgroup(setup)
-            _(" -- Supports key lengths of %i to %i bits"),
-            it.keyLength.min(), it.keyLength.max()) << "\n";
+                    // shown after algorithm name and description.
+                    // xgroup(setup)
+                    _(" -- Supports key lengths of %i to %i bits"),
+                    it.keyLength.min(), it.keyLength.max()) << "\n";
       }
 
-      if(it.blockSize.min() == it.blockSize.max())
-      {
+      if (it.blockSize.min() == it.blockSize.max()) {
         cout << autosprintf(
-            // shown after algorithm name and description.
-            // xgroup(setup)
-            _(" -- block size %i bytes"), it.blockSize.min()) 
-          << "\n";
-      } else
-      {
+                    // shown after algorithm name and description.
+                    // xgroup(setup)
+                    _(" -- block size %i bytes"), it.blockSize.min()) << "\n";
+      } else {
         cout << autosprintf(
-            // shown after algorithm name and description.
-            // xgroup(setup)
-            _(" -- Supports block sizes of %i to %i bytes"),
-            it.blockSize.min(), it.blockSize.max()) << "\n";
+                    // shown after algorithm name and description.
+                    // xgroup(setup)
+                    _(" -- Supports block sizes of %i to %i bytes"),
+                    it.blockSize.min(), it.blockSize.max()) << "\n";
       }
     }
 
     // xgroup(setup)
     cout << "\n" << _("Enter the number corresponding to your choice: ");
     char answer[10];
-    char *res = fgets( answer, sizeof(answer), stdin );
-    int cipherNum = (res == 0 ? 0 : atoi( answer ));
+    char *res = fgets(answer, sizeof(answer), stdin);
+    int cipherNum = (res == 0 ? 0 : atoi(answer));
     cout << "\n";
 
-    if( cipherNum < 1 || cipherNum > (int)algorithms.size() )
-    {
+    if (cipherNum < 1 || cipherNum > (int)algorithms.size()) {
       cerr << _("Invalid selection.") << "\n";
       continue;
     }
 
     CipherV1::CipherAlgorithm alg;
-    for (auto &it : algorithms) 
-    {
-      if (!--cipherNum)
-      {
+    for (auto &it : algorithms) {
+      if (!--cipherNum) {
         alg = it;
         break;
       }
     }
 
     // xgroup(setup)
-    cout << autosprintf(_("Selected algorithm \"%s\""), alg.name.c_str()) 
-      << "\n\n";
+    cout << autosprintf(_("Selected algorithm \"%s\""), alg.name.c_str())
+         << "\n\n";
 
     return alg;
   }
 }
 
-static
-Interface selectNameCoding(const CipherV1::CipherAlgorithm &alg)
-{
-  for(;;)
-  {
+static Interface selectNameCoding(const CipherV1::CipherAlgorithm &alg) {
+  for (;;) {
     // figure out what cipher they want to use..
     // xgroup(setup)
-    (void) alg;
+    (void)alg;
     cout << _("The following filename encoding algorithms are available:")
-      << "\n";
+         << "\n";
     NameIO::AlgorithmList algorithms = NameIO::GetAlgorithmList();
     NameIO::AlgorithmList::const_iterator it;
     int optNum = 1;
     map<int, NameIO::AlgorithmList::const_iterator> algMap;
-    for(it = algorithms.begin(); it != algorithms.end(); ++it)
-    {
-      cout << optNum << ". " << it->name
-        << " : " << gettext(it->description.c_str()) << "\n";
+    for (it = algorithms.begin(); it != algorithms.end(); ++it) {
+      cout << optNum << ". " << it->name << " : "
+           << gettext(it->description.c_str()) << "\n";
       algMap[optNum++] = it;
     }
 
     // xgroup(setup)
     cout << "\n" << _("Enter the number corresponding to your choice: ");
     char answer[10];
-    char *res = fgets( answer, sizeof(answer), stdin );
-    int algNum = (res == 0 ? 0 : atoi( answer ));
+    char *res = fgets(answer, sizeof(answer), stdin);
+    int algNum = (res == 0 ? 0 : atoi(answer));
     cout << "\n";
 
-    if( algNum < 1 || algNum >= optNum )
-    {
+    if (algNum < 1 || algNum >= optNum) {
       cerr << _("Invalid selection.") << "\n";
       continue;
     }
@@ -708,61 +640,55 @@ Interface selectNameCoding(const CipherV1::CipherAlgorithm &alg)
     it = algMap[algNum];
 
     // xgroup(setup)
-    cout << autosprintf(_("Selected algorithm \"%s\""), it->name.c_str()) 
-      << "\"\n\n";
+    cout << autosprintf(_("Selected algorithm \"%s\""), it->name.c_str())
+         << "\"\n\n";
 
     return it->iface;
   }
 }
 
 static int selectKDFDuration() {
-  cout << autosprintf(_("Select desired KDF duration in milliseconds.\n"
-                        "The default is 500 (half a second): "));
+  cout << autosprintf(
+              _("Select desired KDF duration in milliseconds.\n"
+                "The default is 500 (half a second): "));
 
   char answer[10];
-  char *res = fgets( answer, sizeof(answer), stdin );
-  int duration = (res == 0 ? 0 : atoi( answer ));
+  char *res = fgets(answer, sizeof(answer), stdin);
+  int duration = (res == 0 ? 0 : atoi(answer));
   cout << "\n";
 
   return duration;
 }
 
-static
-int selectKeySize( const CipherV1::CipherAlgorithm &alg )
-{
-  if(alg.keyLength.min() == alg.keyLength.max())
-  {
-    cout << autosprintf(_("Using key size of %i bits"), 
-        alg.keyLength.min()) << "\n";
+static int selectKeySize(const CipherV1::CipherAlgorithm &alg) {
+  if (alg.keyLength.min() == alg.keyLength.max()) {
+    cout << autosprintf(_("Using key size of %i bits"), alg.keyLength.min())
+         << "\n";
     return alg.keyLength.min();
   }
 
-  cout << autosprintf(
-      // xgroup(setup)
-      _("Please select a key size in bits.  The cipher you have chosen\n"
-        "supports sizes from %i to %i bits in increments of %i bits.\n"
-        "For example: "), alg.keyLength.min(), alg.keyLength.max(), 
-      alg.keyLength.inc()) << "\n";
+  cout
+      << autosprintf(
+             // xgroup(setup)
+             _("Please select a key size in bits.  The cipher you have chosen\n"
+               "supports sizes from %i to %i bits in increments of %i bits.\n"
+               "For example: "),
+             alg.keyLength.min(), alg.keyLength.max(), alg.keyLength.inc())
+      << "\n";
 
-  int numAvail = (alg.keyLength.max() - alg.keyLength.min()) 
-    / alg.keyLength.inc();
+  int numAvail =
+      (alg.keyLength.max() - alg.keyLength.min()) / alg.keyLength.inc();
 
-  if(numAvail < 5)
-  {
+  if (numAvail < 5) {
     // show them all
-    for(int i=0; i<=numAvail; ++i)
-    {
-      if(i) 
-        cout << ", ";
+    for (int i = 0; i <= numAvail; ++i) {
+      if (i) cout << ", ";
       cout << alg.keyLength.min() + i * alg.keyLength.inc();
     }
-  } else
-  {
+  } else {
     // partial
-    for(int i=0; i<3; ++i)
-    {
-      if(i) 
-        cout << ", ";
+    for (int i = 0; i < 3; ++i) {
+      if (i) cout << ", ";
       cout << alg.keyLength.min() + i * alg.keyLength.inc();
     }
     cout << " ... " << alg.keyLength.max() - alg.keyLength.inc();
@@ -772,11 +698,11 @@ int selectKeySize( const CipherV1::CipherAlgorithm &alg )
   cout << "\n" << _("Selected key size: ");
 
   char answer[10];
-  char *res = fgets( answer, sizeof(answer), stdin );
-  int keySize = (res == 0 ? 0 : atoi( answer ));
+  char *res = fgets(answer, sizeof(answer), stdin);
+  int keySize = (res == 0 ? 0 : atoi(answer));
   cout << "\n";
 
-  keySize = alg.keyLength.closest( keySize );
+  keySize = alg.keyLength.closest(keySize);
 
   // xgroup(setup)
   cout << autosprintf(_("Using key size of %i bits"), keySize) << "\n\n";
@@ -784,66 +710,58 @@ int selectKeySize( const CipherV1::CipherAlgorithm &alg )
   return keySize;
 }
 
-static
-int selectBlockSize( const CipherV1::CipherAlgorithm &alg )
-{
-  if(alg.blockSize.min() == alg.blockSize.max())
-  {
+static int selectBlockSize(const CipherV1::CipherAlgorithm &alg) {
+  if (alg.blockSize.min() == alg.blockSize.max()) {
     cout << autosprintf(
-        // xgroup(setup)
-        _("Using filesystem block size of %i bytes"),
-        alg.blockSize.min()) << "\n";
+                // xgroup(setup)
+                _("Using filesystem block size of %i bytes"),
+                alg.blockSize.min()) << "\n";
     return alg.blockSize.min();
   }
 
   cout << autosprintf(
-      // xgroup(setup)
-      _("Select a block size in bytes.  The cipher you have chosen\n"
-        "supports sizes from %i to %i bytes in increments of %i.\n"
-        "Or just hit enter for the default (%i bytes)\n"),
-      alg.blockSize.min(), alg.blockSize.max(), alg.blockSize.inc(),
-      DefaultBlockSize);
+              // xgroup(setup)
+              _("Select a block size in bytes.  The cipher you have chosen\n"
+                "supports sizes from %i to %i bytes in increments of %i.\n"
+                "Or just hit enter for the default (%i bytes)\n"),
+              alg.blockSize.min(), alg.blockSize.max(), alg.blockSize.inc(),
+              DefaultBlockSize);
 
   // xgroup(setup)
   cout << "\n" << _("filesystem block size: ");
 
   int blockSize = DefaultBlockSize;
   char answer[10];
-  char *res = fgets( answer, sizeof(answer), stdin );
+  char *res = fgets(answer, sizeof(answer), stdin);
   cout << "\n";
 
-  if( res != 0 && atoi( answer )  >= alg.blockSize.min() )
-    blockSize = atoi( answer );
+  if (res != 0 && atoi(answer) >= alg.blockSize.min()) blockSize = atoi(answer);
 
-  blockSize = alg.blockSize.closest( blockSize );
+  blockSize = alg.blockSize.closest(blockSize);
 
   // xgroup(setup)
-  cout << autosprintf(_("Using filesystem block size of %i bytes"), 
-      blockSize) << "\n\n";
+  cout << autosprintf(_("Using filesystem block size of %i bytes"), blockSize)
+       << "\n\n";
 
   return blockSize;
 }
 
-static
-bool boolDefaultNo(const char *prompt)
-{
+static bool boolDefaultNo(const char *prompt) {
   cout << prompt << "\n";
   cout << _("The default here is No.\n"
-      "Any response that does not begin with 'y' will mean No: ");
+            "Any response that does not begin with 'y' will mean No: ");
 
   char answer[10];
-  char *res = fgets( answer, sizeof(answer), stdin );
+  char *res = fgets(answer, sizeof(answer), stdin);
   cout << "\n";
 
-  if(res != 0 && tolower(answer[0]) == 'y')
+  if (res != 0 && tolower(answer[0]) == 'y')
     return true;
   else
     return false;
 }
 
-static 
-void selectBlockMAC(int *macBytes, int *macRandBytes)
-{
+static void selectBlockMAC(int *macBytes, int *macRandBytes) {
   // xgroup(setup)
   bool addMAC = boolDefaultNo(
       _("Enable block authentication code headers\n"
@@ -852,54 +770,48 @@ void selectBlockMAC(int *macBytes, int *macRandBytes)
         "performance but it also means [almost] any modifications or errors\n"
         "within a block will be caught and will cause a read error."));
 
-  if(addMAC)
+  if (addMAC)
     *macBytes = 8;
   else
     *macBytes = 0;
 
   // xgroup(setup)
   cout << _("Add random bytes to each block header?\n"
-      "This adds a performance penalty, but ensures that blocks\n"
-      "have different authentication codes.  Note that you can\n"
-      "have the same benefits by enabling per-file initialization\n"
-      "vectors, which does not come with as great of performance\n"
-      "penalty. \n"
-      "Select a number of bytes, from 0 (no random bytes) to 8: ");
+            "This adds a performance penalty, but ensures that blocks\n"
+            "have different authentication codes.  Note that you can\n"
+            "have the same benefits by enabling per-file initialization\n"
+            "vectors, which does not come with as great of performance\n"
+            "penalty. \n"
+            "Select a number of bytes, from 0 (no random bytes) to 8: ");
 
   char answer[10];
   int randSize = 0;
-  char *res = fgets( answer, sizeof(answer), stdin );
+  char *res = fgets(answer, sizeof(answer), stdin);
   cout << "\n";
 
-  randSize = (res == 0 ? 0 : atoi( answer ));
-  if(randSize < 0)
-    randSize = 0;
-  if(randSize > 8)
-    randSize = 8;
+  randSize = (res == 0 ? 0 : atoi(answer));
+  if (randSize < 0) randSize = 0;
+  if (randSize > 8) randSize = 8;
 
   *macRandBytes = randSize;
 }
 
-static
-bool boolDefaultYes(const char *prompt)
-{
+static bool boolDefaultYes(const char *prompt) {
   cout << prompt << "\n";
   cout << _("The default here is Yes.\n"
-      "Any response that does not begin with 'n' will mean Yes: ");
+            "Any response that does not begin with 'n' will mean Yes: ");
 
   char answer[10];
-  char *res = fgets( answer, sizeof(answer), stdin );
+  char *res = fgets(answer, sizeof(answer), stdin);
   cout << "\n";
 
-  if(res != 0 && tolower(answer[0]) == 'n')
+  if (res != 0 && tolower(answer[0]) == 'n')
     return false;
   else
     return true;
 }
 
-static 
-bool selectUniqueIV()
-{
+static bool selectUniqueIV() {
   // xgroup(setup)
   return boolDefaultYes(
       _("Enable per-file initialization vectors?\n"
@@ -908,9 +820,7 @@ bool selectUniqueIV()
         "which rely on block-aligned file io for performance."));
 }
 
-static 
-bool selectChainedIV()
-{
+static bool selectChainedIV() {
   // xgroup(setup)
   return boolDefaultYes(
       _("Enable filename initialization vector chaining?\n"
@@ -918,9 +828,7 @@ bool selectChainedIV()
         "rather than encoding each path element individually."));
 }
 
-static 
-bool selectExternalChainedIV()
-{
+static bool selectExternalChainedIV() {
   // xgroup(setup)
   return boolDefaultNo(
       _("Enable filename to IV header chaining?\n"
@@ -931,20 +839,18 @@ bool selectExternalChainedIV()
         "in the filesystem."));
 }
 
-static 
-bool selectZeroBlockPassThrough()
-{
+static bool selectZeroBlockPassThrough() {
   // xgroup(setup)
   return boolDefaultYes(
       _("Enable file-hole pass-through?\n"
         "This avoids writing encrypted blocks when file holes are created."));
 }
 
-CipherKey getNewUserKey(EncfsConfig &config, const SecureMem & secure_password);
-CipherKey getUserKey(const EncfsConfig &config, const SecureMem & passwordReader);
+CipherKey getNewUserKey(EncfsConfig &config, const SecureMem &secure_password);
+CipherKey getUserKey(const EncfsConfig &config,
+                     const SecureMem &passwordReader);
 
-EncfsConfig create_paranoid_config(const SecureMem & secure_passwowrd)
-{
+EncfsConfig create_paranoid_config(const SecureMem &secure_passwowrd) {
   // look for AES with 256 bit key..
   // Use block filename encryption mode.
   // Enable per-block HMAC headers at substantial performance penalty..
@@ -955,62 +861,64 @@ EncfsConfig create_paranoid_config(const SecureMem & secure_passwowrd)
   auto alg = findCipherAlgorithm("AES", keySize);
   Interface nameIOIface = BlockNameIO::CurrentInterface();
   int blockMACBytes = 8;
-  int blockMACRandBytes = 0; // using uniqueIV, so this isn't necessary
+  int blockMACRandBytes = 0;  // using uniqueIV, so this isn't necessary
   bool uniqueIV = true;
   bool chainedIV = true;
   bool externalIV = true;
   bool allowHoles = true;
   long desiredKDFDuration = ParanoiaKDFDuration;
 
-  shared_ptr<CipherV1> cipher = CipherV1::New( alg.iface, keySize );
+  shared_ptr<CipherV1> cipher = CipherV1::New(alg.iface, keySize);
   // should never happen
-  if(!cipher) throw std::runtime_error("Unable to instantiate cipher");
+  if (!cipher) throw std::runtime_error("Unable to instantiate cipher");
 
   EncfsConfig config;
 
-  config.mutable_cipher()->MergeFrom( cipher->interface() );
-  config.set_block_size( blockSize );
-  config.mutable_naming()->MergeFrom( nameIOIface );
-  config.set_creator( "EncFS " VERSION );
-  config.set_revision( ProtoSubVersion );
-  config.set_block_mac_bytes( blockMACBytes );
-  config.set_block_mac_rand_bytes( blockMACRandBytes );
-  config.set_unique_iv( uniqueIV );
-  config.set_chained_iv( chainedIV );
-  config.set_external_iv( externalIV );
-  config.set_allow_holes( allowHoles );
+  config.mutable_cipher()->MergeFrom(cipher->interface());
+  config.set_block_size(blockSize);
+  config.mutable_naming()->MergeFrom(nameIOIface);
+  config.set_creator("EncFS " VERSION);
+  config.set_revision(ProtoSubVersion);
+  config.set_block_mac_bytes(blockMACBytes);
+  config.set_block_mac_rand_bytes(blockMACRandBytes);
+  config.set_unique_iv(uniqueIV);
+  config.set_chained_iv(chainedIV);
+  config.set_external_iv(externalIV);
+  config.set_allow_holes(allowHoles);
 
   EncryptedKey *key = config.mutable_key();
   key->clear_salt();
-  key->clear_kdf_iterations(); // filled in by keying function
-  key->set_kdf_duration( desiredKDFDuration );
+  key->clear_kdf_iterations();  // filled in by keying function
+  key->set_kdf_duration(desiredKDFDuration);
   key->set_size(keySize / 8);
 
   int encodedKeySize = cipher->encodedKeySize();
-  auto encodedKey = std::unique_ptr<unsigned char[]>(new unsigned char[ encodedKeySize ]);
+  auto encodedKey =
+      std::unique_ptr<unsigned char[]>(new unsigned char[encodedKeySize]);
 
   CipherKey volumeKey = cipher->newRandomKey();
 
   // get user key and use it to encode volume key
-  auto userKey = getNewUserKey( config, secure_passwowrd );
+  auto userKey = getNewUserKey(config, secure_passwowrd);
 
-  cipher->setKey( userKey );
-  cipher->writeKey( volumeKey, encodedKey.get() );
+  cipher->setKey(userKey);
+  cipher->writeKey(volumeKey, encodedKey.get());
   userKey.reset();
 
   key->set_ciphertext(encodedKey.get(), encodedKeySize);
 
   // should never happen
-  if(!volumeKey.valid()) throw std::runtime_error("Failure generating new volume key!");
+  if (!volumeKey.valid())
+    throw std::runtime_error("Failure generating new volume key!");
 
-  cipher->setKey( volumeKey );
+  cipher->setKey(volumeKey);
 
   return std::move(config);
 }
 
 // XXX: this probably shouldn't be in encfs-fs
-EncfsConfig create_config_interactively(const std::shared_ptr<PasswordReader> & passwordReader)
-{
+EncfsConfig create_config_interactively(
+    const std::shared_ptr<PasswordReader> &passwordReader) {
   bool annotate = true;
   // TODO: should probably ask for this interactively
   // since it's part of the config
@@ -1023,19 +931,17 @@ EncfsConfig create_config_interactively(const std::shared_ptr<PasswordReader> & 
   cout << _("Creating new encrypted volume.") << endl;
 
   char answer[10] = {0};
-  if(configMode == ConfigMode::Prompt)
-  {
+  if (configMode == ConfigMode::Prompt) {
     // xgroup(setup)
     cout << _("Please choose from one of the following options:\n"
-        " enter \"x\" for expert configuration mode,\n"
-        " enter \"p\" for pre-configured paranoia mode,\n"
-        " anything else, or an empty line will select standard mode.\n"
-        "?> ");
+              " enter \"x\" for expert configuration mode,\n"
+              " enter \"p\" for pre-configured paranoia mode,\n"
+              " anything else, or an empty line will select standard mode.\n"
+              "?> ");
 
-    if (annotate)
-      cerr << "$PROMPT$ config_option" << endl;
+    if (annotate) cerr << "$PROMPT$ config_option" << endl;
 
-    char *res = fgets( answer, sizeof(answer), stdin );
+    char *res = fgets(answer, sizeof(answer), stdin);
     (void)res;
     cout << "\n";
   }
@@ -1052,8 +958,7 @@ EncfsConfig create_config_interactively(const std::shared_ptr<PasswordReader> & 
   bool allowHoles = true;
   long desiredKDFDuration = NormalKDFDuration;
 
-  if (reverseEncryption)
-  {
+  if (reverseEncryption) {
     uniqueIV = false;
     chainedIV = false;
     externalIV = false;
@@ -1061,11 +966,10 @@ EncfsConfig create_config_interactively(const std::shared_ptr<PasswordReader> & 
     blockMACRandBytes = 0;
   }
 
-  if(configMode == ConfigMode::Paranoia || answer[0] == 'p')
-  {
-    if (reverseEncryption)
-    {
-      throw std::runtime_error( "Paranoia configuration not supported for --reverse" );
+  if (configMode == ConfigMode::Paranoia || answer[0] == 'p') {
+    if (reverseEncryption) {
+      throw std::runtime_error(
+          "Paranoia configuration not supported for --reverse");
     }
 
     // xgroup(setup)
@@ -1080,13 +984,12 @@ EncfsConfig create_config_interactively(const std::shared_ptr<PasswordReader> & 
     alg = findCipherAlgorithm("AES", keySize);
     nameIOIface = BlockNameIO::CurrentInterface();
     blockMACBytes = 8;
-    blockMACRandBytes = 0; // using uniqueIV, so this isn't necessary
+    blockMACRandBytes = 0;  // using uniqueIV, so this isn't necessary
     uniqueIV = true;
     chainedIV = true;
     externalIV = true;
     desiredKDFDuration = ParanoiaKDFDuration;
-  } else if(configMode == ConfigMode::Standard || answer[0] != 'x')
-  {
+  } else if (configMode == ConfigMode::Standard || answer[0] != 'x') {
     // xgroup(setup)
     cout << _("Standard configuration selected.") << "\n";
     // AES w/ 192 bit key, block name encoding, per-file initialization
@@ -1098,27 +1001,21 @@ EncfsConfig create_config_interactively(const std::shared_ptr<PasswordReader> & 
     externalIV = false;
     nameIOIface = BlockNameIO::CurrentInterface();
 
-    if (reverseEncryption)
-    {
-      cout << _("--reverse specified, not using unique/chained IV") 
-        << "\n";
-    } else
-    {
+    if (reverseEncryption) {
+      cout << _("--reverse specified, not using unique/chained IV") << "\n";
+    } else {
       uniqueIV = true;
       chainedIV = true;
     }
   }
 
-  if(answer[0] == 'x' || alg.name.empty())
-  {
-    if(answer[0] != 'x')
-    {
+  if (answer[0] == 'x' || alg.name.empty()) {
+    if (answer[0] != 'x') {
       // xgroup(setup)
       cout << _("Sorry, unable to locate cipher for predefined "
-          "configuration...\n"
-          "Falling through to Manual configuration mode.");
-    } else
-    {
+                "configuration...\n"
+                "Falling through to Manual configuration mode.");
+    } else {
       // xgroup(setup)
       cout << _("Manual configuration mode selected.");
     }
@@ -1126,24 +1023,21 @@ EncfsConfig create_config_interactively(const std::shared_ptr<PasswordReader> & 
 
     // query user for settings..
     alg = selectCipherAlgorithm();
-    keySize = selectKeySize( alg );
-    blockSize = selectBlockSize( alg );
-    nameIOIface = selectNameCoding( alg );
-    if (reverseEncryption)
-    {
+    keySize = selectKeySize(alg);
+    blockSize = selectBlockSize(alg);
+    nameIOIface = selectNameCoding(alg);
+    if (reverseEncryption) {
       cout << _("--reverse specified, not using unique/chained IV") << "\n";
-    } else
-    {
+    } else {
       chainedIV = selectChainedIV();
       uniqueIV = selectUniqueIV();
-      if(chainedIV && uniqueIV)
+      if (chainedIV && uniqueIV)
         externalIV = selectExternalChainedIV();
-      else
-      {
+      else {
         // xgroup(setup)
         cout << _("External chained IV disabled, as both 'IV chaining'\n"
-            "and 'unique IV' features are required for this option.") 
-          << "\n";
+                  "and 'unique IV' features are required for this option.")
+             << "\n";
         externalIV = false;
       }
       selectBlockMAC(&blockMACBytes, &blockMACRandBytes);
@@ -1152,130 +1046,121 @@ EncfsConfig create_config_interactively(const std::shared_ptr<PasswordReader> & 
     desiredKDFDuration = selectKDFDuration();
   }
 
-  shared_ptr<CipherV1> cipher = CipherV1::New( alg.iface, keySize );
-  if(!cipher)
-  {
+  shared_ptr<CipherV1> cipher = CipherV1::New(alg.iface, keySize);
+  if (!cipher) {
     std::ostringstream os;
-    os << "Unable to instanciate cipher " << alg.name
-       << ", key size " << keySize << ", block size " << blockSize;
+    os << "Unable to instanciate cipher " << alg.name << ", key size "
+       << keySize << ", block size " << blockSize;
     throw std::runtime_error(os.str());
-  } else
-  {
+  } else {
     std::ostringstream os;
-    os << "Using cipher " << alg.name
-       << ", key size " << keySize << ", block size " << blockSize;
+    os << "Using cipher " << alg.name << ", key size " << keySize
+       << ", block size " << blockSize;
     throw std::runtime_error(os.str());
   }
 
   EncfsConfig config;
 
-  config.mutable_cipher()->MergeFrom( cipher->interface() );
-  config.set_block_size( blockSize );
-  config.mutable_naming()->MergeFrom( nameIOIface );
-  config.set_creator( "EncFS " VERSION );
-  config.set_revision( ProtoSubVersion );
-  config.set_block_mac_bytes( blockMACBytes );
-  config.set_block_mac_rand_bytes( blockMACRandBytes );
-  config.set_unique_iv( uniqueIV );
-  config.set_chained_iv( chainedIV );
-  config.set_external_iv( externalIV );
-  config.set_allow_holes( allowHoles );
+  config.mutable_cipher()->MergeFrom(cipher->interface());
+  config.set_block_size(blockSize);
+  config.mutable_naming()->MergeFrom(nameIOIface);
+  config.set_creator("EncFS " VERSION);
+  config.set_revision(ProtoSubVersion);
+  config.set_block_mac_bytes(blockMACBytes);
+  config.set_block_mac_rand_bytes(blockMACRandBytes);
+  config.set_unique_iv(uniqueIV);
+  config.set_chained_iv(chainedIV);
+  config.set_external_iv(externalIV);
+  config.set_allow_holes(allowHoles);
 
   EncryptedKey *key = config.mutable_key();
   key->clear_salt();
-  key->clear_kdf_iterations(); // filled in by keying function
-  key->set_kdf_duration( desiredKDFDuration );
+  key->clear_kdf_iterations();  // filled in by keying function
+  key->set_kdf_duration(desiredKDFDuration);
   key->set_size(keySize / 8);
 
   cout << "\n";
   // xgroup(setup)
   cout << _("Configuration finished.  The filesystem to be created has\n"
-      "the following properties:") << endl;
-  showFSInfo( config );
+            "the following properties:") << endl;
+  showFSInfo(config);
 
-  if( config.external_iv() )
-  {
-    cout << 
-      _("-------------------------- WARNING --------------------------\n")
-      <<
-      _("The external initialization-vector chaining option has been\n"
-          "enabled.  This option disables the use of hard links on the\n"
-          "filesystem. Without hard links, some programs may not work.\n"
-          "The programs 'mutt' and 'procmail' are known to fail.  For\n"
-          "more information, please see the encfs mailing list.\n"
-          "If you would like to choose another configuration setting,\n"
-          "please press CTRL-C now to abort and start over.") << endl;
+  if (config.external_iv()) {
+    cout << _("-------------------------- WARNING --------------------------\n")
+         << _("The external initialization-vector chaining option has been\n"
+              "enabled.  This option disables the use of hard links on the\n"
+              "filesystem. Without hard links, some programs may not work.\n"
+              "The programs 'mutt' and 'procmail' are known to fail.  For\n"
+              "more information, please see the encfs mailing list.\n"
+              "If you would like to choose another configuration setting,\n"
+              "please press CTRL-C now to abort and start over.") << endl;
     cout << endl;
   }
 
   // xgroup(setup)
   cout << _("Now you will need to enter a password for your filesystem.\n"
-      "You will need to remember this password, as there is absolutely\n"
-      "no recovery mechanism.  However, the password can be changed\n"
-      "later using encfsctl.\n\n");
+            "You will need to remember this password, as there is absolutely\n"
+            "no recovery mechanism.  However, the password can be changed\n"
+            "later using encfsctl.\n\n");
 
   int encodedKeySize = cipher->encodedKeySize();
-  unsigned char *encodedKey = new unsigned char[ encodedKeySize ];
+  unsigned char *encodedKey = new unsigned char[encodedKeySize];
 
   CipherKey volumeKey = cipher->newRandomKey();
 
   // get user key and use it to encode volume key
-  auto userKey = getNewUserKey( config, passwordReader );
+  auto userKey = getNewUserKey(config, passwordReader);
 
-  cipher->setKey( userKey );
-  cipher->writeKey( volumeKey, encodedKey );
+  cipher->setKey(userKey);
+  cipher->writeKey(volumeKey, encodedKey);
   userKey.reset();
 
   key->set_ciphertext(encodedKey, encodedKeySize);
   delete[] encodedKey;
 
-  if(!volumeKey.valid())
-  {
-    throw std::runtime_error("Failure generating new volume key! "
-                             "Please report this error.");
+  if (!volumeKey.valid()) {
+    throw std::runtime_error(
+        "Failure generating new volume key! "
+        "Please report this error.");
   }
 
-  cipher->setKey( volumeKey );
+  cipher->setKey(volumeKey);
 
   // fill in config struct
-  shared_ptr<NameIO> nameCoder = NameIO::New( config.naming(), cipher );
-  if(!nameCoder)
-  {
+  shared_ptr<NameIO> nameCoder = NameIO::New(config.naming(), cipher);
+  if (!nameCoder) {
     LOG(WARNING) << "Name coding interface not supported";
-    cout << _("The filename encoding interface requested is not available") 
-      << endl;
+    cout << _("The filename encoding interface requested is not available")
+         << endl;
     // XXX: should this every really happen?
     throw std::runtime_error("name coder not supported");
   }
 
-  nameCoder->setChainedNameIV( config.chained_iv() );
-  nameCoder->setReverseEncryption( reverseEncryption );
+  nameCoder->setChainedNameIV(config.chained_iv());
+  nameCoder->setReverseEncryption(reverseEncryption);
 
   return std::move(config);
 }
 
-void showFSInfo( const EncfsConfig &config )
-{
-  shared_ptr<CipherV1> cipher = CipherV1::New( config.cipher(), 
-        config.key().size() );
+void showFSInfo(const EncfsConfig &config) {
+  shared_ptr<CipherV1> cipher =
+      CipherV1::New(config.cipher(), config.key().size());
   {
     cout << autosprintf(
-        // xgroup(diag)
-        _("Filesystem cipher: \"%s\", version %i:%i:%i"),
-        config.cipher().name().c_str(), config.cipher().major(),
-        config.cipher().minor(), config.cipher().age());
+                // xgroup(diag)
+                _("Filesystem cipher: \"%s\", version %i:%i:%i"),
+                config.cipher().name().c_str(), config.cipher().major(),
+                config.cipher().minor(), config.cipher().age());
     // check if we support this interface..
-    if(!cipher)
+    if (!cipher)
       cout << _(" (NOT supported)\n");
-    else
-    {
+    else {
       // if we're using a newer interface, show the version number
-      if( config.cipher() != cipher->interface() )
-      {
+      if (config.cipher() != cipher->interface()) {
         Interface iface = cipher->interface();
         // xgroup(diag)
-        cout << autosprintf(_(" (using %i:%i:%i)\n"),
-            iface.major(), iface.minor(), iface.age());
+        cout << autosprintf(_(" (using %i:%i:%i)\n"), iface.major(),
+                            iface.minor(), iface.age());
       } else
         cout << "\n";
     }
@@ -1283,28 +1168,23 @@ void showFSInfo( const EncfsConfig &config )
 
   // xgroup(diag)
   cout << autosprintf(_("Filename encoding: \"%s\", version %i:%i:%i"),
-          config.naming().name().c_str(), config.naming().major(),
-          config.naming().minor(), config.naming().age());
-    
-  if (!cipher)
-  {
-      cout <<  "\n";
-  } else
-  {
+                      config.naming().name().c_str(), config.naming().major(),
+                      config.naming().minor(), config.naming().age());
+
+  if (!cipher) {
+    cout << "\n";
+  } else {
     // check if we support the filename encoding interface..
-    shared_ptr<NameIO> nameCoder = NameIO::New( config.naming(), cipher );
-    if(!nameCoder)
-    {
+    shared_ptr<NameIO> nameCoder = NameIO::New(config.naming(), cipher);
+    if (!nameCoder) {
       // xgroup(diag)
       cout << _(" (NOT supported)\n");
-    } else
-    {
+    } else {
       // if we're using a newer interface, show the version number
-      if( config.naming() != nameCoder->interface() )
-      {
+      if (config.naming() != nameCoder->interface()) {
         Interface iface = nameCoder->interface();
-        cout << autosprintf(_(" (using %i:%i:%i)\n"),
-            iface.major(), iface.minor(), iface.age());
+        cout << autosprintf(_(" (using %i:%i:%i)\n"), iface.major(),
+                            iface.minor(), iface.age());
       } else
         cout << "\n";
     }
@@ -1313,140 +1193,120 @@ void showFSInfo( const EncfsConfig &config )
   {
     cout << autosprintf(_("Key Size: %i bits"), 8 * key.size());
     cipher = getCipher(config);
-    if(!cipher)
-    {
+    if (!cipher) {
       // xgroup(diag)
       cout << _(" (NOT supported)\n");
     } else
       cout << "\n";
   }
-  if(key.kdf_iterations() > 0 && key.salt().size() > 0)
-  {
-    cout << autosprintf(_("Using PBKDF2, with %i iterations"), 
-        key.kdf_iterations()) << "\n";
-    cout << autosprintf(_("Salt Size: %i bits"), 
-        8*(int)key.salt().size()) << "\n";
+  if (key.kdf_iterations() > 0 && key.salt().size() > 0) {
+    cout << autosprintf(_("Using PBKDF2, with %i iterations"),
+                        key.kdf_iterations()) << "\n";
+    cout << autosprintf(_("Salt Size: %i bits"), 8 * (int)key.salt().size())
+         << "\n";
   }
-  if(config.block_mac_bytes() || config.block_mac_rand_bytes())
-  {
-    if(config.revision() < V5Latest)
-    {
+  if (config.block_mac_bytes() || config.block_mac_rand_bytes()) {
+    if (config.revision() < V5Latest) {
       cout << autosprintf(
-          // xgroup(diag)
-          _("Block Size: %i bytes + %i byte MAC header"),
-          config.block_size(),
-          config.block_mac_bytes() + config.block_mac_rand_bytes()) << endl;
-    } else
-    {
+                  // xgroup(diag)
+                  _("Block Size: %i bytes + %i byte MAC header"),
+                  config.block_size(),
+                  config.block_mac_bytes() + config.block_mac_rand_bytes())
+           << endl;
+    } else {
       // new version stores the header as part of that block size..
       cout << autosprintf(
-          // xgroup(diag)
-          _("Block Size: %i bytes, including %i byte MAC header"),
-          config.block_size(),
-          config.block_mac_bytes() + config.block_mac_rand_bytes()) << endl;
+                  // xgroup(diag)
+                  _("Block Size: %i bytes, including %i byte MAC header"),
+                  config.block_size(),
+                  config.block_mac_bytes() + config.block_mac_rand_bytes())
+           << endl;
     }
-  } else
-  {
+  } else {
     // xgroup(diag)
     cout << autosprintf(_("Block Size: %i bytes"), config.block_size());
     cout << "\n";
   }
 
-  if(config.unique_iv())
-  {
+  if (config.unique_iv()) {
     // xgroup(diag)
     cout << _("Each file contains 8 byte header with unique IV data.\n");
   }
-  if(config.chained_iv())
-  {
+  if (config.chained_iv()) {
     // xgroup(diag)
     cout << _("Filenames encoded using IV chaining mode.\n");
   }
-  if(config.external_iv())
-  {
+  if (config.external_iv()) {
     // xgroup(diag)
     cout << _("File data IV is chained to filename IV.\n");
   }
-  if(config.allow_holes())
-  {
+  if (config.allow_holes()) {
     // xgroup(diag)
     cout << _("File holes passed through to ciphertext.\n");
   }
   cout << "\n";
 }
 
-shared_ptr<CipherV1> getCipher(const EncfsConfig &config)
-{
+shared_ptr<CipherV1> getCipher(const EncfsConfig &config) {
   return getCipher(config.cipher(), 8 * config.key().size());
 }
 
-shared_ptr<CipherV1> getCipher(const Interface &iface, int keySize)
-{
-  return CipherV1::New( iface, keySize );
+shared_ptr<CipherV1> getCipher(const Interface &iface, int keySize) {
+  return CipherV1::New(iface, keySize);
 }
 
-CipherKey makeNewKey(EncfsConfig &config, const char *password, int passwdLen)
-{
+CipherKey makeNewKey(EncfsConfig &config, const char *password, int passwdLen) {
   CipherKey userKey;
   shared_ptr<CipherV1> cipher = getCipher(config);
 
   EncryptedKey *key = config.mutable_key();
 
   unsigned char salt[20];
-  if(!cipher->pseudoRandomize( salt, sizeof(salt)))
-  {
+  if (!cipher->pseudoRandomize(salt, sizeof(salt))) {
     cout << _("Error creating salt\n");
     return userKey;
   }
   key->set_salt(salt, sizeof(salt));
 
   int iterations = key->kdf_iterations();
-  userKey = cipher->newKey(password, passwdLen,
-                           &iterations, key->kdf_duration(),
-                           salt, sizeof(salt));
+  userKey = cipher->newKey(password, passwdLen, &iterations,
+                           key->kdf_duration(), salt, sizeof(salt));
   key->set_kdf_iterations(iterations);
 
   return userKey;
 }
 
-CipherKey decryptKey(const EncfsConfig &config, const char *password, int passwdLen)
-{
+CipherKey decryptKey(const EncfsConfig &config, const char *password,
+                     int passwdLen) {
   const EncryptedKey &key = config.key();
   CipherKey userKey;
   shared_ptr<CipherV1> cipher = getCipher(config.cipher(), 8 * key.size());
 
-  if(!key.salt().empty())
-  {
+  if (!key.salt().empty()) {
     int iterations = key.kdf_iterations();
-    userKey = cipher->newKey(password, passwdLen,
-                             &iterations, key.kdf_duration(), 
-                             (const byte *)key.salt().data(),
-                             key.salt().size());
+    userKey =
+        cipher->newKey(password, passwdLen, &iterations, key.kdf_duration(),
+                       (const byte *)key.salt().data(), key.salt().size());
 
-    if (iterations != key.kdf_iterations()) 
-    {
+    if (iterations != key.kdf_iterations()) {
       LOG(ERROR) << "Error in KDF, iteration mismatch";
       return userKey;
     }
-  } else
-  {
+  } else {
     // old KDF, no salt..
-    userKey = cipher->newKey( password, passwdLen );
+    userKey = cipher->newKey(password, passwdLen);
   }
 
   return userKey;
 }
 
-
-
-CipherKey getUserKey(const EncfsConfig &config, shared_ptr<PasswordReader> passwordReader)
-{
+CipherKey getUserKey(const EncfsConfig &config,
+                     shared_ptr<PasswordReader> passwordReader) {
   const bool newPass = false;
   SecureMem *password = passwordReader->readPassword(MaxPassBuf, newPass);
 
   CipherKey userKey;
-  if(password)
-  {
+  if (password) {
     userKey = getUserKey(config, *password);
     delete password;
   }
@@ -1454,21 +1314,20 @@ CipherKey getUserKey(const EncfsConfig &config, shared_ptr<PasswordReader> passw
   return userKey;
 }
 
-CipherKey getUserKey(const EncfsConfig &config, const SecureMem & secure_password)
-{
+CipherKey getUserKey(const EncfsConfig &config,
+                     const SecureMem &secure_password) {
   assert(secure_password.data());
-  auto c_str = (char *) secure_password.data();
+  auto c_str = (char *)secure_password.data();
   return decryptKey(config, c_str, strlen(c_str));
 }
 
-CipherKey getNewUserKey(EncfsConfig &config, shared_ptr<PasswordReader> passwordReader)
-{
+CipherKey getNewUserKey(EncfsConfig &config,
+                        shared_ptr<PasswordReader> passwordReader) {
   const bool newPass = true;
   SecureMem *password = passwordReader->readPassword(MaxPassBuf, newPass);
 
   CipherKey result;
-  if(password)
-  {
+  if (password) {
     result = getNewUserKey(config, *password);
     delete password;
   }
@@ -1476,47 +1335,42 @@ CipherKey getNewUserKey(EncfsConfig &config, shared_ptr<PasswordReader> password
   return result;
 }
 
-CipherKey getNewUserKey(EncfsConfig &config, const SecureMem & secure_password)
-{
+CipherKey getNewUserKey(EncfsConfig &config, const SecureMem &secure_password) {
   assert(secure_password.data());
-  auto c_str = (char *) secure_password.data();
-  return makeNewKey( config, c_str, strlen(c_str) );
+  auto c_str = (char *)secure_password.data();
+  return makeNewKey(config, c_str, strlen(c_str));
 }
 
-bool
-verify_password(const encfs::EncfsConfig & config,
-                const encfs::SecureMem & secure_password) {
+bool verify_password(const encfs::EncfsConfig &config,
+                     const encfs::SecureMem &secure_password) {
   // first, instantiate the cipher.
   auto cipher = getCipher(config);
-  if(!cipher) throw std::runtime_error("Bad cipher: " + config.cipher().name());
+  if (!cipher)
+    throw std::runtime_error("Bad cipher: " + config.cipher().name());
 
   // get user key
-  auto userKey = getUserKey( config, secure_password );
+  auto userKey = getUserKey(config, secure_password);
   // TODO: check while it wouldn't be valid
-  if(!userKey.valid()) return false;
+  if (!userKey.valid()) return false;
 
   cipher->setKey(userKey);
-  auto volumeKey =
-    cipher->readKey((const unsigned char *) config.key().ciphertext().data(),
-                    true);
+  auto volumeKey = cipher->readKey(
+      (const unsigned char *)config.key().ciphertext().data(), true);
   userKey.reset();
 
   return volumeKey.valid();
 }
 
-RootPtr initFS( const shared_ptr<EncFS_Context> &ctx,
-                const shared_ptr<EncFS_Opts> &opts,
-                opt::optional<EncfsConfig> maybeConfig )
-{
+RootPtr initFS(const shared_ptr<EncFS_Context> &ctx,
+               const shared_ptr<EncFS_Opts> &opts,
+               opt::optional<EncfsConfig> maybeConfig) {
   std::shared_ptr<EncFS_Root> rootInfo;
 
   // if no config was passed in, read it from the base file system
-  if(!maybeConfig)
-  {
+  if (!maybeConfig) {
     EncfsConfig config;
-    if(readConfig( opts->fs_io, opts->rootDir, config ) != Config_None)
-    {
-      maybeConfig = std::move( config );
+    if (readConfig(opts->fs_io, opts->rootDir, config) != Config_None) {
+      maybeConfig = std::move(config);
     }
   }
 
@@ -1525,12 +1379,9 @@ RootPtr initFS( const shared_ptr<EncFS_Context> &ctx,
   if (!maybeConfig) return rootInfo;
 
   EncfsConfig &config = *maybeConfig;
-  if(opts->reverseEncryption)
-  {
-    if (config.block_mac_bytes() != 0 || config.block_mac_rand_bytes() != 0
-        || config.unique_iv() || config.external_iv()
-        || config.chained_iv() )
-    {
+  if (opts->reverseEncryption) {
+    if (config.block_mac_bytes() != 0 || config.block_mac_rand_bytes() != 0 ||
+        config.unique_iv() || config.external_iv() || config.chained_iv()) {
       cout << _("The configuration loaded is not compatible with --reverse\n");
       return rootInfo;
     }
@@ -1538,19 +1389,16 @@ RootPtr initFS( const shared_ptr<EncFS_Context> &ctx,
 
   // first, instantiate the cipher.
   shared_ptr<CipherV1> cipher = getCipher(config);
-  if(!cipher)
-  {
+  if (!cipher) {
     Interface iface = config.cipher();
-    LOG(ERROR) << "Unable to find cipher " << iface.name()
-               << ", version " << iface.major()
-               << ":" << iface.minor() << ":" << iface.age();
+    LOG(ERROR) << "Unable to find cipher " << iface.name() << ", version "
+               << iface.major() << ":" << iface.minor() << ":" << iface.age();
     // xgroup(diag)
     cout << _("The requested cipher interface is not available\n");
     return rootInfo;
   }
 
-  if(opts->delayMount)
-  {
+  if (opts->delayMount) {
     rootInfo = std::make_shared<EncFS_Root>();
     rootInfo->cipher = cipher;
     rootInfo->root = std::shared_ptr<DirNode>();
@@ -1558,20 +1406,18 @@ RootPtr initFS( const shared_ptr<EncFS_Context> &ctx,
   }
 
   // get user key
-  CipherKey userKey = getUserKey( config, opts->passwordReader );
-  if(!userKey.valid()) return rootInfo;
+  CipherKey userKey = getUserKey(config, opts->passwordReader);
+  if (!userKey.valid()) return rootInfo;
 
   cipher->setKey(userKey);
 
   VLOG(1) << "cipher encoded key size = " << cipher->encodedKeySize();
   // decode volume key..
-  CipherKey volumeKey =
-    cipher->readKey((const unsigned char *) config.key().ciphertext().data(),
-                    opts->checkKey);
+  CipherKey volumeKey = cipher->readKey(
+      (const unsigned char *)config.key().ciphertext().data(), opts->checkKey);
   userKey.reset();
 
-  if(!volumeKey.valid())
-  {
+  if (!volumeKey.valid()) {
     // xgroup(diag)
     cout << _("Error decoding volume key, password incorrect\n");
     return rootInfo;
@@ -1579,27 +1425,26 @@ RootPtr initFS( const shared_ptr<EncFS_Context> &ctx,
 
   cipher->setKey(volumeKey);
 
-  shared_ptr<NameIO> nameCoder = NameIO::New( config.naming(), cipher );
-  if(!nameCoder)
-  {
+  shared_ptr<NameIO> nameCoder = NameIO::New(config.naming(), cipher);
+  if (!nameCoder) {
     Interface iface = config.naming();
     LOG(ERROR) << "Unable to find nameio interface " << iface.name()
-               << ", version " << iface.major()
-               << ":" << iface.minor() << ":" << iface.age();
+               << ", version " << iface.major() << ":" << iface.minor() << ":"
+               << iface.age();
     // xgroup(diag)
     cout << _("The requested filename coding interface is "
               "not available\n");
     return rootInfo;
   }
 
-  nameCoder->setChainedNameIV( config.chained_iv() );
-  nameCoder->setReverseEncryption( opts->reverseEncryption );
+  nameCoder->setChainedNameIV(config.chained_iv());
+  nameCoder->setReverseEncryption(opts->reverseEncryption);
 
   auto fsConfig = std::make_shared<FSConfig>();
   fsConfig->cipher = cipher;
   fsConfig->key = volumeKey;
   fsConfig->nameCoding = nameCoder;
-  fsConfig->config = std::make_shared<EncfsConfig>( config );
+  fsConfig->config = std::make_shared<EncfsConfig>(config);
   fsConfig->forceDecode = opts->forceDecode;
   fsConfig->reverseEncryption = opts->reverseEncryption;
   fsConfig->opts = opts;
@@ -1607,7 +1452,7 @@ RootPtr initFS( const shared_ptr<EncFS_Context> &ctx,
   rootInfo = std::make_shared<EncFS_Root>();
   rootInfo->cipher = cipher;
   rootInfo->volumeKey = volumeKey;
-  rootInfo->root = std::make_shared<DirNode>( ctx, opts->rootDir, fsConfig );
+  rootInfo->root = std::make_shared<DirNode>(ctx, opts->rootDir, fsConfig);
 
   return rootInfo;
 }

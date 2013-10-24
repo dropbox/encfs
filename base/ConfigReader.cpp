@@ -7,7 +7,7 @@
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.  
+ * option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -34,19 +34,14 @@ using std::string;
 
 namespace encfs {
 
-ConfigReader::ConfigReader()
-{
-}
+ConfigReader::ConfigReader() {}
 
-ConfigReader::~ConfigReader()
-{
-}
+ConfigReader::~ConfigReader() {}
 
 // read the entire file into a ConfigVar instance and then use that to decode
 // into mapped variables.
-bool ConfigReader::load(const char *fileName)
-{
-  std::fstream f( fileName, std::ios::binary );
+bool ConfigReader::load(const char *fileName) {
+  std::fstream f(fileName, std::ios::binary);
   if (!f) return false;
 
   std::ostringstream os;
@@ -56,78 +51,70 @@ bool ConfigReader::load(const char *fileName)
   auto str = os.str();
 
   ConfigVar in;
-  in.write( (byte *)str.data(), str.size() );
+  in.write((byte *)str.data(), str.size());
 
-  return loadFromVar( in );
+  return loadFromVar(in);
 }
 
-bool ConfigReader::loadFromVar(ConfigVar &in)
-{
+bool ConfigReader::loadFromVar(ConfigVar &in) {
   in.resetOffset();
 
   // parse.
   int numEntries = in.readInt();
 
-  for(int i=0; i<numEntries; ++i)
-  {
+  for (int i = 0; i < numEntries; ++i) {
     string key, value;
     in >> key >> value;
 
-    if(key.length() == 0)
-    {
+    if (key.length() == 0) {
       LOG(ERROR) << "Invalid key encoding in buffer";
       return false;
     }
-    ConfigVar newVar( value );
-    vars.insert( make_pair( key, newVar ) );
+    ConfigVar newVar(value);
+    vars.insert(make_pair(key, newVar));
   }
 
   return true;
 }
 
-bool ConfigReader::save(const char *fileName) const
-{
+bool ConfigReader::save(const char *fileName) const {
   // write everything to a ConfigVar, then output to disk
   ConfigVar out = toVar();
 
   // TODO: unix perms used to be 0650
-  std::ofstream f(fileName, std::ios::binary | std::ios::out );
+  std::ofstream f(fileName, std::ios::binary | std::ios::out);
   if (!f) return false;
 
-  f.write( out.buffer(), out.size() );
-  return (bool) f;
+  f.write(out.buffer(), out.size());
+  return (bool)f;
 }
 
-ConfigVar ConfigReader::toVar() const
-{
+ConfigVar ConfigReader::toVar() const {
   // write everything to a ConfigVar, then output to disk
   ConfigVar out;
-  out.writeInt( vars.size() );
+  out.writeInt(vars.size());
   map<string, ConfigVar>::const_iterator it;
-  for(it = vars.begin(); it != vars.end(); ++it)
-  {
-    out.writeInt( it->first.size() );
-    out.write( (byte*)it->first.data(), it->first.size() );
-    out.writeInt( it->second.size() );
-    out.write( (byte*)it->second.buffer(), it->second.size() );
+  for (it = vars.begin(); it != vars.end(); ++it) {
+    out.writeInt(it->first.size());
+    out.write((byte *)it->first.data(), it->first.size());
+    out.writeInt(it->second.size());
+    out.write((byte *)it->second.buffer(), it->second.size());
   }
 
   return out;
 }
 
-ConfigVar ConfigReader::operator[] ( const std::string &varName ) const
-{
+ConfigVar ConfigReader::operator[](const std::string &varName) const {
   // read only
-  map<string, ConfigVar>::const_iterator it = vars.find( varName );
-  if( it == vars.end() )
+  map<string, ConfigVar>::const_iterator it = vars.find(varName);
+  if (it == vars.end())
     return ConfigVar();
   else
     return it->second;
 }
 
-ConfigVar &ConfigReader::operator[] ( const std::string &varName )
-{
-    return vars[ varName ];
+ConfigVar &ConfigReader::operator[](const std::string &varName) {
+  return vars[varName];
 }
 
 }  // namespace encfs

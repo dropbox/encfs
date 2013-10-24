@@ -33,31 +33,27 @@
 
 namespace encfs {
 
-class EncfsPasswordReader : public PasswordReader
-{
-private:
+class EncfsPasswordReader : public PasswordReader {
+ private:
   bool useStdin;
   StdinPasswordReader stdinPasswordReader;
   opt::optional<ProgramPasswordReader> optProgramPasswordReader;
   PromptPasswordReader promptPasswordReader;
 
-public:
-  EncfsPasswordReader(bool useStdin_,
-                      std::string passProg_,
+ public:
+  EncfsPasswordReader(bool useStdin_, std::string passProg_,
                       std::string rootDir_)
-  : useStdin( std::move( useStdin_ ) )
-  , optProgramPasswordReader( passProg_.empty() ? opt::nullopt :
-                              opt::make_optional( ProgramPasswordReader( std::move( passProg_ ),
-                                                                         std::move( rootDir_ ) ) ) )
-  {}
+      : useStdin(std::move(useStdin_)),
+        optProgramPasswordReader(passProg_.empty()
+                                     ? opt::nullopt
+                                     : opt::make_optional(ProgramPasswordReader(
+                                           std::move(passProg_),
+                                           std::move(rootDir_)))) {}
 
-  EncfsPasswordReader(bool useStdin_)
-  : useStdin( std::move( useStdin_ ) )
-  {}
+  EncfsPasswordReader(bool useStdin_) : useStdin(std::move(useStdin_)) {}
 
   virtual SecureMem *readPassword(size_t maxLen, bool newPass) override;
 };
-
 }
 
 #endif

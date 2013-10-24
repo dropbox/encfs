@@ -7,7 +7,7 @@
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.  
+ * option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,16 +31,15 @@ namespace encfs {
 
 class SecureMem;
 
-class CipherKey
-{
+class CipherKey {
  public:
   CipherKey();  // Creates a key for which valid() returns false.
   explicit CipherKey(int length);
   CipherKey(const byte *data, int length);
-  CipherKey(const CipherKey& src);
+  CipherKey(const CipherKey &src);
   ~CipherKey();
 
-  void operator = (const CipherKey& src);
+  void operator=(const CipherKey &src);
 
   byte *data() const;
   int size() const;
@@ -55,9 +54,8 @@ class CipherKey
   std::shared_ptr<SecureMem> _mem;
 };
 
-bool operator == (const CipherKey &a, const CipherKey &b);
+bool operator==(const CipherKey &a, const CipherKey &b);
 
 }  // namespace encfs
 
 #endif
-

@@ -38,8 +38,7 @@ typedef uintmax_t fs_posix_gid_t;
 typedef uintmax_t fs_posix_mode_t;
 typedef uintmax_t fs_posix_dev_t;
 
-enum class FsFileType
-{
+enum class FsFileType {
   UNKNOWN,
   DIRECTORY,
   REGULAR,
@@ -50,17 +49,11 @@ struct FsPosixAttrs {
   fs_posix_uid_t uid;
   fs_posix_gid_t gid;
 
-  FsPosixAttrs(fs_posix_mode_t mode_,
-               fs_posix_uid_t uid_,
-               fs_posix_gid_t gid_)
-  : mode( mode_ )
-  , uid( uid_ )
-  , gid( gid_ )
-  {}
+  FsPosixAttrs(fs_posix_mode_t mode_, fs_posix_uid_t uid_, fs_posix_gid_t gid_)
+      : mode(mode_), uid(uid_), gid(gid_) {}
 };
 
-struct FsFileAttrs
-{
+struct FsFileAttrs {
   FsFileType type;
   fs_time_t mtime;
   fs_off_t size;
@@ -68,22 +61,17 @@ struct FsFileAttrs
   opt::optional<FsPosixAttrs> posix;
 };
 
-inline bool posix_is_symlink(fs_posix_mode_t mode) {
-  return mode & 0120000;
-}
+inline bool posix_is_symlink(fs_posix_mode_t mode) { return mode & 0120000; }
 
 // posix symlink data is just arbitrary 0-terminated data
 typedef std::string PosixSymlinkData;
 
-struct PosixSetxattrFlags
-{
+struct PosixSetxattrFlags {
   bool create : 1;
   bool replace : 1;
 
   PosixSetxattrFlags(bool create_ = false, bool replace_ = false)
-  : create( create_ )
-  , replace( replace_ )
-  {}
+      : create(create_), replace(replace_) {}
 };
 
 typedef std::vector<std::string> PosixXattrList;

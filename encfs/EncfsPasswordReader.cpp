@@ -18,7 +18,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 #include "encfs/StdinPasswordReader.h"
 #include "encfs/ProgramPasswordReader.h"
 #include "encfs/PromptPasswordReader.h"
@@ -27,18 +26,16 @@
 
 namespace encfs {
 
-SecureMem *EncfsPasswordReader::readPassword(size_t maxLen, bool newPass)
-{
+SecureMem *EncfsPasswordReader::readPassword(size_t maxLen, bool newPass) {
   PasswordReader *passwordReader;
 
-  if(useStdin)
+  if (useStdin)
     passwordReader = &stdinPasswordReader;
-  else if(newPass && optProgramPasswordReader)
+  else if (newPass && optProgramPasswordReader)
     passwordReader = &*optProgramPasswordReader;
   else
     passwordReader = &promptPasswordReader;
 
   return passwordReader->readPassword(maxLen, newPass);
 }
-
 }

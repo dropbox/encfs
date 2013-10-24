@@ -27,22 +27,17 @@
 
 namespace encfs {
 
-class ProgramPasswordReader : public PasswordReader
-{
-private:
+class ProgramPasswordReader : public PasswordReader {
+ private:
   std::string passProg;
   std::string rootDir;
 
-public:
-  ProgramPasswordReader(std::string passProg_,
-                        std::string rootDir_)
-  : passProg( std::move( passProg_ ) )
-  , rootDir( std::move( rootDir_ ) )
-  {}
+ public:
+  ProgramPasswordReader(std::string passProg_, std::string rootDir_)
+      : passProg(std::move(passProg_)), rootDir(std::move(rootDir_)) {}
 
   virtual SecureMem *readPassword(size_t maxLen, bool newPass) override;
 };
-
 }
 
 #endif

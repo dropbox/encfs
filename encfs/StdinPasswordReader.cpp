@@ -25,20 +25,16 @@
 
 namespace encfs {
 
-SecureMem *StdinPasswordReader::readPassword(size_t maxLen, bool /*newPass*/)
-{
+SecureMem *StdinPasswordReader::readPassword(size_t maxLen, bool /*newPass*/) {
   SecureMem *buf = new SecureMem(maxLen);
 
-  char *res = fgets( (char *)buf->data(), buf->size(), stdin );
-  if (res)
-  {
+  char *res = fgets((char *)buf->data(), buf->size(), stdin);
+  if (res) {
     // Kill the trailing newline.
     int last = strnlen((char *)buf->data(), buf->size());
-    if (last > 0 && buf->data()[last-1] == '\n')
-      buf->data()[ last-1 ] = '\0';
+    if (last > 0 && buf->data()[last - 1] == '\n') buf->data()[last - 1] = '\0';
   }
 
   return buf;
 }
-
 }

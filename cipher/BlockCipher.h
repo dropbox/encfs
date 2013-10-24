@@ -16,8 +16,7 @@ static const char NAME_BLOWFISH_CBC[] = "Blowfish/CBC";
 
 // BlockCipher is a StreamCipher with a block size.
 // Encryption and decryption must be in multiples of the block size.
-class BlockCipher : public StreamCipher
-{
+class BlockCipher : public StreamCipher {
  public:
   DECLARE_REGISTERABLE_TYPE(BlockCipher);
 
@@ -26,9 +25,9 @@ class BlockCipher : public StreamCipher
 
   // Not valid until a key has been set, as they key size may determine the
   // block size.
-  virtual int blockSize() const =0;
+  virtual int blockSize() const = 0;
 };
 
 }  // namespace encfs
 
-#endif // BLOCKCIPHER_H
+#endif  // BLOCKCIPHER_H

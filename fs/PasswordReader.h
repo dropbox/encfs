@@ -27,13 +27,11 @@
 
 namespace encfs {
 
-class PasswordReader
-{
-public:
-  virtual ~PasswordReader() =0;
-  virtual SecureMem *readPassword(size_t maxLen, bool newPass) =0;
+class PasswordReader {
+ public:
+  virtual ~PasswordReader() = 0;
+  virtual SecureMem *readPassword(size_t maxLen, bool newPass) = 0;
 };
-
 }
 
 #endif

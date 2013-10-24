@@ -31,37 +31,22 @@
 #undef __MUTEX_WIN32_CS_DEFINED_LAM
 #endif
 
-namespace encfs
-{
+namespace encfs {
 
-class MutexWin32CS
-{
+class MutexWin32CS {
   CRITICAL_SECTION _cs;
 
-public:
+ public:
 
-  MutexWin32CS()
-  {
-    InitializeCriticalSection( &_cs );
-  }
+  MutexWin32CS() { InitializeCriticalSection(&_cs); }
 
-  ~MutexWin32CS()
-  {
-    DeleteCriticalSection( &_cs );
-  }
+  ~MutexWin32CS() { DeleteCriticalSection(&_cs); }
 
-  void lock()
-  {
-    EnterCriticalSection( &_cs );
-  }
+  void lock() { EnterCriticalSection(&_cs); }
 
-  void unlock()
-  {
-    LeaveCriticalSection( &_cs );
-  }
+  void unlock() { LeaveCriticalSection(&_cs); }
 };
 
 }  // namespace encfs
 
 #endif
-

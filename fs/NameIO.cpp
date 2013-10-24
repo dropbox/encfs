@@ -7,7 +7,7 @@
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.  
+ * option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -43,23 +43,18 @@ using std::shared_ptr;
 
 namespace encfs {
 
-#define REF_MODULE(TYPE) \
-  do { \
-    if(!TYPE::Enabled() ) \
-      cerr << "referenceModule: should never happen\n"; \
-  } while(0)
+#define REF_MODULE(TYPE)                                                    \
+  do {                                                                      \
+    if (!TYPE::Enabled()) cerr << "referenceModule: should never happen\n"; \
+  } while (0)
 
-static
-void AddSymbolReferences()
-{
+static void AddSymbolReferences() {
   REF_MODULE(BlockNameIO);
   REF_MODULE(StreamNameIO);
   REF_MODULE(NullNameIO);
 }
 
-
-struct NameIOAlg
-{
+struct NameIOAlg {
   bool hidden;
   NameIO::Constructor constructor;
   string description;
@@ -67,30 +62,25 @@ struct NameIOAlg
   bool needsStreamMode;
 };
 
-typedef multimap< string, NameIOAlg > NameIOMap_t;
+typedef multimap<string, NameIOAlg> NameIOMap_t;
 static NameIOMap_t *gNameIOMap = 0;
 
-
-list< NameIO::Algorithm > NameIO::GetAlgorithmList( bool includeHidden )
-{
+list<NameIO::Algorithm> NameIO::GetAlgorithmList(bool includeHidden) {
   AddSymbolReferences();
 
-  list< Algorithm > result;
-  if(gNameIOMap)
-  {
+  list<Algorithm> result;
+  if (gNameIOMap) {
     NameIOMap_t::const_iterator it;
     NameIOMap_t::const_iterator end = gNameIOMap->end();
-    for(it = gNameIOMap->begin(); it != end; ++it)
-    {
-      if(includeHidden || !it->second.hidden)
-      {
+    for (it = gNameIOMap->begin(); it != end; ++it) {
+      if (includeHidden || !it->second.hidden) {
         Algorithm tmp;
         tmp.name = it->first;
         tmp.description = it->second.description;
         tmp.iface = it->second.iface;
         tmp.needsStreamMode = it->second.needsStreamMode;
 
-        result.push_back( tmp );
+        result.push_back(tmp);
       }
     }
   }
@@ -98,13 +88,10 @@ list< NameIO::Algorithm > NameIO::GetAlgorithmList( bool includeHidden )
   return result;
 }
 
-bool NameIO::Register( const char *name, const char *description,
-    const Interface &iface, Constructor constructor,
-    bool needsStreamMode,
-    bool hidden )
-{
-  if( !gNameIOMap )
-    gNameIOMap = new NameIOMap_t;
+bool NameIO::Register(const char *name, const char *description,
+                      const Interface &iface, Constructor constructor,
+                      bool needsStreamMode, bool hidden) {
+  if (!gNameIOMap) gNameIOMap = new NameIOMap_t;
 
   NameIOAlg alg;
   alg.hidden = hidden;
@@ -113,40 +100,33 @@ bool NameIO::Register( const char *name, const char *description,
   alg.iface = iface;
   alg.needsStreamMode = needsStreamMode;
 
-  gNameIOMap->insert( make_pair( string(name), alg ));
+  gNameIOMap->insert(make_pair(string(name), alg));
   return true;
 }
 
-shared_ptr<NameIO> NameIO::New(const string &name, 
-                               const shared_ptr<CipherV1> &cipher)
-{
+shared_ptr<NameIO> NameIO::New(const string &name,
+                               const shared_ptr<CipherV1> &cipher) {
   shared_ptr<NameIO> result;
-  if(gNameIOMap)
-  {
-    NameIOMap_t::const_iterator it = gNameIOMap->find( name );
-    if(it != gNameIOMap->end())
-    {
+  if (gNameIOMap) {
+    NameIOMap_t::const_iterator it = gNameIOMap->find(name);
+    if (it != gNameIOMap->end()) {
       Constructor fn = it->second.constructor;
-      result = (*fn)( it->second.iface, cipher );
+      result = (*fn)(it->second.iface, cipher);
     }
   }
   return result;
 }
 
-shared_ptr<NameIO> NameIO::New(const Interface &iface, 
-                               const shared_ptr<CipherV1> &cipher)
-{
+shared_ptr<NameIO> NameIO::New(const Interface &iface,
+                               const shared_ptr<CipherV1> &cipher) {
   shared_ptr<NameIO> result;
-  if(gNameIOMap)
-  {
+  if (gNameIOMap) {
     NameIOMap_t::const_iterator it;
     NameIOMap_t::const_iterator end = gNameIOMap->end();
-    for(it = gNameIOMap->begin(); it != end; ++it)
-    {
-      if( implements(it->second.iface, iface ))
-      {
+    for (it = gNameIOMap->begin(); it != end; ++it) {
+      if (implements(it->second.iface, iface)) {
         Constructor fn = it->second.constructor;
-        result = (*fn)( iface, cipher );
+        result = (*fn)(iface, cipher);
         break;
       }
     }
@@ -154,49 +134,27 @@ shared_ptr<NameIO> NameIO::New(const Interface &iface,
   return result;
 }
 
+NameIO::NameIO() : chainedNameIV(false), reverseEncryption(false) {}
 
+NameIO::~NameIO() {}
 
-NameIO::NameIO()
-    : chainedNameIV( false ), reverseEncryption( false )
-{
-}
+void NameIO::setChainedNameIV(bool enable) { chainedNameIV = enable; }
 
-NameIO::~NameIO()
-{
-}
+bool NameIO::getChainedNameIV() const { return chainedNameIV; }
 
-void NameIO::setChainedNameIV( bool enable )
-{
-  chainedNameIV = enable;
-}
+void NameIO::setReverseEncryption(bool enable) { reverseEncryption = enable; }
 
-bool NameIO::getChainedNameIV() const
-{
-  return chainedNameIV;
-}
+bool NameIO::getReverseEncryption() const { return reverseEncryption; }
 
-void NameIO::setReverseEncryption( bool enable )
-{
-  reverseEncryption = enable;
-}
-
-bool NameIO::getReverseEncryption() const
-{
-  return reverseEncryption;
-}
-
-
-NameIOPath NameIO::recodePath( const NameIOPath &path,
-    int (NameIO::*_length)(int) const,
-    int (NameIO::*_code)(const char*, int, uint64_t *, char*) const,
-    uint64_t *iv ) const
-{
+NameIOPath NameIO::recodePath(const NameIOPath &path,
+                              int (NameIO::*_length)(int) const,
+                              int (NameIO::*_code)(const char *, int,
+                                                   uint64_t *, char *) const,
+                              uint64_t *iv) const {
   NameIOPath output;
 
-  for (const std::string &component : path)
-  {
-    if(component == "." || component == "..")
-    {
+  for (const std::string &component : path) {
+    if (component == "." || component == "..") {
       output.push_back(component);
       continue;
     }
@@ -204,132 +162,112 @@ NameIOPath NameIO::recodePath( const NameIOPath &path,
     int len = component.size();
 
     // figure out buffer sizes
-    int approxLen = (this->*_length)( len );
-    if(approxLen <= 0) throw Error("Filename too small to decode");
+    int approxLen = (this->*_length)(len);
+    if (approxLen <= 0) throw Error("Filename too small to decode");
 
-    BUFFER_INIT( codeBuf, 32, (unsigned int)approxLen+1 );
+    BUFFER_INIT(codeBuf, 32, (unsigned int)approxLen + 1);
 
     // code the name
-    int codedLen = (this->*_code)( component.data(), component.size(),
-                                   iv, codeBuf );
-    rAssert( codedLen <= approxLen );
-    rAssert( codeBuf[codedLen] == '\0' );
+    int codedLen =
+        (this->*_code)(component.data(), component.size(), iv, codeBuf);
+    rAssert(codedLen <= approxLen);
+    rAssert(codeBuf[codedLen] == '\0');
 
     // append result
     output.push_back(codeBuf);
 
-    BUFFER_RESET( codeBuf );
+    BUFFER_RESET(codeBuf);
   }
 
-  return std::move( output );
+  return std::move(output);
 }
 
-NameIOPath NameIO::encodePath( const NameIOPath &plaintextPath ) const
-{
+NameIOPath NameIO::encodePath(const NameIOPath &plaintextPath) const {
   uint64_t iv = 0;
-  return encodePath( plaintextPath, &iv);
+  return encodePath(plaintextPath, &iv);
 }
 
-NameIOPath NameIO::decodePath( const NameIOPath &cipherPath ) const
-{
+NameIOPath NameIO::decodePath(const NameIOPath &cipherPath) const {
   uint64_t iv = 0;
-  return decodePath( cipherPath, &iv );
+  return decodePath(cipherPath, &iv);
 }
 
-NameIOPath NameIO::_encodePath( const NameIOPath &plaintextPath, uint64_t *iv ) const
-{
-    // if chaining is not enabled, then the iv pointer is not used..
-  if(!chainedNameIV)
-    iv = 0;
-  return recodePath( plaintextPath, 
-      &NameIO::maxEncodedNameLen, &NameIO::encodeName, iv);
-}
-
-NameIOPath NameIO::_decodePath( const NameIOPath &cipherPath, uint64_t *iv ) const
-{
+NameIOPath NameIO::_encodePath(const NameIOPath &plaintextPath,
+                               uint64_t *iv) const {
   // if chaining is not enabled, then the iv pointer is not used..
-  if(!chainedNameIV)
-    iv = 0;
-  return recodePath( cipherPath, 
-      &NameIO::maxDecodedNameLen, &NameIO::decodeName, iv);
+  if (!chainedNameIV) iv = 0;
+  return recodePath(plaintextPath, &NameIO::maxEncodedNameLen,
+                    &NameIO::encodeName, iv);
 }
 
-NameIOPath NameIO::encodePath( const NameIOPath &path, uint64_t *iv ) const
-{
-  return getReverseEncryption() ? 
-    _decodePath( path, iv ) :
-    _encodePath( path, iv );
-} 
-
-NameIOPath NameIO::decodePath( const NameIOPath &path, uint64_t *iv ) const
-{
-  return getReverseEncryption() ? 
-    _encodePath( path, iv ) :
-    _decodePath( path, iv );
-} 
-
-
-int NameIO::encodeName( const char *input, int length, char *output ) const
-{
-  return encodeName( input, length, (uint64_t*)0, output );
+NameIOPath NameIO::_decodePath(const NameIOPath &cipherPath,
+                               uint64_t *iv) const {
+  // if chaining is not enabled, then the iv pointer is not used..
+  if (!chainedNameIV) iv = 0;
+  return recodePath(cipherPath, &NameIO::maxDecodedNameLen, &NameIO::decodeName,
+                    iv);
 }
 
-int NameIO::decodeName( const char *input, int length, char *output ) const
-{
-  return decodeName( input, length, (uint64_t*)0, output );
+NameIOPath NameIO::encodePath(const NameIOPath &path, uint64_t *iv) const {
+  return getReverseEncryption() ? _decodePath(path, iv) : _encodePath(path, iv);
 }
 
-std::string NameIO::_encodeName( const char *plaintextName, int length ) const
-{
-  int approxLen = maxEncodedNameLen( length );
+NameIOPath NameIO::decodePath(const NameIOPath &path, uint64_t *iv) const {
+  return getReverseEncryption() ? _encodePath(path, iv) : _decodePath(path, iv);
+}
 
-  BUFFER_INIT( codeBuf, 32, (unsigned int)approxLen+1 );
+int NameIO::encodeName(const char *input, int length, char *output) const {
+  return encodeName(input, length, (uint64_t *)0, output);
+}
+
+int NameIO::decodeName(const char *input, int length, char *output) const {
+  return decodeName(input, length, (uint64_t *)0, output);
+}
+
+std::string NameIO::_encodeName(const char *plaintextName, int length) const {
+  int approxLen = maxEncodedNameLen(length);
+
+  BUFFER_INIT(codeBuf, 32, (unsigned int)approxLen + 1);
 
   // code the name
-  int codedLen = encodeName( plaintextName, length, 0, codeBuf );
-  rAssert( codedLen <= approxLen );
-  rAssert( codeBuf[codedLen] == '\0' );
+  int codedLen = encodeName(plaintextName, length, 0, codeBuf);
+  rAssert(codedLen <= approxLen);
+  rAssert(codeBuf[codedLen] == '\0');
 
   // append result to string
-  std::string result = (char*)codeBuf;
+  std::string result = (char *)codeBuf;
 
-  BUFFER_RESET( codeBuf );
+  BUFFER_RESET(codeBuf);
 
   return result;
 }
 
-std::string NameIO::_decodeName( const char *encodedName, int length ) const
-{
-  int approxLen = maxDecodedNameLen( length );
+std::string NameIO::_decodeName(const char *encodedName, int length) const {
+  int approxLen = maxDecodedNameLen(length);
 
-  BUFFER_INIT( codeBuf, 32, (unsigned int)approxLen+1 );
+  BUFFER_INIT(codeBuf, 32, (unsigned int)approxLen + 1);
 
   // code the name
-  int codedLen = decodeName( encodedName, length, 0, codeBuf );
-  rAssert( codedLen <= approxLen );
-  rAssert( codeBuf[codedLen] == '\0' );
+  int codedLen = decodeName(encodedName, length, 0, codeBuf);
+  rAssert(codedLen <= approxLen);
+  rAssert(codeBuf[codedLen] == '\0');
 
   // append result to string
-  std::string result = (char*)codeBuf;
+  std::string result = (char *)codeBuf;
 
-  BUFFER_RESET( codeBuf );
+  BUFFER_RESET(codeBuf);
 
   return result;
 }
 
-std::string NameIO::encodeName( const char *path, int length ) const
-{
-  return getReverseEncryption() ?
-    _decodeName( path, length ) :
-    _encodeName( path, length );
+std::string NameIO::encodeName(const char *path, int length) const {
+  return getReverseEncryption() ? _decodeName(path, length)
+                                : _encodeName(path, length);
 }
 
-std::string NameIO::decodeName( const char *path, int length ) const
-{
-  return getReverseEncryption() ?
-    _encodeName( path, length ) :
-    _decodeName( path, length );
+std::string NameIO::decodeName(const char *path, int length) const {
+  return getReverseEncryption() ? _encodeName(path, length)
+                                : _decodeName(path, length);
 }
 
 }  // namespace encfs
-

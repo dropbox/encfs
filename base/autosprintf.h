@@ -22,32 +22,31 @@
 #include <string>
 #include <iostream>
 
-namespace gnu
-{
-  /* A temporary object, usually allocated on the stack, representing
-     the result of an asprintf() call.  */
-  class autosprintf
-  {
-  public:
-    /* Constructor: takes a format string and the printf arguments.  */
-    autosprintf (const char *format, ...)
-                __attribute__ ((__format__ (__printf__, 2, 3)));
-    /* Copy constructor.  */
-    autosprintf (const autosprintf& src);
-    /* Destructor: frees the temporarily allocated string.  */
-    ~autosprintf ();
-    /* Conversion to string.  */
-    operator char * () const;
-    operator std::string () const;
-    /* Output to an ostream.  */
-    friend inline std::ostream& operator<< (std::ostream& stream, const autosprintf& tmp)
-    {
-      stream << (tmp.str ? tmp.str : "(error in autosprintf)");
-      return stream;
-    }
-  private:
-    char *str;
-  };
+namespace gnu {
+/* A temporary object, usually allocated on the stack, representing
+   the result of an asprintf() call.  */
+class autosprintf {
+ public:
+  /* Constructor: takes a format string and the printf arguments.  */
+  autosprintf(const char* format, ...)
+  __attribute__((__format__(__printf__, 2, 3)));
+  /* Copy constructor.  */
+  autosprintf(const autosprintf& src);
+  /* Destructor: frees the temporarily allocated string.  */
+  ~autosprintf();
+  /* Conversion to string.  */
+  operator char*() const;
+  operator std::string() const;
+  /* Output to an ostream.  */
+  friend inline std::ostream& operator<<(std::ostream& stream,
+                                         const autosprintf& tmp) {
+    stream << (tmp.str ? tmp.str : "(error in autosprintf)");
+    return stream;
+  }
+
+ private:
+  char* str;
+};
 }
 
 #endif /* _AUTOSPRINTF_H */
