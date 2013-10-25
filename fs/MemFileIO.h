@@ -32,28 +32,26 @@ namespace encfs {
 class MemFileIO : public FileIO {
  public:
   MemFileIO(int size);
+
+  void setFileName(const char *name);
+  const char *getFileName() const;
+
   virtual ~MemFileIO();
 
-  virtual Interface interface() const;
+  virtual Interface interface() const override;
 
-  virtual void setFileName(const char *name);
-  virtual const char *getFileName() const;
+  virtual FsFileAttrs get_attrs() const override;
 
-  virtual int open(int flags);
+  virtual size_t read(const IORequest &req) const override;
+  virtual void write(const IORequest &req) override;
 
-  virtual int getAttr(struct stat *stbuf) const;
-  virtual off_t getSize() const;
-
-  virtual ssize_t read(const IORequest &req) const;
-  virtual bool write(const IORequest &req);
-
-  virtual int truncate(off_t size);
+  virtual void truncate(fs_off_t size);
   virtual bool isWritable() const;
+  virtual void sync(bool dataSync);
 
  private:
   std::vector<char> buf;
   std::string name;
-  bool writable;
 };
 
 }  // namespace encfs

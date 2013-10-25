@@ -335,14 +335,8 @@ string DirNode::plainPathPosix(const char *cipherPath_) {
           pathToRelativeNameIOPath(fs_io->pathFromString(cipherPath_)));
       return nameIOPathToRelativePosixPath(std::move(decoded_path));
     } else {
-      if (cipherPath_[0] == '+') {
-        // decode as fully qualified path
-        return string("/") +
-               naming->decodeName(cipherPath_ + 1, strlen(cipherPath_ + 1));
-      } else {
-        auto niopath = posixPathToNameIOPath(cipherPath_);
-        return nameIOPathToRelativePosixPath(naming->decodePath(niopath));
-      }
+      auto niopath = posixPathToNameIOPath(cipherPath_);
+      return nameIOPathToRelativePosixPath(naming->decodePath(niopath));
     }
   }
   catch (Error &err) {
@@ -359,15 +353,8 @@ PosixSymlinkData DirNode::decryptLinkPath(PosixSymlinkData in) {
 string DirNode::relativeCipherPathPosix(const char *plaintextPath) {
   // NB: this method only works when our base file system
   //     is posix! (due to hardcoding of '/')
-
   try {
-    if (plaintextPath[0] == '/') {
-      // mark with '+' to indicate special decoding..
-      return string("+") +
-             naming->encodeName(plaintextPath + 1, strlen(plaintextPath + 1));
-    } else {
-      return cipherPathWithoutRootPosix(plaintextPath);
-    }
+    return cipherPathWithoutRootPosix(plaintextPath);
   }
   catch (Error &err) {
     LOG(ERROR) << "encode err: " << err.what();
@@ -714,6 +701,10 @@ int DirNode::unlink(const char *plaintextName) {
   } else {
     res = withExceptionCatcherNoRet((int)std::errc::io_error,
                                     bindMethod(fs_io, &FsIO::unlink), cyName);
+    if (res < 0) {
+      VLOG(1) << "unlink error: " <<
+        std::make_error_condition(static_cast<std::errc>(-res)).message();
+    }
   }
 
   return res;

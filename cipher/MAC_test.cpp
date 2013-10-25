@@ -19,13 +19,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <cstring>
+#include "cipher/MAC.h"
+#include "cipher/testing.h"
 
 #include <gtest/gtest.h>
 
-#include "base/shared_ptr.h"
-#include "cipher/MAC.h"
-#include "cipher/testing.h"
+#include <memory>
+
+#include <cstring>
+
+using std::shared_ptr;
 
 using namespace encfs;
 

@@ -34,25 +34,24 @@ class MemFileIO;
 class MemBlockFileIO : public BlockFileIO {
  public:
   MemBlockFileIO(int blockSize, const FSConfigPtr &cfg);
+
+  void setFileName(const char *name);
+  const char *getFileName() const;
+
   virtual ~MemBlockFileIO();
 
-  virtual Interface interface() const;
+  virtual Interface interface() const override;
 
-  virtual void setFileName(const char *name);
-  virtual const char *getFileName() const;
-
-  virtual int open(int flags);
-
-  virtual int getAttr(struct stat *stbuf) const;
-  virtual off_t getSize() const;
+  virtual FsFileAttrs get_attrs() const override;
 
   virtual bool isWritable() const;
 
-  virtual int truncate(off_t size);
+  virtual void truncate(fs_off_t size) override;
+  virtual void sync(bool dataSync) override;
 
  protected:
-  virtual ssize_t readOneBlock(const IORequest &req) const;
-  virtual bool writeOneBlock(const IORequest &req);
+  virtual ssize_t readOneBlock(const IORequest &req) const override;
+  virtual bool writeOneBlock(const IORequest &req) override;
 
  private:
   MemFileIO *impl;

@@ -58,19 +58,28 @@ struct EncFS_Args {
     if (idleTimeout > 0) ss << "(timeout " << idleTimeout << ") ";
     if (opts->checkKey) ss << "(keyCheck) ";
     if (opts->forceDecode) ss << "(forceDecode) ";
-    if (isPublic) ss << "(public) ";
     if (useStdin) ss << "(useStdin) ";
     if (opts->annotate) ss << "(annotate) ";
     if (opts->reverseEncryption) ss << "(reverseEncryption) ";
+    if (isPublic) ss << "(public) ";
     if (mountOnDemand) ss << "(mountOnDemand) ";
     if (opts->delayMount) ss << "(delayMount) ";
-
     for (int i = 0; i < fuseArgc; ++i) ss << fuseArgv[i] << ' ';
 
     return ss.str();
   }
 
-  EncFS_Args() : opts(new EncFS_Opts()) {}
+  EncFS_Args()
+      : isDaemon(false),
+        isThreaded(false),
+        isVerbose(false),
+        idleTimeout(0),
+        fuseArgc(0),
+        opts(std::make_shared<EncFS_Opts>()) {
+    for (int i = 0; i < MaxFuseArgs; ++i) {
+      fuseArgv[i] = nullptr;
+    }
+  }
 };
 }
 

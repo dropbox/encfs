@@ -42,24 +42,33 @@ void MemBlockFileIO::setFileName(const char* name) {
 
 const char* MemBlockFileIO::getFileName() const { return impl->getFileName(); }
 
-int MemBlockFileIO::open(int flags) { return impl->open(flags); }
-
-int MemBlockFileIO::getAttr(struct stat* stbuf) const {
-  return impl->getAttr(stbuf);
+FsFileAttrs MemBlockFileIO::get_attrs() const {
+  return impl->get_attrs();
 }
 
-off_t MemBlockFileIO::getSize() const { return impl->getSize(); }
-
 ssize_t MemBlockFileIO::readOneBlock(const IORequest& req) const {
-  return impl->read(req);
+  try {
+    return impl->read(req);
+  }
+  catch (...) {
+    return -1;
+  }
 }
 
 bool MemBlockFileIO::writeOneBlock(const IORequest& req) {
-  return impl->write(req);
+  try {
+    impl->write(req);
+    return true;
+  }
+  catch (...) {
+    return false;
+  }
 }
 
-int MemBlockFileIO::truncate(off_t size) { return impl->truncate(size); }
+void MemBlockFileIO::truncate(fs_off_t size) { return impl->truncate(size); }
 
 bool MemBlockFileIO::isWritable() const { return impl->isWritable(); }
+
+void MemBlockFileIO::sync(bool dataSync) { return impl->sync(dataSync); }
 
 }  // namespace encfs

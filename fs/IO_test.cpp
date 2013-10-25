@@ -19,12 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <list>
-
-#include <gtest/gtest.h>
 #include "fs/testing.h"
-
-#include "cipher/MemoryPool.h"
 
 #include "fs/CipherFileIO.h"
 #include "fs/FileUtils.h"
@@ -32,13 +27,22 @@
 #include "fs/MACFileIO.h"
 #include "fs/MemFileIO.h"
 
+#include "cipher/MemoryPool.h"
+
+#include <gtest/gtest.h>
+
+#include <list>
+#include <memory>
+
+using std::shared_ptr;
+
 using namespace encfs;
 
 namespace {
 
 TEST(MemIOTest, BasicIO) {
   MemFileIO io(1024);
-  ASSERT_EQ(1024, io.getSize());
+  ASSERT_EQ(1024, io.get_attrs().size);
 
   MemBlock mb;
   mb.allocate(256);
@@ -51,7 +55,7 @@ TEST(MemIOTest, BasicIO) {
   for (int i = 0; i < 4; i++) {
     req.offset = i * 256;
     memset(req.data, 0, req.dataLen);
-    ASSERT_TRUE(io.write(req));
+    ASSERT_NO_THROW(io.write(req));
   }
 
   for (int i = 0; i < 4; i++) {
@@ -85,7 +89,7 @@ void testBasicCipherIO(FSConfigPtr& cfg) {
   req.dataLen = sizeof(buf);
 
   memcpy(req.data, buf, sizeof(buf));
-  ASSERT_TRUE(test->write(req));
+  ASSERT_NO_THROW(test->write(req));
 
   memset(req.data, 0, sizeof(buf));
   ASSERT_EQ(req.dataLen, test->read(req));

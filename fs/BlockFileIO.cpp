@@ -99,13 +99,13 @@ size_t BlockFileIO::read(const IORequest &req) const {
 
   int partialOffset = req.offset % _blockSize;
   fs_off_t blockNum = req.offset / _blockSize;
-  ssize_t result = 0;
 
   if (partialOffset == 0 && req.dataLen <= (size_t)_blockSize) {
     // read completely within a single block -- can be handled as-is by
     // readOneBloc().
     return cacheReadOneBlock(req);
   } else {
+    ssize_t result = 0;
     auto size = req.dataLen;
 
     // if the request is larger then a block, then request each block

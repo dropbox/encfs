@@ -37,12 +37,12 @@ namespace {
 TEST(BlockFileIOTest, BasicIO) {
   // Base for comparison.
   MemFileIO base(1024);
-  ASSERT_EQ(1024, base.getSize());
+  ASSERT_EQ(1024, base.get_attrs().size);
 
   FSConfigPtr cfg = makeConfig(CipherV1::New("Null"), 512);
   MemBlockFileIO block(512, cfg);
   block.truncate(1024);
-  ASSERT_EQ(1024, block.getSize());
+  ASSERT_EQ(1024, block.get_attrs().size);
 
   MemBlock mb;
   mb.allocate(256);
@@ -55,11 +55,11 @@ TEST(BlockFileIOTest, BasicIO) {
   for (int i = 0; i < 4; i++) {
     req.offset = i * 256;
     memset(req.data, 0, req.dataLen);
-    ASSERT_TRUE(base.write(req));
+    ASSERT_NO_THROW(base.write(req));
 
     req.offset = i * 256;
     memset(req.data, 0, req.dataLen);
-    ASSERT_TRUE(block.write(req));
+    ASSERT_NO_THROW(block.write(req));
   }
 
   ASSERT_NO_FATAL_FAILURE(compare(&base, &block, 0, 1024));

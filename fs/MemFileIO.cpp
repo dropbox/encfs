@@ -19,22 +19,21 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "fs/FsIO.h"
 #include "fs/MemFileIO.h"
 
 #include "base/Error.h"
+#include "base/optional.h"
 
 #include <glog/logging.h>
+
+#include <limits>
 
 namespace encfs {
 
 static Interface MemFileIO_iface = makeInterface("FileIO/Mem", 1, 0, 0);
 
-MemFileIO* NewMemFileIO(const Interface& iface) {
-  (void)iface;
-  return new MemFileIO(0);
-}
-
-MemFileIO::MemFileIO(int size) : writable(false) { buf.resize(size); }
+MemFileIO::MemFileIO(int size) { buf.resize(size); }
 
 MemFileIO::~MemFileIO() {}
 
@@ -44,52 +43,56 @@ void MemFileIO::setFileName(const char* name) { this->name = name; }
 
 const char* MemFileIO::getFileName() const { return name.c_str(); }
 
-int MemFileIO::open(int flags) {
-  bool requestWrite = ((flags & O_RDWR) || (flags & O_WRONLY));
+FsFileAttrs MemFileIO::get_attrs() const {
+  assert(buf.size() <= std::numeric_limits<decltype(FsFileAttrs().size)>::max());
+  return {
+    /*.type =*/ FsFileType::REGULAR,
+    /*.mtime =*/ 0,
+    /*.size =*/ (fs_off_t) buf.size(),
+    /*.file_id =*/ 0,
+    /*.posix =*/ opt::nullopt,
+  };
 
-  writable = writable || requestWrite;
-  LOG(ERROR) << "returning fake file descriptor";
-  return 0;
 }
 
-int MemFileIO::getAttr(struct stat* stbuf) const {
-  stbuf->st_size = buf.size();
-  return 0;
-}
-
-off_t MemFileIO::getSize() const { return buf.size(); }
-
-ssize_t MemFileIO::read(const IORequest& req) const {
+size_t MemFileIO::read(const IORequest& req) const {
   rAssert(req.offset >= 0);
 
-  int len = req.dataLen;
-  if (req.offset + req.dataLen > getSize()) {
-    len = getSize() - req.offset;
-  }
-  if (len < 0) {
-    len = 0;
+  assert(req.dataLen <= std::numeric_limits<decltype(req.offset)>::max());
+  auto amt_to_read = static_cast<decltype(req.offset)>(req.dataLen);
+
+  if (req.offset + amt_to_read > get_attrs().size) {
+    amt_to_read = get_attrs().size - req.offset;
+    if (amt_to_read < 0) amt_to_read = 0;
   }
 
-  memcpy(req.data, &buf[req.offset], len);
-  return len;
+  memcpy(req.data, &buf[req.offset], amt_to_read);
+  return amt_to_read;
 }
 
-bool MemFileIO::write(const IORequest& req) {
+void MemFileIO::write(const IORequest& req) {
   rAssert(req.offset >= 0);
-  if (req.offset + req.dataLen > getSize()) {
-    truncate(req.offset + req.dataLen);
+
+  assert(req.dataLen <= std::numeric_limits<decltype(req.offset)>::max());
+  auto amt_to_write = static_cast<decltype(req.offset)>(req.dataLen);
+
+  // if writing more than the size of the buf
+  if (req.offset + amt_to_write > get_attrs().size) {
+    truncate(req.offset + amt_to_write);
   }
-  rAssert(req.offset + req.dataLen <= getSize());
+
+  rAssert(req.offset + amt_to_write <= get_attrs().size);
 
   memcpy(&buf[req.offset], req.data, req.dataLen);
-  return true;
 }
 
-int MemFileIO::truncate(off_t size) {
+void MemFileIO::truncate(fs_off_t size) {
+  rAssert(size >= 0);
   buf.resize(size);
-  return 0;
 }
 
-bool MemFileIO::isWritable() const { return writable; }
+bool MemFileIO::isWritable() const { return true; }
+
+void MemFileIO::sync(bool /*dataSync*/) {}
 
 }  // namespace encfs

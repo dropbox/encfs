@@ -36,11 +36,11 @@ using std::shared_ptr;
 
 namespace encfs {
 
-shared_ptr<DirNode> EncFS_Context::getRoot() { return root; }
+shared_ptr<DirNode> EncFS_Context::getRoot() const { return root; }
 
 void EncFS_Context::setRoot(const shared_ptr<DirNode> &r) { root = r; }
 
-bool EncFS_Context::isMounted() { return (bool)root; }
+bool EncFS_Context::isMounted() const { return (bool)root; }
 
 int EncFS_Context::openFileCount() const { return openFiles.size(); }
 

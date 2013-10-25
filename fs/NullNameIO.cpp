@@ -18,16 +18,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <cstring>
-
-#include "base/base64.h"
-#include "cipher/CipherV1.h"
-
 #include "fs/NullNameIO.h"
 
+#include "base/base64.h"
+
+#include "cipher/CipherV1.h"
+
+#include <string>
+
+#include <cstring>
+
 using std::shared_ptr;
+using std::string;
 
 namespace encfs {
+
+using std::string;
 
 static shared_ptr<NameIO> NewNNIO(const Interface &,
                                   const shared_ptr<CipherV1> &) {
@@ -54,16 +60,12 @@ int NullNameIO::maxDecodedNameLen(int encodedNameLen) const {
   return encodedNameLen;
 }
 
-int NullNameIO::encodeName(const char *plaintextName, int length,
-                           uint64_t * /* iv */, char *encodedName) const {
-  memcpy(encodedName, plaintextName, length);
-  return length;
+string NullNameIO::encodeName(const string &plaintextName, uint64_t *) const {
+  return plaintextName;
 }
 
-int NullNameIO::decodeName(const char *encodedName, int length,
-                           uint64_t * /* iv */, char *plaintextName) const {
-  memcpy(plaintextName, encodedName, length);
-  return length;
+string NullNameIO::decodeName(const string &encodedName, uint64_t *) const {
+  return encodedName;
 }
 
 bool NullNameIO::Enabled() { return true; }

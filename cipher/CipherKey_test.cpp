@@ -1,10 +1,10 @@
-
 #include <list>
+#include <string>
 
 #include <gtest/gtest.h>
 
 #include "base/config.h"
-#include "base/shared_ptr.h"
+
 #include "cipher/CipherV1.h"
 #include "cipher/MemoryPool.h"
 #include "cipher/testing.h"
@@ -13,9 +13,10 @@
 #include <valgrind/memcheck.h>
 #endif
 
-using namespace encfs;
 using std::list;
 using std::string;
+
+using namespace encfs;
 
 namespace {
 

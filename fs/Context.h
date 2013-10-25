@@ -44,11 +44,10 @@ class EncFS_Context {
   void renameNode(const char *oldName, const char *newName);
 
   void setRoot(const std::shared_ptr<DirNode> &root);
-  std::shared_ptr<DirNode> getRoot();
-  bool isMounted();
+  std::shared_ptr<DirNode> getRoot() const;
+  bool isMounted() const;
 
  private:
-
   // set of open files, indexed by path
   typedef std::unordered_map<std::string, std::weak_ptr<FileNode> > FileMap;
   FileMap openFiles;

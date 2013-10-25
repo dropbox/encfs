@@ -364,14 +364,14 @@ static bool processArgs(int argc, char *argv[],
     }
   }
 
-  if (out->opts->delayMount && !out->opts->mountOnDemand) {
+  if (out->opts->delayMount && !out->mountOnDemand) {
     cerr <<
         // xgroup(usage)
         _("You must use mount-on-demand with delay-mount") << endl;
     return false;
   }
 
-  if (out->opts->mountOnDemand && out->opts->passwordProgram.empty()) {
+  if (out->mountOnDemand && out->passwordProgram.empty()) {
     cerr <<
         // xgroup(usage)
         _("Must set password program when using mount-on-demand") << endl;
@@ -430,7 +430,7 @@ void *encfs_init(fuse_conn_info *conn) {
 }
 
 void encfs_destroy(void *_ctx) {
-  auto ctx = (EncFSFuseContext *)_ctx;
+  auto ctx = static_cast<EncFSFuseContext *>(_ctx);
   if (ctx->getArgs()->idleTimeout > 0) {
     ctx->setRunning(false);
 

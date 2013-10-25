@@ -77,33 +77,6 @@ bool ConfigReader::loadFromVar(ConfigVar &in) {
   return true;
 }
 
-bool ConfigReader::save(const char *fileName) const {
-  // write everything to a ConfigVar, then output to disk
-  ConfigVar out = toVar();
-
-  // TODO: unix perms used to be 0650
-  std::ofstream f(fileName, std::ios::binary | std::ios::out);
-  if (!f) return false;
-
-  f.write(out.buffer(), out.size());
-  return (bool)f;
-}
-
-ConfigVar ConfigReader::toVar() const {
-  // write everything to a ConfigVar, then output to disk
-  ConfigVar out;
-  out.writeInt(vars.size());
-  map<string, ConfigVar>::const_iterator it;
-  for (it = vars.begin(); it != vars.end(); ++it) {
-    out.writeInt(it->first.size());
-    out.write((byte *)it->first.data(), it->first.size());
-    out.writeInt(it->second.size());
-    out.write((byte *)it->second.buffer(), it->second.size());
-  }
-
-  return out;
-}
-
 ConfigVar ConfigReader::operator[](const std::string &varName) const {
   // read only
   map<string, ConfigVar>::const_iterator it = vars.find(varName);

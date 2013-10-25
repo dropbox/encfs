@@ -24,6 +24,7 @@
 #include <list>
 #include <string>
 
+#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include "cipher/CipherV1.h"
@@ -36,6 +37,7 @@
 #include "fs/MemFileIO.h"
 
 using std::list;
+using std::shared_ptr;
 using std::string;
 
 namespace encfs {
@@ -79,13 +81,13 @@ void runWithAllCiphers(void (*func)(FSConfigPtr& config)) {
 }
 
 void truncate(FileIO* a, FileIO* b, int len) {
-  SCOPED_TRACE(testing::Message() << "Truncate from " << a->getSize()
+  SCOPED_TRACE(testing::Message() << "Truncate from " << a->get_attrs().size
                                   << " to len " << len);
   a->truncate(len);
-  ASSERT_EQ(len, a->getSize());
+  ASSERT_EQ(len, a->get_attrs().size);
 
   b->truncate(len);
-  ASSERT_EQ(len, b->getSize());
+  ASSERT_EQ(len, b->get_attrs().size);
 
   compare(a, b, 0, len);
 }
@@ -93,11 +95,11 @@ void truncate(FileIO* a, FileIO* b, int len) {
 void writeRandom(FSConfigPtr& cfg, FileIO* a, FileIO* b, int offset, int len) {
   SCOPED_TRACE(testing::Message() << "Write random " << offset << ", " << len);
 
-  if (a->getSize() < offset + len) {
+  if (a->get_attrs().size < offset + len) {
     a->truncate(offset + len);
   }
 
-  if (b->getSize() < offset + len) {
+  if (b->get_attrs().size < offset + len) {
     b->truncate(offset + len);
   }
 
@@ -110,7 +112,7 @@ void writeRandom(FSConfigPtr& cfg, FileIO* a, FileIO* b, int offset, int len) {
 
   memcpy(req.data, buf, len);
   req.offset = offset;
-  ASSERT_TRUE(a->write(req));
+  ASSERT_NO_THROW(a->write(req));
 
   // Check that write succeeded.
   req.offset = offset;
@@ -121,7 +123,7 @@ void writeRandom(FSConfigPtr& cfg, FileIO* a, FileIO* b, int offset, int len) {
   memcpy(req.data, buf, len);
   req.offset = offset;
   req.dataLen = len;
-  ASSERT_TRUE(b->write(req));
+  ASSERT_NO_THROW(b->write(req));
 
   // Check that write succeeded.
   req.offset = offset;
@@ -137,7 +139,7 @@ void writeRandom(FSConfigPtr& cfg, FileIO* a, FileIO* b, int offset, int len) {
 
 void compare(FileIO* a, FileIO* b, int offset, int len) {
   SCOPED_TRACE(testing::Message() << "compare " << offset << ", " << len
-                                  << " from file length " << a->getSize());
+                                  << " from file length " << a->get_attrs().size);
   unsigned char* buf1 = new unsigned char[len];
   unsigned char* buf2 = new unsigned char[len];
   memset(buf1, 0, len);
@@ -176,18 +178,20 @@ void comparisonTest(FSConfigPtr& cfg, FileIO* a, FileIO* b) {
   for (int i = 0; i < 10000; i++) {
     SCOPED_TRACE(testing::Message() << "Test Loop " << i);
     int len = 128 + random() % 512;
-    int offset = (len == a->getSize()) ? 0 : random() % (a->getSize() - len);
+    int offset = (len == a->get_attrs().size) ? 0 : random() % (a->get_attrs().size - len);
     writeRandom(cfg, a, b, offset, len);
     if (testing::Test::HasFatalFailure()) return;
-    ASSERT_EQ(a->getSize(), b->getSize());
+    ASSERT_EQ(a->get_attrs().size, b->get_attrs().size);
   }
 
   SCOPED_TRACE("Final Compare");
-  compare(a, b, 0, a->getSize());
+  compare(a, b, 0, a->get_attrs().size);
 }
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
+  google::InitGoogleLogging(argv[0]);
+
   return RUN_ALL_TESTS();
 }
 
