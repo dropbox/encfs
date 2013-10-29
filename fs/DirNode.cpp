@@ -128,6 +128,7 @@ class RenameOp {
   void undo();
 };
 
+// TODO: share this code with DirNode::rename()
 bool RenameOp::apply() {
   try {
     while (last != renameList->end()) {
@@ -161,7 +162,9 @@ bool RenameOp::apply() {
       }
 
       if (preserve_mtime) {
-        dn->fs_io->set_times(newCNamePath, opt::nullopt, old_mtime);
+        withExceptionCatcherNoRet((int)std::errc::io_error,
+                                  bindMethod(dn->fs_io, &FsIO::set_times),
+                                  newCNamePath, opt::nullopt, old_mtime);
       }
 
       ++last;
@@ -563,7 +566,8 @@ int DirNode::rename(const char *cfromPlaintext, const char *ctoPlaintext) {
 
       if (renameOp) renameOp->undo();
     } else if (preserve_mtime) {
-      withExceptionCatcherNoRet(1, bindMethod(fs_io, &FsIO::set_times), toCName,
+      withExceptionCatcherNoRet((int)std::errc::io_error,
+                                bindMethod(fs_io, &FsIO::set_times), toCName,
                                 opt::nullopt, old_mtime);
     }
   }
