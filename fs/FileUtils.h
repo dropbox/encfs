@@ -118,7 +118,7 @@ RootPtr initFS(const std::shared_ptr<EncFS_Context> &ctx,
 
 EncfsConfig create_config_interactively(
     const std::shared_ptr<PasswordReader> &);
-EncfsConfig create_paranoid_config(const SecureMem &secure_password);
+EncfsConfig create_paranoid_config(const SecureMem &secure_password, bool case_sensitive = true);
 
 class ConfigurationFileDoesNotExist : public std::runtime_error {
  public:
