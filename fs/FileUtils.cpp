@@ -850,7 +850,8 @@ CipherKey getNewUserKey(EncfsConfig &config, const SecureMem &secure_password);
 CipherKey getUserKey(const EncfsConfig &config,
                      const SecureMem &passwordReader);
 
-EncfsConfig create_paranoid_config(const SecureMem &secure_password, bool case_sensitive) {
+EncfsConfig create_paranoid_config(const SecureMem &secure_password,
+                                   bool use_case_insensitive_encoding) {
   // look for AES with 256 bit key..
   // Use block filename encryption mode.
   // Enable per-block HMAC headers at substantial performance penalty..
@@ -859,7 +860,8 @@ EncfsConfig create_paranoid_config(const SecureMem &secure_password, bool case_s
   int keySize = 256;
   int blockSize = DefaultBlockSize;
   auto alg = findCipherAlgorithm("AES", keySize);
-  Interface nameIOIface = BlockNameIO::CurrentInterface(case_sensitive);
+  Interface nameIOIface =
+    BlockNameIO::CurrentInterface(use_case_insensitive_encoding);
   int blockMACBytes = 8;
   int blockMACRandBytes = 0;  // using uniqueIV, so this isn't necessary
   bool uniqueIV = true;
@@ -899,7 +901,7 @@ EncfsConfig create_paranoid_config(const SecureMem &secure_password, bool case_s
   CipherKey volumeKey = cipher->newRandomKey();
 
   // get user key and use it to encode volume key
-  auto userKey = getNewUserKey(config, secure_passwowrd);
+  auto userKey = getNewUserKey(config, secure_password);
 
   cipher->setKey(userKey);
   cipher->writeKey(volumeKey, encodedKey.get());

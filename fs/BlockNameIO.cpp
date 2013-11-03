@@ -83,9 +83,9 @@ static bool BlockIO32_registered = NameIO::Register(
     - Version 4.0 adds support for base32, creating names better suited to
     case-insensitive filesystems (eg Mac).
  */
-Interface BlockNameIO::CurrentInterface(bool caseSensitive) {
+Interface BlockNameIO::CurrentInterface(bool useEncodingForCaseInsensitiveFS) {
   // implement major version 4 plus support for prior versions
-  if (caseSensitive)
+  if (useEncodingForCaseInsensitiveFS)
     return makeInterface("nameio/block32", 4, 0, 2);
   else
     return makeInterface("nameio/block", 4, 0, 2);

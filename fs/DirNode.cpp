@@ -75,7 +75,7 @@ std::string DirTraverse::nextPlaintextName(FsFileType *fileType,
 
 std::string DirTraverse::nextInvalid() {
   opt::optional<FsDirEnt> dirent;
-  while (!(dirent = dir_io->readdir())) {
+  while ((dirent = dir_io->readdir())) {
     try {
       uint64_t localIv = iv;
       naming->decodePath({dirent->name}, &localIv);
@@ -284,12 +284,77 @@ NameIOPath DirNode::pathToRelativeNameIOPath(const Path &plaintextPath) const {
 }
 
 Path DirNode::cipherPath(const Path &plaintextPath, uint64_t *iv) const {
-  auto pp = pathToRelativeNameIOPath(plaintextPath);
-
   uint64_t iv2 = 0;
   if (!iv) iv = &iv2;
-  auto encodedpp = naming->encodePath(std::move(pp), iv);
-  return appendToRoot(std::move(encodedpp));
+
+  // iv should be a zero value since this method only works
+  // for the starting path
+  assert(!*iv);
+
+  auto pp = pathToRelativeNameIOPath(plaintextPath);
+
+  // for file systems with non bytewise equality for file names
+  // (i.e. case-insensitive file systems)
+  // we have to use the cipher path given by the filename stored,
+  // not by the filename passed in
+
+  // to solve this we iterate over each parent directory and search
+  // for the stored plaintext filename path component
+  // then we use that path to encrypt
+  
+  auto parent_encrypted_path = rootDir;
+  unsigned i = 0;
+  for (const auto & p : pp) {
+    // find the canonical string of this path component "p"
+    // in the parent directory
+    opt::optional<Directory> maybe_dir;
+    try {
+      maybe_dir = fs_io->opendir(parent_encrypted_path);
+    }
+    catch (const std::system_error &err) {
+      if (err.code() != std::errc::no_such_file_or_directory) throw;
+    }
+
+    auto similar_files = std::vector<std::pair<uint64_t, std::string>>();
+    opt::optional<FsDirEnt> ent;    
+    if (maybe_dir) {
+      while ((ent = maybe_dir->readdir())) {
+        try {
+          auto localIV = *iv;
+          auto plain_name =
+            naming->decodePath({ent->name}, &localIV).front();
+          if (fs_io->filename_equal(plain_name, p)) {
+            similar_files.push_back({localIV, std::move(ent->name)});
+            break;
+          }
+        }
+        catch (const Error &ex) {
+          // problem decoding, just continue
+        }
+      }
+    }
+
+    // didn't find a canonical file name for the current
+    // path component, treat this component as the canonical version
+    if (similar_files.empty()) {
+      auto encoded_p = naming->encodePath({p}, iv).front();
+      parent_encrypted_path = parent_encrypted_path.join(std::move(encoded_p));
+    }
+    else {
+      // NB: we do this so we always select the same file
+      //     for the canonical version since there is no guarantee of the
+      //     ordering of readdir()
+      std::sort(similar_files.begin(), similar_files.end());
+      auto canon_name = std::move(similar_files.front());
+      *iv = canon_name.first;
+      parent_encrypted_path =
+        parent_encrypted_path.join(std::move(canon_name.second));
+    }
+
+    ++i;
+  }
+
+  return parent_encrypted_path;
 }
 
 Path DirNode::apiToInternal(const char *plaintextPath, uint64_t *iv) const {
@@ -324,7 +389,7 @@ static NameIOPath posixPathToNameIOPath(const string &p) {
 
 std::string DirNode::cipherPathWithoutRootPosix(
     std::string plaintextPath) const {
-  return nameIOPathToRelativePosixPath(
+  return "+" + nameIOPathToRelativePosixPath(
       naming->encodePath(posixPathToNameIOPath(std::move(plaintextPath))));
 }
 
@@ -338,8 +403,18 @@ string DirNode::plainPathPosix(const char *cipherPath_) {
           pathToRelativeNameIOPath(fs_io->pathFromString(cipherPath_)));
       return nameIOPathToRelativePosixPath(std::move(decoded_path));
     } else {
-      auto niopath = posixPathToNameIOPath(cipherPath_);
-      return nameIOPathToRelativePosixPath(naming->decodePath(niopath));
+      const char *start = cipherPath_;
+      auto to_prepend = std::string("");
+
+      // if the first character is "+" that means this is an absolute path
+      if (start[0] == '+') {
+        ++start;
+        to_prepend = "/";
+      }
+
+      auto niopath = posixPathToNameIOPath(start);
+      return to_prepend +
+        nameIOPathToRelativePosixPath(naming->decodePath(niopath));
     }
   }
   catch (Error &err) {
@@ -378,12 +453,6 @@ DirTraverse DirNode::openDir(const char *plaintextPath) const {
   }
 
   assert(maybeCyName);
-
-  // if we're not using chained IV mode, then ignore
-  // the computed iv
-  if (!naming->getChainedNameIV()) iv = 0;
-
-  // rDebug("openDir on %s", cyName.c_str() );
 
   opt::optional<Directory> dir_io;
   const int res = withExceptionCatcher((int)std::errc::io_error,
@@ -797,6 +866,11 @@ const std::string &DirNode::path_sep() const { return fs_io->path_sep(); }
 
 Path DirNode::pathFromString(const std::string &string) const {
   return fs_io->pathFromString(string);
+}
+
+bool DirNode::filename_equal(const std::string &a,
+                             const std::string &b) const {
+  return fs_io->filename_equal(a, b);
 }
 
 int DirNode::posix_create(shared_ptr<FileNode> *fnode, const char *plainName,

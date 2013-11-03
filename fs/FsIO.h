@@ -65,7 +65,7 @@ class PathPoly {
   virtual bool operator!=(const PathPoly &p) const { return !(*this == p); }
 
   // paths support copying
-  virtual std::unique_ptr<PathPoly> copy() = 0;
+  virtual std::unique_ptr<PathPoly> copy() const = 0;
 };
 
 class DirectoryIO {
@@ -190,6 +190,8 @@ class FsIO {
 
   virtual const std::string &path_sep() const = 0;
   virtual Path pathFromString(const std::string &path) const = 0;
+  virtual bool filename_equal(const std::string &a,
+                              const std::string &b) const = 0;
 
   virtual Directory opendir(const Path &path) const = 0;
   virtual File openfile(const Path &path, bool open_for_write = false,
@@ -247,6 +249,10 @@ class StringPathDynamicSep : public PathPoly {
 
   virtual std::unique_ptr<PathPoly> _from_string(std::string str) const = 0;
 
+  virtual bool
+    _filename_equal(const std::string & a,
+                    const std::string & b) const = 0;
+
  public:
   virtual operator const std::string &() const override { return _path; }
 
@@ -265,10 +271,30 @@ class StringPathDynamicSep : public PathPoly {
   virtual bool operator==(const PathPoly &p) const override {
     auto p2 = dynamic_cast<const StringPathDynamicSep *>(&p);
     if (!p2) return false;
-    return ((const std::string &)*p2 == (const std::string &)*this);
+
+    if (this->_sep != p2->_sep) return false;
+
+    auto a = this->copy();
+    auto b = p2->copy();
+
+    while (true) {
+      if (a->is_root() || b->is_root()) {
+        return ((const std::string &)*a == (const std::string &)*b);
+      }
+
+      if (!_filename_equal(a->basename(), b->basename())) {
+        return false;
+      }
+
+      a = a->dirname();
+      b = b->dirname();
+    }
+
+    /* not reached */
+    assert(false);
   }
 
-  virtual std::unique_ptr<PathPoly> copy() override {
+  virtual std::unique_ptr<PathPoly> copy() const override {
     return _from_string(_path);
   }
 };

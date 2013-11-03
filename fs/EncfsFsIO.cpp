@@ -166,6 +166,11 @@ Path EncfsFsIO::pathFromString(const std::string &path) const {
   return ctx->getRoot()->pathFromString(path);
 }
 
+bool EncfsFsIO::filename_equal(const std::string &a,
+                               const std::string &b) const {
+  return ctx->getRoot()->filename_equal(a ,b);
+}
+
 Directory EncfsFsIO::opendir(const Path &path) const {
   auto dt = getRoot()->openDir(path.c_str());
   if (!dt.valid()) throw create_errno_system_error(std::errc::io_error);
