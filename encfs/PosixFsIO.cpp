@@ -83,8 +83,8 @@ static void current_fs_error(int thiserror = -1) {
   throw std::system_error(thiserror, errno_category());
 }
 
-static bool _posix_filename_equals(const std::string &a,
-                                   const std::string &b) {
+static bool _posix_filename_equal(const std::string &a,
+                                  const std::string &b) {
   // posix by default does bytewise filename equality comparison
   // there are some exceptions, usually depending on the file system mounted
   // at this path.
@@ -102,7 +102,7 @@ class PosixPath final : public StringPath<PosixPath, POSIX_PATH_SEP> {
 
   virtual bool _filename_equal(const std::string & a,
                                const std::string & b) const {
-    return _posix_filename_equals(a, b);
+    return _posix_filename_equal(a, b);
   }
 
  public:

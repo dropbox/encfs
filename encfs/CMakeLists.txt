@@ -1,4 +1,3 @@
-
 include_directories (${Encfs_SOURCE_DIR}/base)
 link_directories (${Encfs_BINARY_DIR}/base)
 
@@ -20,11 +19,19 @@ add_library (encfs-app
 )
 
 if (FUSE_FOUND)
+# only the encfs console application requires fuse
+
+add_definitions (-DFUSE_USE_VERSION=26)
+add_definitions (-D_FILE_OFFSET_BITS=64)
+
+include_directories (${FUSE_INCLUDE_DIR})
 
 add_executable (encfs
     EncFSFuseContext.cpp
     encfs.cpp
-    main.cpp)
+    main.cpp
+)
+
 target_link_libraries (encfs
     encfs-app
     encfs-fs

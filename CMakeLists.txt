@@ -53,14 +53,6 @@ endif (HAVE_CXX11_FLAG)
 
 # Flume specific flags.
 find_package (FUSE)
-if (FUSE_FOUND)
-   include_directories (${FUSE_INCLUDE_DIR})
-endif (FUSE_FOUND)
-
-add_definitions (-DFUSE_USE_VERSION=26)
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    add_definitions (-D_FILE_OFFSET_BITS=64)
-endif ()
 
 # Packaging config.
 set (CPACK_PACKAGE_NAME "Encfs")
@@ -88,9 +80,6 @@ include (CheckCXXSourceCompiles)
 CHECK_CXX_SOURCE_COMPILES ("#include <sys/types.h>
   #include <sys/xattr.h>
   int main() { getxattr(0,0,0,0,0,0); return 1; } " XATTR_ADD_OPT)
-
-include (CheckFunctionExists)
-check_function_exists(lchmod HAVE_LCHMOD)
 
 # Libraries or programs used for multiple modules.
 find_package (Protobuf REQUIRED)
