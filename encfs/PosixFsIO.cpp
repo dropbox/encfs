@@ -105,6 +105,11 @@ class PosixPath final : public StringPath<PosixPath, POSIX_PATH_SEP> {
     return _posix_filename_equal(a, b);
   }
 
+  virtual bool
+  _filename_valid(const std::string & a) const {
+    return !a.empty() && a.find('/') == std::string::npos;
+  }
+
  public:
   PosixPath(std::string str) : StringPath(std::move(str)) {
     if (((const std::string &)*this).empty())

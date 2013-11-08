@@ -301,7 +301,7 @@ Path DirNode::cipherPath(const Path &plaintextPath, uint64_t *iv) const {
   // to solve this we iterate over each parent directory and search
   // for the stored plaintext filename path component
   // then we use that path to encrypt
-  
+
   auto parent_encrypted_path = rootDir;
   unsigned i = 0;
   for (const auto & p : pp) {
@@ -316,7 +316,7 @@ Path DirNode::cipherPath(const Path &plaintextPath, uint64_t *iv) const {
     }
 
     auto similar_files = std::vector<std::pair<uint64_t, std::string>>();
-    opt::optional<FsDirEnt> ent;    
+    opt::optional<FsDirEnt> ent;
     if (maybe_dir) {
       while ((ent = maybe_dir->readdir())) {
         try {
@@ -790,15 +790,34 @@ int DirNode::mkdir(const char *plaintextName) {
                                    bindMethod(fs_io, &FsIO::mkdir), fullName);
 }
 
+FsFileAttrs
+DirNode::correct_attrs(FsFileAttrs attrs) const {
+  // TODO: make sure this wrap code is similar to how FileIO is created
+  // in FileNode
+  attrs = CipherFileIO::wrapAttrs(fsConfig, std::move(attrs));
+
+  if (fsConfig->config->block_mac_bytes() ||
+      fsConfig->config->block_mac_rand_bytes()) {
+    attrs = MACFileIO::wrapAttrs(fsConfig, std::move(attrs));
+  }
+
+  return attrs;
+}
+
 int DirNode::get_attrs(FsFileAttrs *attrs, const char *plaintextName) const {
   Lock _lock(mutex);
 
   auto cyName = apiToInternal(plaintextName);
   VLOG(1) << "get_attrs " << cyName;
 
-  return withExceptionCatcher((int)std::errc::io_error,
-                              encfs::get_attrs<decltype(fs_io)>, attrs, fs_io,
-                              cyName);
+  auto ret = withExceptionCatcher((int)std::errc::io_error,
+                                  encfs::get_attrs<decltype(fs_io)>, attrs, fs_io,
+                                  cyName);
+  if (ret < 0) return ret;
+
+  *attrs = correct_attrs(*attrs);
+
+  return ret;
 }
 
 int DirNode::posix_stat(FsFileAttrs *attrs, const char *plaintextName,
@@ -813,14 +832,10 @@ int DirNode::posix_stat(FsFileAttrs *attrs, const char *plaintextName,
                                  cyName, follow);
   if (ret < 0) return ret;
 
-  // TODO: make sure this wrap code is similar to how FileIO is created
-  // in FileNode
-  *attrs = CipherFileIO::wrapAttrs(fsConfig, std::move(*attrs));
+  *attrs = correct_attrs(*attrs);
 
-  if (fsConfig->config->block_mac_bytes() ||
-      fsConfig->config->block_mac_rand_bytes()) {
-    *attrs = MACFileIO::wrapAttrs(fsConfig, std::move(*attrs));
-  }
+  // this should exist since we're calling posix_stat
+  assert(attrs->posix);
 
   if (posix_is_symlink(attrs->posix->mode)) {
     opt::optional<PosixSymlinkData> buf;

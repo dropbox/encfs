@@ -192,6 +192,7 @@ class DirNode {
   std::shared_ptr<FileNode> _openNode(const Path &plainName,
                                       const char *requestor, bool requestWrite,
                                       bool createFile, int *result);
+  FsFileAttrs correct_attrs(FsFileAttrs attrs) const;
 
   mutable Mutex mutex;
 

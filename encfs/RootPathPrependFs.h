@@ -61,10 +61,16 @@ class RootPathPrependFs : public FsIO {
   virtual const std::string &path_sep() const override {
     return _base_fs->path_sep();
   }
+
   virtual Path pathFromString(const std::string &path) const override {
     // we do all the transformation in the actual methods
     // since we don't make a new type for our paths
     return _base_fs->pathFromString(path);
+  }
+
+  virtual bool filename_equal(const std::string &a,
+                              const std::string &b) const override {
+    return _base_fs->filename_equal(a, b);
   }
 
   virtual Directory opendir(const Path &path) const override {

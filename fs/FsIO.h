@@ -253,12 +253,16 @@ class StringPathDynamicSep : public PathPoly {
     _filename_equal(const std::string & a,
                     const std::string & b) const = 0;
 
+  virtual bool
+    _filename_valid(const std::string & a) const = 0;
+
  public:
   virtual operator const std::string &() const override { return _path; }
 
   virtual const char *c_str() const override { return _path.c_str(); }
 
   virtual std::unique_ptr<PathPoly> join(std::string name) const override {
+    if (!_filename_valid(name)) throw std::runtime_error("bad file name");
     return _from_string(_path + _sep + name);
   }
 
@@ -310,10 +314,35 @@ class StringPath : public StringPathDynamicSep<T> {
 
 template <typename T>
 FsFileAttrs get_attrs(T fs_io, const Path &p) {
-  const bool create = false;
-  const bool open_for_write = false;
-  return fs_io->openfile(p, open_for_write, create).get_attrs();
+  try {
+    const bool create = false;
+    const bool open_for_write = false;
+    return fs_io->openfile(p, open_for_write, create).get_attrs();
+  }
+  catch (const std::system_error &err) {
+    // TODO: support FsIO::get_attrs for directories again
+    if (err.code() != std::errc::is_a_directory) throw;
+    return {FsFileType::DIRECTORY, 0, 0, 0, opt::nullopt};
+  }
 }
+
+template <typename T>
+bool file_exists(T fs_io, const Path &p) {
+  try {
+    get_attrs(fs_io, p);
+    return true;
+  }
+  catch (const std::system_error &err) {
+    if (err.code() != std::errc::no_such_file_or_directory) throw;
+    return false;
+  }
+}
+
+template <typename T>
+bool is_directory(T fs_io, const Path &p) {
+  return get_attrs(fs_io, p).type == FsFileType::DIRECTORY;
+}
+
 
 bool path_is_parent(Path potential_parent, Path potential_child);
 
