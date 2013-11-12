@@ -161,20 +161,10 @@ class File : public _UniqueWrapper<FileIO> {
     return read(IORequest(offset, data, dataLen));
   }
 
-  std::string read(fs_off_t offset, size_t amt) {
-    auto data = std::unique_ptr<byte[]>(new byte[amt]);
-    auto amt_read = read(IORequest(offset, data.get(), amt));
-    return std::string((char *)data.get(), amt_read);
-  }
-
   void write(const IORequest &req) { return _impl->write(req); }
 
   void write(fs_off_t offset, const byte *data, size_t dataLen) {
     return write(IORequest(offset, (byte *)data, dataLen));
-  }
-
-  void write(fs_off_t offset, const std::string &data) {
-    return write(IORequest(offset, (byte *)data.data(), data.size()));
   }
 
   void truncate(fs_off_t size) { return _impl->truncate(size); }
