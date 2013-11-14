@@ -56,7 +56,7 @@ class PathPoly {
   virtual ~PathPoly() = 0;
 
   virtual operator const std::string &() const = 0;
-  virtual const char *c_str() const = 0;
+  virtual const char *c_str() const { return ((const std::string &)*this).c_str(); }
   virtual std::unique_ptr<PathPoly> join(std::string path) const = 0;
   virtual std::string basename() const = 0;
   virtual std::unique_ptr<PathPoly> dirname() const = 0;
