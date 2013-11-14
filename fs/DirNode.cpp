@@ -293,65 +293,9 @@ Path DirNode::cipherPath(const Path &plaintextPath, uint64_t *iv) const {
 
   auto pp = pathToRelativeNameIOPath(plaintextPath);
 
-  // for file systems with non bytewise equality for file names
-  // (i.e. case-insensitive file systems)
-  // we have to use the cipher path given by the filename stored,
-  // not by the filename passed in
-
-  // to solve this we iterate over each parent directory and search
-  // for the stored plaintext filename path component
-  // then we use that path to encrypt
-
   auto parent_encrypted_path = rootDir;
-  unsigned i = 0;
-  for (const auto & p : pp) {
-    // find the canonical string of this path component "p"
-    // in the parent directory
-    opt::optional<Directory> maybe_dir;
-    try {
-      maybe_dir = fs_io->opendir(parent_encrypted_path);
-    }
-    catch (const std::system_error &err) {
-      if (err.code() != std::errc::no_such_file_or_directory) throw;
-    }
-
-    auto similar_files = std::vector<std::pair<uint64_t, std::string>>();
-    opt::optional<FsDirEnt> ent;
-    if (maybe_dir) {
-      while ((ent = maybe_dir->readdir())) {
-        try {
-          auto localIV = *iv;
-          auto plain_name =
-            naming->decodePath({ent->name}, &localIV).front();
-          if (fs_io->filename_equal(plain_name, p)) {
-            similar_files.push_back({localIV, std::move(ent->name)});
-            break;
-          }
-        }
-        catch (const Error &ex) {
-          // problem decoding, just continue
-        }
-      }
-    }
-
-    // didn't find a canonical file name for the current
-    // path component, treat this component as the canonical version
-    if (similar_files.empty()) {
-      auto encoded_p = naming->encodePath({p}, iv).front();
-      parent_encrypted_path = parent_encrypted_path.join(std::move(encoded_p));
-    }
-    else {
-      // NB: we do this so we always select the same file
-      //     for the canonical version since there is no guarantee of the
-      //     ordering of readdir()
-      std::sort(similar_files.begin(), similar_files.end());
-      auto canon_name = std::move(similar_files.front());
-      *iv = canon_name.first;
-      parent_encrypted_path =
-        parent_encrypted_path.join(std::move(canon_name.second));
-    }
-
-    ++i;
+  for (const auto & p : naming->encodePath(pp, iv)) {
+    parent_encrypted_path = parent_encrypted_path.join(p);
   }
 
   return parent_encrypted_path;
@@ -877,15 +821,8 @@ int DirNode::posix_symlink(const char *path, const char *data) {
       std::move(toCName), PosixSymlinkData(std::move(fromCName)));
 }
 
-const std::string &DirNode::path_sep() const { return fs_io->path_sep(); }
-
 Path DirNode::pathFromString(const std::string &string) const {
   return fs_io->pathFromString(string);
-}
-
-bool DirNode::filename_equal(const std::string &a,
-                             const std::string &b) const {
-  return fs_io->filename_equal(a, b);
 }
 
 int DirNode::posix_create(shared_ptr<FileNode> *fnode, const char *plainName,

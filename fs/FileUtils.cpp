@@ -204,17 +204,6 @@ ConfigType readConfig_load(const shared_ptr<FsIO> &fs_io, ConfigInfo *nm,
   }
 }
 
-static bool endswith(const std::string &haystack, const std::string &needle) {
-  if (haystack.size() < needle.size()) return false;
-  return haystack.substr(haystack.size() - needle.size(), needle.size()) ==
-         needle;
-}
-
-std::string ensure_endswith(std::string path, std::string term) {
-  if (!endswith(path, term)) path += term;
-  return std::move(path);
-}
-
 EncfsConfig read_config(std::shared_ptr<FsIO> fs_io,
                         const Path &encrypted_folder_path) {
   EncfsConfig config;
@@ -225,6 +214,7 @@ EncfsConfig read_config(std::shared_ptr<FsIO> fs_io,
 
 ConfigType readConfig(const shared_ptr<FsIO> &fs_io, const string &rootDir,
                       EncfsConfig &config, bool throw_exception) {
+  auto pathRootDir = fs_io->pathFromString(rootDir);
   ConfigInfo *nm = ConfigFileMapping;
   while (nm->fileName) {
     // allow environment variable to override default config path
@@ -235,8 +225,8 @@ ConfigType readConfig(const shared_ptr<FsIO> &fs_io, const string &rootDir,
         return readConfig_load(fs_io, nm, envFile, config, throw_exception);
     }
     // the standard place to look is in the root directory
-    auto path = ensure_endswith(rootDir, fs_io->path_sep()) + nm->fileName;
-    if (fileExists(fs_io, path.c_str())) {
+    auto path = pathRootDir.join(nm->fileName);
+    if (file_exists(fs_io, path)) {
       return readConfig_load(fs_io, nm, path.c_str(), config, throw_exception);
     }
 
@@ -483,7 +473,8 @@ bool saveConfig(const shared_ptr<FsIO> &fs_io, const string &rootDir,
   ConfigInfo *nm = ConfigFileMapping;
 
   // TODO(vgough): remove old config after saving a new one?
-  string path = ensure_endswith(rootDir, fs_io->path_sep()) + ConfigFileName;
+  auto pathRootDir = fs_io->pathFromString(rootDir);
+  string path = pathRootDir.join(ConfigFileName);
   if (nm->environmentOverride != NULL) {
     // use environment file if specified..
     const char *envFile = getenv(nm->environmentOverride);

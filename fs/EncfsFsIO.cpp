@@ -158,17 +158,8 @@ EncfsFsIO::~EncfsFsIO() {
 
 std::shared_ptr<DirNode> EncfsFsIO::getRoot() const { return ctx->getRoot(); }
 
-const std::string &EncfsFsIO::path_sep() const {
-  return ctx->getRoot()->path_sep();
-}
-
 Path EncfsFsIO::pathFromString(const std::string &path) const {
   return ctx->getRoot()->pathFromString(path);
-}
-
-bool EncfsFsIO::filename_equal(const std::string &a,
-                               const std::string &b) const {
-  return ctx->getRoot()->filename_equal(a ,b);
 }
 
 Directory EncfsFsIO::opendir(const Path &path) const {

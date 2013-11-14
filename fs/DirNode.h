@@ -121,10 +121,7 @@ class DirNode {
 
   // FS wrappers
 
-  const std::string &path_sep() const;
   Path pathFromString(const std::string &string) const;
-  bool filename_equal(const std::string &a,
-                      const std::string &b) const;
 
   DirTraverse openDir(const char *plainDirName) const;
   int get_attrs(FsFileAttrs *attrs, const char *plaintextName) const;

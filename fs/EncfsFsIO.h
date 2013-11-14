@@ -47,10 +47,7 @@ class EncfsFsIO : public FsIO {
               opt::optional<EncfsConfig> oCfg);
 
   // generic fs methods
-  virtual const std::string &path_sep() const override;
   virtual Path pathFromString(const std::string &path) const override;
-  virtual bool filename_equal(const std::string &a,
-                              const std::string &b) const override;
 
   virtual Directory opendir(const Path &path) const override;
   virtual File openfile(const Path &path, bool open_for_write = false,

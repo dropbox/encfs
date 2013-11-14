@@ -83,26 +83,11 @@ static void current_fs_error(int thiserror = -1) {
   throw std::system_error(thiserror, errno_category());
 }
 
-static bool _posix_filename_equal(const std::string &a,
-                                  const std::string &b) {
-  // posix by default does bytewise filename equality comparison
-  // there are some exceptions, usually depending on the file system mounted
-  // at this path.
-  // specific systems can subclass PosixFsIO to get the custom behavior they
-  // want
-  return a == b;
-}
-
 extern const char POSIX_PATH_SEP[] = "/";
 class PosixPath final : public StringPath<PosixPath, POSIX_PATH_SEP> {
  protected:
   virtual std::unique_ptr<PathPoly> _from_string(std::string str) const {
     return std::unique_ptr<PosixPath>(new PosixPath(std::move(str)));
-  }
-
-  virtual bool _filename_equal(const std::string & a,
-                               const std::string & b) const {
-    return _posix_filename_equal(a, b);
   }
 
   virtual bool
@@ -198,11 +183,6 @@ static bool endswith(const std::string &haystack, const std::string &needle) {
                            needle);
 }
 
-const std::string &PosixFsIO::path_sep() const {
-  static const std::string path_sep = POSIX_PATH_SEP;
-  return path_sep;
-}
-
 Path PosixFsIO::pathFromString(const std::string &path) const {
   if (path.empty()) throw std::runtime_error("EMPTY STRING IS NOT ALLOWED");
 
@@ -218,11 +198,6 @@ Path PosixFsIO::pathFromString(const std::string &path) const {
   }
 
   return std::unique_ptr<PosixPath>(new PosixPath(std::move(newpath)));
-}
-
-bool PosixFsIO::filename_equal(const std::string &a,
-                               const std::string &b) const {
-  return _posix_filename_equal(a, b);
 }
 
 Directory PosixFsIO::opendir(const Path &path) const {
