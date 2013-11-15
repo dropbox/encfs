@@ -198,6 +198,13 @@ void EncfsFsIO::rmdir(const Path &path) {
   if (res < 0) throw create_errno_system_error(-res);
 }
 
+FsFileAttrs EncfsFsIO::get_attrs(const encfs::Path & path) const {
+  FsFileAttrs attrs;
+  const int res = getRoot()->get_attrs(&attrs, path.c_str());
+  if (res < 0) throw create_errno_system_error(-res);
+  return std::move(attrs);
+}
+
 void EncfsFsIO::set_times(const Path &path,
                           const opt::optional<fs_time_t> &atime,
                           const opt::optional<fs_time_t> &mtime) {

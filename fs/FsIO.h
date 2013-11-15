@@ -191,6 +191,7 @@ class FsIO {
   virtual void unlink(const Path &path) = 0;
   virtual void rmdir(const Path &path) = 0;
 
+  virtual FsFileAttrs get_attrs(const Path &path) const = 0;
   virtual void set_times(const Path &path,
                          const opt::optional<fs_time_t> &atime,
                          const opt::optional<fs_time_t> &mtime) = 0;
@@ -242,8 +243,6 @@ class StringPathDynamicSep : public PathPoly {
  public:
   virtual operator const std::string &() const override { return _path; }
 
-  virtual const char *c_str() const override { return _path.c_str(); }
-
   virtual std::unique_ptr<PathPoly> join(std::string name) const override {
     if (!_filename_valid(name)) throw std::runtime_error("bad file name");
     return _from_string(_path + _sep + name);
@@ -277,16 +276,7 @@ class StringPath : public StringPathDynamicSep<T> {
 
 template <typename T>
 FsFileAttrs get_attrs(T fs_io, const Path &p) {
-  try {
-    const bool create = false;
-    const bool open_for_write = false;
-    return fs_io->openfile(p, open_for_write, create).get_attrs();
-  }
-  catch (const std::system_error &err) {
-    // TODO: support FsIO::get_attrs for directories again
-    if (err.code() != std::errc::is_a_directory) throw;
-    return {FsFileType::DIRECTORY, 0, 0, 0, opt::nullopt};
-  }
+  return fs_io->get_attrs(p);
 }
 
 template <typename T>

@@ -232,6 +232,10 @@ void PosixFsIO::rmdir(const Path &path) {
   if (res < 0) current_fs_error();
 }
 
+FsFileAttrs PosixFsIO::get_attrs(const Path &path) const {
+  return posix_stat(path, /* follow =*/ true);
+}
+
 void PosixFsIO::set_times(const Path &path,
                           const opt::optional<fs_time_t> &atime,
                           const opt::optional<fs_time_t> &mtime) {

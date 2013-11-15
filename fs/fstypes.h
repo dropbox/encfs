@@ -33,6 +33,7 @@ namespace encfs {
 typedef intmax_t fs_time_t;
 typedef intmax_t fs_off_t;
 typedef uintmax_t fs_file_id_t;
+typedef uintmax_t fs_volume_id_t;
 typedef uintmax_t fs_posix_uid_t;
 typedef uintmax_t fs_posix_gid_t;
 typedef uintmax_t fs_posix_mode_t;
@@ -58,6 +59,7 @@ struct FsFileAttrs {
   fs_time_t mtime;
   fs_off_t size;
   fs_file_id_t file_id;
+  fs_volume_id_t volume_id;
   opt::optional<FsPosixAttrs> posix;
 };
 

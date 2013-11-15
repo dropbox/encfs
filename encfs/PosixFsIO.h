@@ -58,6 +58,7 @@ class PosixFsIO : public FsIO {
   virtual void unlink(const Path &path) override;
   virtual void rmdir(const Path &path) override;
 
+  virtual FsFileAttrs get_attrs(const Path &path) const override;
   virtual void set_times(const Path &path,
                          const opt::optional<fs_time_t> &atime,
                          const opt::optional<fs_time_t> &mtime) override;

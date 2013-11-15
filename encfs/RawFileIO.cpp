@@ -205,6 +205,8 @@ FsFileAttrs stat_to_fs_file_attrs(const struct stat &st) {
                                                          : FsFileType::UNKNOWN);
   attrs.mtime = {st.st_mtime};
   attrs.size = {st.st_size};
+  attrs.file_id = {st.st_ino};
+  attrs.volume_id = {st.st_dev};
   attrs.posix = FsPosixAttrs(st.st_mode, st.st_uid, st.st_gid);
 
   return attrs;
