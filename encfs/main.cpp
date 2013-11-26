@@ -16,11 +16,17 @@
  *
  */
 
-#include "encfs/EncFS_Args.h"
-#include "encfs/EncfsPasswordReader.h"
-#include "encfs/PosixFsIO.h"
-#include "encfs/RootPathPrependFs.h"
-#include "encfs/encfs.h"
+#include "base/config.h"
+
+#include "base/libc_support.h"
+#include "base/logging.h"
+#include "base/autosprintf.h"
+#include "base/ConfigReader.h"
+#include "base/Error.h"
+#include "base/Interface.h"
+#include "base/i18n.h"
+
+#include "cipher/CipherV1.h"
 
 #include "fs/EncfsFsIO.h"
 // TODO: get rid of the following import
@@ -28,17 +34,11 @@
 #include "fs/FsIO.h"
 #include "fs/PasswordReader.h"
 
-#include "cipher/CipherV1.h"
-
-#include "base/libc_support.h"
-#include "base/config.h"
-#include "base/autosprintf.h"
-#include "base/ConfigReader.h"
-#include "base/Error.h"
-#include "base/Interface.h"
-#include "base/i18n.h"
-
-#include <glog/logging.h>
+#include "encfs/EncFS_Args.h"
+#include "encfs/EncfsPasswordReader.h"
+#include "encfs/PosixFsIO.h"
+#include "encfs/RootPathPrependFs.h"
+#include "encfs/encfs.h"
 
 #include <getopt.h>
 
@@ -409,7 +409,7 @@ void *encfs_init(fuse_conn_info *conn) {
   // if an idle timeout is specified, then setup a thread to monitor the
   // filesystem.
   if (ctx->getArgs()->idleTimeout > 0) {
-    VLOG(1) << "starting idle monitoring thread";
+    LOG(INFO) << "starting idle monitoring thread";
     ctx->setRunning(true);
 
     try {
@@ -421,7 +421,7 @@ void *encfs_init(fuse_conn_info *conn) {
   }
 
   if (ctx->getArgs()->isDaemon && oldStderr >= 0) {
-    VLOG(1) << "Closing stderr";
+    LOG(INFO) << "Closing stderr";
     close(oldStderr);
     oldStderr = -1;
   }
@@ -434,11 +434,11 @@ void encfs_destroy(void *_ctx) {
   if (ctx->getArgs()->idleTimeout > 0) {
     ctx->setRunning(false);
 
-    VLOG(1) << "waking up monitoring thread";
+    LOG(INFO) << "waking up monitoring thread";
     ctx->wakeupCond.notify_one();
-    VLOG(1) << "joining with idle monitoring thread";
+    LOG(INFO) << "joining with idle monitoring thread";
     ctx->monitorThread->join();
-    VLOG(1) << "join done";
+    LOG(INFO) << "join done";
   }
 }
 
@@ -451,13 +451,6 @@ int main(int argc, char *argv[]) {
   cerr << "Stable releases are available from the Encfs website, or look\n"
           "for the 1.x branch in SVN for the stable 1.x series.";
   cerr << "\n\n";
-
-  // log to stderr by default..
-  FLAGS_logtostderr = 1;
-  FLAGS_minloglevel = 1;  // WARNING and above.
-
-  google::InitGoogleLogging(argv[0]);
-  google::InstallFailureSignalHandler();
 
 #ifdef LOCALEDIR
   setlocale(LC_ALL, "");
@@ -686,14 +679,14 @@ static void idleMonitor(EncFSFuseContext *ctx) {
         break;
       }
 
-      VLOG(1) << "num open files: " << openCount;
+      LOG(INFO) << "num open files: " << openCount;
     }
 
-    VLOG(1) << "idle cycle count: " << idleCycles << ", timeout after "
-            << timeoutCycles;
+    LOG(INFO) << "idle cycle count: " << idleCycles << ", timeout after "
+              << timeoutCycles;
 
     ctx->wakeupCond.wait_for(lock, std::chrono::seconds(ActivityCheckInterval));
   }
 
-  VLOG(1) << "Idle monitoring thread exiting";
+  LOG(INFO) << "Idle monitoring thread exiting";
 }

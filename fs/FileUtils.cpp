@@ -18,32 +18,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <cctype>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-
-#include <iostream>
-#include <memory>
-#include <sstream>
-
-#include <glog/logging.h>
-
-#include <google/protobuf/text_format.h>
-#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
-
-#include "fs/fsconfig.pb.h"
+#include "fs/FileUtils.h"
 
 #include "base/autosprintf.h"
 #include "base/config.h"
+#include "base/i18n.h"
+#include "base/logging.h"
 #include "base/ConfigReader.h"
 #include "base/Error.h"
-#include "base/i18n.h"
 #include "base/XmlReader.h"
 
 #include "cipher/CipherV1.h"
 #include "cipher/MemoryPool.h"
 
+#include "fs/fsconfig.pb.h"
 #include "fs/BlockNameIO.h"
 #include "fs/Context.h"
 #include "fs/DirNode.h"
@@ -52,7 +40,17 @@
 #include "fs/StreamNameIO.h"
 #include "fs/FsIO.h"
 
-#include "fs/FileUtils.h"
+#include <google/protobuf/text_format.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
+
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
+#include <iostream>
+#include <memory>
+#include <sstream>
 
 using gnu::autosprintf;
 using std::cout;
@@ -268,13 +266,13 @@ bool readV6Config(const shared_ptr<FsIO> & /*fs_io*/, const char *configFile,
 
   // version numbering was complicated by boost::archive
   if (version == 20 || version >= 20100713) {
-    VLOG(1) << "found new serialization format";
+    LOG(INFO) << "found new serialization format";
     cfg.set_revision(version);
   } else if (version == 26800) {
-    VLOG(1) << "found 20080816 version";
+    LOG(INFO) << "found 20080816 version";
     cfg.set_revision(20080816);
   } else if (version == 26797) {
-    VLOG(1) << "found 20080813";
+    LOG(INFO) << "found 20080813";
     cfg.set_revision(20080813);
   } else if (version < V5Latest) {
     LOG(ERROR) << "Invalid version " << version << " - please fix config file";
@@ -282,7 +280,7 @@ bool readV6Config(const shared_ptr<FsIO> & /*fs_io*/, const char *configFile,
     LOG(INFO) << "Boost <= 1.41 compatibility mode";
     cfg.set_revision(version);
   }
-  VLOG(1) << "subVersion = " << cfg.revision();
+  LOG(INFO) << "subVersion = " << cfg.revision();
 
   config->read("creator", cfg.mutable_creator());
   config->read("cipherAlg", cfg.mutable_cipher());
@@ -1404,7 +1402,7 @@ RootPtr initFS(const shared_ptr<EncFS_Context> &ctx,
 
   cipher->setKey(userKey);
 
-  VLOG(1) << "cipher encoded key size = " << cipher->encodedKeySize();
+  LOG(INFO) << "cipher encoded key size = " << cipher->encodedKeySize();
   // decode volume key..
   CipherKey volumeKey = cipher->readKey(
       (const unsigned char *)config.key().ciphertext().data(), opts->checkKey);

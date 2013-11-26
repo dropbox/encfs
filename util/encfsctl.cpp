@@ -15,8 +15,17 @@
  * more details.
  */
 
-#include "encfs/EncfsPasswordReader.h"
-#include "encfs/PosixFsIO.h"
+#include "base/config.h"
+
+#include "base/autosprintf.h"
+#include "base/i18n.h"
+#include "base/logging.h"
+#include "base/Error.h"
+
+#include "cipher/CipherV1.h"
+#include "cipher/BlockCipher.h"
+#include "cipher/MAC.h"
+#include "cipher/StreamCipher.h"
 
 // TODO: get rid of all the following includes
 // in preference of use EncfsFsIO.h only
@@ -25,19 +34,10 @@
 #include "fs/FileNode.h"
 #include "fs/DirNode.h"
 
-#include "cipher/CipherV1.h"
-#include "cipher/BlockCipher.h"
-#include "cipher/MAC.h"
-#include "cipher/StreamCipher.h"
-
-#include "base/autosprintf.h"
-#include "base/config.h"
-#include "base/Error.h"
-#include "base/i18n.h"
+#include "encfs/EncfsPasswordReader.h"
+#include "encfs/PosixFsIO.h"
 
 #include <getopt.h>
-
-#include <glog/logging.h>
 
 #include <iostream>
 #include <list>
@@ -765,16 +765,6 @@ static int chpasswdAutomaticly(int argc, char **argv) {
 int main(int argc, char **argv) {
   /* TODO: make this X-Platform */
   g_fs_io = std::make_shared<PosixFsIO>();
-
-  FLAGS_logtostderr = 1;
-  FLAGS_minloglevel = 1;
-
-#ifdef DECLARE_VARIABLE
-  google::ParseCommandLineFlags(&argc, &argv, true);
-#endif
-
-  google::InitGoogleLogging(argv[0]);
-  google::InstallFailureSignalHandler();
 
 #ifdef LOCALEDIR
   setlocale(LC_ALL, "");

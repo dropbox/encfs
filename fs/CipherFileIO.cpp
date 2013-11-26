@@ -18,18 +18,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define GLOG_NO_ABBREVIATED_SEVERITIES
-
 #include "fs/CipherFileIO.h"
 
-#include "fs/fsconfig.pb.h"
+#include "base/logging.h"
+#include "base/Error.h"
 
 #include "cipher/CipherV1.h"
 #include "cipher/MemoryPool.h"
 
-#include "base/Error.h"
-
-#include <glog/logging.h>
+#include "fs/fsconfig.pb.h"
 
 using std::shared_ptr;
 
@@ -59,8 +56,8 @@ CipherFileIO::CipherFileIO(const shared_ptr<FileIO> &_base,
   int blockBoundary =
       fsConfig->config->block_size() % fsConfig->cipher->cipherBlockSize();
   if (blockBoundary != 0) {
-    LOG_FIRST_N(ERROR, 1)
-        << "CipherFileIO: blocks should be multiple of cipher block size";
+    LOG(ERROR)
+      << "CipherFileIO: blocks should be multiple of cipher block size";
   }
 }
 
@@ -69,7 +66,7 @@ CipherFileIO::~CipherFileIO() {}
 Interface CipherFileIO::interface() const { return CipherFileIO_iface; }
 
 bool CipherFileIO::setIV(uint64_t iv) {
-  VLOG(1) << "in setIV, current IV = " << externalIV << ", new IV = " << iv
+  LOG(INFO) << "in setIV, current IV = " << externalIV << ", new IV = " << iv
           << ", fileIV = " << fileIV;
   if (externalIV == 0) {
     // we're just being told about which IV to use.  since we haven't
@@ -83,7 +80,7 @@ bool CipherFileIO::setIV(uint64_t iv) {
 
     // ensure the file is open for read/write..
     if (!isWritable()) {
-      VLOG(1) << "writeHeader failed to re-open for write";
+      LOG(INFO) << "writeHeader failed to re-open for write";
       return false;
     }
 
@@ -148,7 +145,7 @@ void CipherFileIO::initHeader() {
   // create one.
   auto rawSize = base->get_attrs().size;
   if (rawSize >= headerLen) {
-    VLOG(1) << "reading existing header, rawSize = " << rawSize;
+    LOG(INFO) << "reading existing header, rawSize = " << rawSize;
 
     IORequest req;
     req.offset = 0;
@@ -166,7 +163,7 @@ void CipherFileIO::initHeader() {
       rAssert(fileIV != 0);  // 0 is never used..
     }
   } else if (perFileIV) {
-    VLOG(1) << "creating new file IV header";
+    LOG(INFO) << "creating new file IV header";
 
     do {
       if (!cipher->pseudoRandomize(mb.data, 8))
@@ -190,17 +187,17 @@ void CipherFileIO::initHeader() {
     assert(base->isWritable());
     base->write(req);
   }
-  VLOG(1) << "initHeader finished, fileIV = " << fileIV;
+  LOG(INFO) << "initHeader finished, fileIV = " << fileIV;
 }
 
 bool CipherFileIO::writeHeader() {
   if (!base->isWritable()) {
-    VLOG(1) << "writeHeader failed to re-open for write";
+    LOG(INFO) << "writeHeader failed to re-open for write";
     return false;
   }
 
   LOG_IF(ERROR, fileIV == 0) << "Internal error: fileIV == 0 in writeHeader!!!";
-  VLOG(1) << "writing fileIV " << fileIV;
+  LOG(INFO) << "writing fileIV " << fileIV;
 
   MemBlock mb;
   mb.allocate(headerLen);
@@ -261,7 +258,7 @@ ssize_t CipherFileIO::readOneBlock(const IORequest &req) const {
     }
 
     if (!ok) {
-      VLOG(1) << "decodeBlock failed for block " << blockNum << ", size "
+      LOG(INFO) << "decodeBlock failed for block " << blockNum << ", size "
               << readSize;
       readSize = -1;
     } else if (tmpReq.data != req.data) {
@@ -269,7 +266,7 @@ ssize_t CipherFileIO::readOneBlock(const IORequest &req) const {
       memcpy(req.data, tmpReq.data, readSize);
     }
   } else
-    VLOG(1) << "readSize zero for offset " << req.offset;
+    LOG(INFO) << "readSize zero for offset " << req.offset;
 
   return readSize;
 }
@@ -314,7 +311,7 @@ bool CipherFileIO::writeOneBlock(const IORequest &req) {
       ok = false;
     }
   } else {
-    VLOG(1) << "encodeBlock failed for block " << blockNum << ", size "
+    LOG(INFO) << "encodeBlock failed for block " << blockNum << ", size "
             << req.dataLen;
   }
 
@@ -360,7 +357,7 @@ void CipherFileIO::truncate(fs_off_t size) {
 
   rAssert(size >= 0);
   if (!isWritable()) {
-    VLOG(1) << "writeHeader failed to re-open for write";
+    LOG(INFO) << "writeHeader failed to re-open for write";
     throw std::runtime_error("file not opened for writing");
   }
 

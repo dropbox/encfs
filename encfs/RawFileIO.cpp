@@ -22,20 +22,19 @@
 #define _XOPEN_SOURCE 500  // pick up pread , pwrite
 #endif
 
-#include <sys/types.h>
-#include <sys/stat.h>
+#include "encfs/RawFileIO.h"
 
-#include <fcntl.h>
-#include <unistd.h>
+#include "base/logging.h"
+#include "base/Error.h"
 
 #include <cerrno>
 #include <cstring>
 
-#include <glog/logging.h>
+#include <fcntl.h>
+#include <unistd.h>
 
-#include "base/Error.h"
-
-#include "encfs/RawFileIO.h"
+#include <sys/types.h>
+#include <sys/stat.h>
 
 namespace encfs {
 
@@ -103,7 +102,7 @@ FsFileAttrs RawFileIO::get_attrs() const {
 size_t RawFileIO::read(const IORequest &req) const {
   rAssert(fd >= 0);
 
-  VLOG(2) << "Read " << req.dataLen << " bytes from offset " << req.offset;
+  LOG(INFO) << "Read " << req.dataLen << " bytes from offset " << req.offset;
   ssize_t readSize = pread(fd, req.data, req.dataLen, req.offset);
 
   if (readSize < 0) {
@@ -120,7 +119,7 @@ void RawFileIO::write(const IORequest &req) {
   rAssert(fd >= 0);
   rAssert(true == canWrite);
 
-  VLOG(2) << "Write " << req.dataLen << " bytes to offset " << req.offset;
+  LOG(INFO) << "Write " << req.dataLen << " bytes to offset " << req.offset;
 
   int retrys = 10;
   void *buf = req.data;

@@ -37,7 +37,6 @@ target_link_libraries (encfs
     encfs-fs
     encfs-cipher
     encfs-base
-    ${GLOG_LIBRARIES}
     ${FUSE_LIBRARIES}
 )
 

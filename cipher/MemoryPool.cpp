@@ -18,23 +18,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "base/config.h"
+
 #include "cipher/MemoryPool.h"
 
-#include <cstdlib>
-#include <cstring>
-
-#include "base/config.h"
+#include "base/logging.h"
 #include "base/Error.h"
-
-#include <pthread.h>
-
-// for our custom SecureMem implementation
-// (only implemented for posix machines currently)
-#ifndef WITH_BOTAN
-#include <sys/mman.h>
-#endif
-
-#include <glog/logging.h>
 
 #ifdef HAVE_VALGRIND_MEMCHECK_H
 #include <valgrind/memcheck.h>
@@ -42,9 +31,6 @@
 #define VALGRIND_MAKE_MEM_NOACCESS(a, b)
 #define VALGRIND_MAKE_MEM_UNDEFINED(a, b)
 #endif
-
-#include <map>
-#include <list>
 
 #ifdef WITH_OPENSSL
 #include <openssl/crypto.h>
@@ -54,6 +40,18 @@
 #ifdef WITH_BOTAN
 #include <botan/botan.h>
 #include <botan/version.h>
+#endif
+
+#include <map>
+#include <list>
+
+#include <cstdlib>
+#include <cstring>
+
+// for our custom SecureMem implementation
+// (only implemented for posix machines currently)
+#ifndef WITH_BOTAN
+#include <sys/mman.h>
 #endif
 
 namespace encfs {

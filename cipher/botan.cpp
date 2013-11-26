@@ -19,12 +19,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define GLOG_NO_ABBREVIATED_SEVERITIES
-
 #include "base/config.h"
 
 #include "cipher/botan.h"
 
+#include "base/logging.h"
 #include "base/Error.h"
 #include "base/Mutex.h"
 #include "base/Range.h"
@@ -38,8 +37,6 @@
 #ifdef HAVE_VALGRIND_MEMCHECK_H
 #include <valgrind/memcheck.h>
 #endif
-
-#include <glog/logging.h>
 
 #include <botan/botan.h>
 

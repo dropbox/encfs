@@ -18,9 +18,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define GLOG_NO_ABBREVIATED_SEVERITIES
-
 #include "fs/FileNode.h"
+
+#include "base/logging.h"
+#include "base/Error.h"
+#include "base/Mutex.h"
+
+#include "cipher/MemoryPool.h"
 
 #include "fs/Context.h"
 #include "fs/CipherFileIO.h"
@@ -30,12 +34,6 @@
 #include "fs/FsIO.h"
 #include "fs/MACFileIO.h"
 #include "fs/fsconfig.pb.h"
-
-#include "base/Error.h"
-#include "base/Mutex.h"
-#include "cipher/MemoryPool.h"
-
-#include <glog/logging.h>
 
 #include <memory>
 
@@ -116,7 +114,7 @@ bool FileNode::setName(opt::optional<Path> plaintextName_,
   Lock _lock(mutex);
   auto oldPName = _pname;
 
-  VLOG(1) << "calling setIV on " << _cname;
+  LOG(INFO) << "calling setIV on " << _cname;
   if (setIVFirst) {
     if (!_setIV(iv)) return false;
 
@@ -213,7 +211,7 @@ ssize_t FileNode::read(fs_off_t offset, byte *data, size_t size) const {
 }
 
 bool FileNode::write(fs_off_t offset, const byte *data, size_t size) {
-  VLOG(1) << "FileNode::write offset " << offset << ", data size " << size;
+  LOG(INFO) << "FileNode::write offset " << offset << ", data size " << size;
 
   // since the cipher io's modify data in place,
   // we make a copy of our buf

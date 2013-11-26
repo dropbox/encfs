@@ -18,26 +18,27 @@
 
 #include "base/config.h"
 
-#include <cstdlib>
+#include "base/logging.h"
+#include "base/Error.h"
+#include "base/Interface.h"
+
+#include "cipher/CipherV1.h"
+#include "cipher/MemoryPool.h"
+
+#include "fs/BlockNameIO.h"
+#include "fs/DirNode.h"
+#include "fs/FileUtils.h"
+#include "fs/NullNameIO.h"
+#include "fs/StreamNameIO.h"
+
+#include <google/protobuf/text_format.h>
 
 #include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <unordered_set>
 
-#include <glog/logging.h>
-
-#include <google/protobuf/text_format.h>
-
-#include "base/Error.h"
-#include "base/Interface.h"
-#include "cipher/CipherV1.h"
-#include "cipher/MemoryPool.h"
-#include "fs/BlockNameIO.h"
-#include "fs/DirNode.h"
-#include "fs/FileUtils.h"
-#include "fs/NullNameIO.h"
-#include "fs/StreamNameIO.h"
+#include <cstdlib>
 
 using std::cerr;
 using std::shared_ptr;
@@ -376,14 +377,8 @@ bool runTests(const shared_ptr<CipherV1> &cipher, bool verbose) {
 
 }  // namespace encfs
 
-int main(int /*argc*/, char *argv[]) {
+int main(int /*argc*/, char */*argv*/[]) {
   using namespace encfs;
-
-  FLAGS_logtostderr = 1;
-  FLAGS_minloglevel = 1;
-
-  google::InitGoogleLogging(argv[0]);
-  google::InstallFailureSignalHandler();
 
   bool isThreaded = false;
   CipherV1::init(isThreaded);

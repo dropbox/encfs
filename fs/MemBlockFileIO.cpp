@@ -20,9 +20,10 @@
  */
 
 #include "fs/MemBlockFileIO.h"
-#include "fs/MemFileIO.h"
 
-#include <glog/logging.h>
+#include "base/logging.h"
+
+#include "fs/MemFileIO.h"
 
 namespace encfs {
 

@@ -45,7 +45,6 @@ if (GTEST_FOUND)
         ${GTEST_BOTH_LIBRARIES}
         encfs-cipher
         encfs-base
-        ${GLOG_LIBRARIES}
     )
 
     add_test (CipherTests cipher-tests)

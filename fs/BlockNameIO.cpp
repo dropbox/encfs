@@ -18,17 +18,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define GLOG_NO_ABBREVIATED_SEVERITIES
-
 #include "fs/BlockNameIO.h"
 
 #include "cipher/CipherV1.h"
 
 #include "base/base64.h"
-#include "base/Error.h"
+#include "base/logging.h"
 #include "base/i18n.h"
-
-#include <glog/logging.h>
+#include "base/Error.h"
 
 #include <vector>
 
@@ -203,7 +200,7 @@ string BlockNameIO::decodeName(const string &encodedName, uint64_t *iv) const {
 
   // might happen if there is an error decoding..
   if (padding > _bs || finalSize < 0) {
-    VLOG(1) << "padding, _bx, finalSize = " << padding << ", " << _bs << ", "
+    LOG(INFO) << "padding, _bx, finalSize = " << padding << ", " << _bs << ", "
             << finalSize;
     throw Error("invalid padding size");
   }

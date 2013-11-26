@@ -21,9 +21,8 @@
 #include "base/XmlReader.h"
 
 #include "base/base64.h"
+#include "base/logging.h"
 #include "base/Interface.h"
-
-#include <glog/logging.h>
 
 #include <tinyxml.h>
 
@@ -42,7 +41,7 @@ XmlValue::~XmlValue() {}
 XmlValuePtr XmlValue::operator[](const char *path) const { return find(path); }
 
 XmlValuePtr XmlValue::find(const char *path) const {
-  LOG_FIRST_N(ERROR, 1) << "in XmlValue::find( " << path << ")";
+  LOG(ERROR) << "in XmlValue::find( " << path << ")";
   return XmlValuePtr();
 }
 

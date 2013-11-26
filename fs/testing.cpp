@@ -21,11 +21,7 @@
 
 #include "fs/testing.h"
 
-#include <list>
-#include <string>
-
-#include <glog/logging.h>
-#include <gtest/gtest.h>
+#include "base/logging.h"
 
 #include "cipher/CipherV1.h"
 #include "cipher/MemoryPool.h"
@@ -35,6 +31,11 @@
 #include "fs/FileUtils.h"
 #include "fs/MACFileIO.h"
 #include "fs/MemFileIO.h"
+
+#include <gtest/gtest.h>
+
+#include <list>
+#include <string>
 
 using std::list;
 using std::shared_ptr;

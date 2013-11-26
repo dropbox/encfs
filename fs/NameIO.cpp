@@ -19,20 +19,19 @@
  */
 
 #include "base/config.h"
+#include "base/logging.h"
 #include "base/Error.h"
-#include "fs/NameIO.h"
-
-#include <glog/logging.h>
-
-#include <algorithm>
-#include <cstring>
-#include <map>
 
 // for static build.  Need to reference the modules which are registered at
 // run-time, to ensure that the linker doesn't optimize them away.
 #include "fs/BlockNameIO.h"
 #include "fs/StreamNameIO.h"
+#include "fs/NameIO.h"
 #include "fs/NullNameIO.h"
+
+#include <algorithm>
+#include <cstring>
+#include <map>
 
 using std::list;
 using std::make_pair;

@@ -18,19 +18,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <cstring>
+#include "fs/MACFileIO.h"
 
-#include <memory>
-
-#include <glog/logging.h>
-
-#include "base/Error.h"
 #include "base/i18n.h"
+#include "base/logging.h"
+#include "base/Error.h"
+
 #include "cipher/MemoryPool.h"
+
 #include "fs/FileUtils.h"
 #include "fs/fsconfig.pb.h"
 
-#include "fs/MACFileIO.h"
+#include <memory>
+
+#include <cstring>
 
 using std::shared_ptr;
 
@@ -65,7 +66,7 @@ MACFileIO::MACFileIO(const shared_ptr<FileIO> &_base, const FSConfigPtr &cfg)
       warnOnly(cfg->opts->forceDecode) {
   rAssert(macBytes >= 0 && macBytes <= 8);
   rAssert(randBytes >= 0);
-  VLOG(1) << "fs block size = " << cfg->config->block_size()
+  LOG(INFO) << "fs block size = " << cfg->config->block_size()
           << ", macBytes = " << cfg->config->block_mac_bytes()
           << ", randBytes = " << cfg->config->block_mac_rand_bytes();
 }
@@ -185,7 +186,7 @@ ssize_t MACFileIO::readOneBlock(const IORequest &req) const {
     readSize -= headerSize;
     memcpy(req.data, tmp.data + headerSize, readSize);
   } else {
-    VLOG(1) << "readSize " << readSize << " at offset " << req.offset;
+    LOG(INFO) << "readSize " << readSize << " at offset " << req.offset;
     if (readSize > 0) readSize = 0;
   }
 

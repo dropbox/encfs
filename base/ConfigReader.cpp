@@ -20,9 +20,10 @@
 
 #include "base/ConfigReader.h"
 
-#include <glog/logging.h>
+#include "base/logging.h"
 
 #include <fstream>
+#include <sstream>
 
 #include <cstring>
 

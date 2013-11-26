@@ -19,19 +19,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "base/config.h"
+
 #include "cipher/CommonCrypto.h"
 
-#include <glog/logging.h>
+#include "base/logging.h"
+
+#include "cipher/BlockCipher.h"
+#include "cipher/MAC.h"
+#include "cipher/PBKDF.h"
 
 #include <CommonCrypto/CommonCryptor.h>
 #include <CommonCrypto/CommonDigest.h>
 #include <CommonCrypto/CommonHMAC.h>
 #include <CommonCrypto/CommonKeyDerivation.h>
-
-#include "base/config.h"
-#include "cipher/BlockCipher.h"
-#include "cipher/MAC.h"
-#include "cipher/PBKDF.h"
 
 #ifdef HAVE_SEC_RANDOM_H
 #include <Security/SecRandom.h>
@@ -54,7 +55,7 @@ class PbkdfPkcs5Hmac : public PBKDF {
                                    saltLength, prf_, numIterations,
                                    outKey->data(), outKey->size());
     if (ret != 0) {
-      PLOG(ERROR) << "CCKeyDerivationPBKDF failed";
+      LOG(ERROR) << "CCKeyDerivationPBKDF failed";
       return false;
     }
     return true;
@@ -65,7 +66,7 @@ class PbkdfPkcs5Hmac : public PBKDF {
     if (length == 0) return key;
 #ifdef HAVE_SEC_RANDOM_H
     if (SecRandomCopyBytes(kSecRandomDefault, key.size(), key.data()) < 0) {
-      PLOG(ERROR) << "random key generation failure for length " << length;
+      LOG(ERROR) << "random key generation failure for length " << length;
       key.reset();
     }
 #else
@@ -78,7 +79,7 @@ class PbkdfPkcs5Hmac : public PBKDF {
     if (length == 0) return true;
 #ifdef HAVE_SEC_RANDOM_H
     if (SecRandomCopyBytes(kSecRandomDefault, length, out) < 0) {
-      PLOG(ERROR) << "random key generation failure for length " << length;
+      LOG(ERROR) << "random key generation failure for length " << length;
       return false;
     }
 #else

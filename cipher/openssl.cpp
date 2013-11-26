@@ -18,16 +18,21 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "cipher/openssl.h"
 #include "base/config.h"
 
-#include <cstring>
-#include <ctime>
-#include <pthread.h>
-#include <sys/mman.h>
-#include <sys/time.h>
+#include "cipher/openssl.h"
 
-#include <glog/logging.h>
+#include "base/i18n.h"
+#include "base/logging.h"
+#include "base/Error.h"
+#include "base/Mutex.h"
+#include "base/Range.h"
+
+#include "cipher/BlockCipher.h"
+#include "cipher/MAC.h"
+#include "cipher/MemoryPool.h"
+#include "cipher/PBKDF.h"
+#include "cipher/StreamCipher.h"
 
 #ifdef HAVE_VALGRIND_MEMCHECK_H
 #include <valgrind/memcheck.h>
@@ -46,16 +51,13 @@
 #include <openssl/rand.h>
 #include <openssl/sha.h>
 
-#include "base/Error.h"
-#include "base/i18n.h"
-#include "base/Mutex.h"
-#include "base/Range.h"
+#include <cstring>
+#include <ctime>
 
-#include "cipher/BlockCipher.h"
-#include "cipher/MAC.h"
-#include "cipher/MemoryPool.h"
-#include "cipher/PBKDF.h"
-#include "cipher/StreamCipher.h"
+#include <pthread.h>
+
+#include <sys/mman.h>
+#include <sys/time.h>
 
 namespace encfs {
 
@@ -81,7 +83,7 @@ class OpenSSLCipher : public BlockCipher {
   }
 
   bool rekey(const EVP_CIPHER *cipher, const CipherKey &key) {
-    VLOG(1) << "setting key length " << key.size();
+    LOG(INFO) << "setting key length " << key.size();
     EVP_EncryptInit_ex(&enc, cipher, NULL, NULL, NULL);
     EVP_CIPHER_CTX_set_key_length(&enc, key.size());
     EVP_CIPHER_CTX_set_padding(&enc, 0);
@@ -483,7 +485,7 @@ void pthreads_locking_callback(int mode, int n, const char *caller_file,
   (void)caller_line;
 
   if (!crypto_locks) {
-    VLOG(1) << "Allocating " << CRYPTO_num_locks() << " locks for OpenSSL";
+    LOG(INFO) << "Allocating " << CRYPTO_num_locks() << " locks for OpenSSL";
     crypto_locks = new pthread_mutex_t[CRYPTO_num_locks()];
     for (int i = 0; i < CRYPTO_num_locks(); ++i)
       pthread_mutex_init(crypto_locks + i, 0);

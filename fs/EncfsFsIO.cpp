@@ -20,18 +20,18 @@
 
 #include "base/config.h"
 
-#include <cstring>
+#include "fs/EncfsFsIO.h"
 
-#include <memory>
-#include <string>
-
-#include <glog/logging.h>
+#include "base/logging.h"
 
 #include "fs/Context.h"
 #include "fs/DirNode.h"
 #include "fs/FileUtils.h"
 
-#include "fs/EncfsFsIO.h"
+#include <memory>
+#include <string>
+
+#include <cstring>
 
 namespace encfs {
 

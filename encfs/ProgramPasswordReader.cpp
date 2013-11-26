@@ -24,8 +24,7 @@
 #include "encfs/ProgramPasswordReader.h"
 
 #include "base/i18n.h"
-
-#include <glog/logging.h>
+#include "base/logging.h"
 
 #include <string>
 
@@ -82,7 +81,7 @@ SecureMem *ProgramPasswordReader::readPassword(size_t /*maxLen*/,
     perror(_("Internal error: socketpair() failed"));
     return NULL;
   }
-  VLOG(1) << "getUserKey: fds = " << fds[0] << ", " << fds[1];
+  LOG(INFO) << "getUserKey: fds = " << fds[0] << ", " << fds[1];
 
   pid = fork();
   if (pid == -1) {

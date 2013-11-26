@@ -34,7 +34,6 @@ target_link_libraries (checkops
     encfs-fs
     encfs-cipher
     encfs-base
-    ${GLOG_LIBRARIES}
 )
 
 # Unit tests are optional, depends on libgtest (Google's C++ test framework).
@@ -58,7 +57,6 @@ if (GTEST_FOUND)
         encfs-fs
         encfs-cipher
         encfs-base
-        ${GLOG_LIBRARIES}
     )
 
     add_test (FSTests fs-tests)

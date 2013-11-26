@@ -22,13 +22,15 @@
 
 #include "fs/BlockFileIO.h"
 
-#include "base/Error.h"
 #include "base/i18n.h"
+#include "base/logging.h"
+#include "base/Error.h"
+
 #include "cipher/MemoryPool.h"
+
 #include "fs/fsconfig.pb.h"
 
 #include <cstring>
-#include <glog/logging.h>
 
 namespace encfs {
 
@@ -285,7 +287,7 @@ void BlockFileIO::padFile(fs_off_t oldSize, fs_off_t newSize, bool forceWrite) {
         cacheWriteOneBlock(req);
       }
     } else
-      VLOG(1) << "optimization: not padding last block";
+      LOG(INFO) << "optimization: not padding last block";
   } else {
     mb.allocate(_blockSize);
     req.data = mb.data;
@@ -299,7 +301,7 @@ void BlockFileIO::padFile(fs_off_t oldSize, fs_off_t newSize, bool forceWrite) {
 
     // 1. req.dataLen == 0, iff oldSize was already a multiple of blocksize
     if (req.dataLen != 0) {
-      VLOG(1) << "padding block " << oldLastBlock;
+      LOG(INFO) << "padding block " << oldLastBlock;
       memset(mb.data, 0, _blockSize);
       cacheReadOneBlock(req);
       req.dataLen = _blockSize;  // expand to full block size
@@ -310,7 +312,7 @@ void BlockFileIO::padFile(fs_off_t oldSize, fs_off_t newSize, bool forceWrite) {
     // 2, pad zero blocks unless holes are allowed
     if (!_allowHoles) {
       for (; oldLastBlock != newLastBlock; ++oldLastBlock) {
-        VLOG(1) << "padding block " << oldLastBlock;
+        LOG(INFO) << "padding block " << oldLastBlock;
         req.offset = oldLastBlock * _blockSize;
         req.dataLen = _blockSize;
         memset(mb.data, 0, req.dataLen);

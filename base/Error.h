@@ -1,7 +1,8 @@
 #ifndef _Error_incl_
 #define _Error_incl_
 
-#include <glog/logging.h>
+#include "base/logging.h"
+
 #include <stdexcept>
 
 namespace encfs {

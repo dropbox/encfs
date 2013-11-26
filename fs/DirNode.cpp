@@ -18,28 +18,28 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <cstdio>
-#include <cstddef>
-#include <cstdlib>
-#include <cstring>
+#include "fs/DirNode.h"
 
-#include <algorithm>
-#include <iostream>
-#include <memory>
-#include <numeric>
-
-#include <glog/logging.h>
-
+#include "base/logging.h"
+#include "base/optional.h"
 #include "base/Error.h"
 #include "base/Mutex.h"
-#include "base/optional.h"
+
 #include "fs/CipherFileIO.h"
 #include "fs/Context.h"
 #include "fs/FileUtils.h"
 #include "fs/MACFileIO.h"
 #include "fs/fsconfig.pb.h"
 
-#include "fs/DirNode.h"
+#include <algorithm>
+#include <iostream>
+#include <memory>
+#include <numeric>
+
+#include <cstdio>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
 
 using std::list;
 using std::string;
@@ -65,7 +65,7 @@ std::string DirTraverse::nextPlaintextName(FsFileType *fileType,
     }
     catch (Error &ex) {
       // .. .problem decoding, ignore it and continue on to next name..
-      VLOG(1) << "error decoding filename " << dirent->name << " : "
+      LOG(INFO) << "error decoding filename " << dirent->name << " : "
               << ex.what();
     }
   }
@@ -133,7 +133,7 @@ bool RenameOp::apply() {
   try {
     while (last != renameList->end()) {
       // backing store rename.
-      VLOG(2) << "renaming " << last->oldCName << "-> " << last->newCName;
+      LOG(INFO) << "renaming " << last->oldCName << "-> " << last->newCName;
       auto oldCNamePath = last->oldCName;
       auto newCNamePath = last->newCName;
 
@@ -179,10 +179,10 @@ bool RenameOp::apply() {
 }
 
 void RenameOp::undo() {
-  VLOG(1) << "in undoRename";
+  LOG(INFO) << "in undoRename";
 
   if (last == renameList->begin()) {
-    VLOG(1) << "nothing to undo";
+    LOG(INFO) << "nothing to undo";
     return;  // nothing to undo
   }
 
@@ -195,7 +195,7 @@ void RenameOp::undo() {
   while (it != renameList->begin()) {
     --it;
 
-    VLOG(1) << "undo: renaming " << it->newCName << " -> " << it->oldCName;
+    LOG(INFO) << "undo: renaming " << it->newCName << " -> " << it->oldCName;
 
     auto newCNamePath = it->newCName;
     auto oldCNamePath = it->oldCName;
@@ -421,7 +421,7 @@ bool DirNode::genRenameList(list<RenameEl> &renameList, const Path &fromP,
   if (fromIV == toIV) return true;
 
   // generate the real destination path, where we expect to find the files..
-  VLOG(1) << "opendir " << sourcePath;
+  LOG(INFO) << "opendir " << sourcePath;
 
   opt::optional<Directory> dir_io;
   try {
@@ -485,7 +485,7 @@ bool DirNode::genRenameList(list<RenameEl> &renameList, const Path &fromP,
         }
       }
 
-      VLOG(1) << "adding file " << ren.oldCName << " to rename list";
+      LOG(INFO) << "adding file " << ren.oldCName << " to rename list";
       renameList.push_back(std::move(ren));
     }
     catch (Error &err) {
@@ -525,7 +525,7 @@ shared_ptr<RenameOp> DirNode::newRenameOp(const Path &fromP, const Path &toP) {
 int DirNode::posix_mkdir(const char *plaintextPath, fs_posix_mode_t mode) {
   auto cyName = apiToInternal(plaintextPath);
 
-  VLOG(1) << "mkdir on " << cyName;
+  LOG(INFO) << "mkdir on " << cyName;
 
   return withExceptionCatcherNoRet((int)std::errc::io_error,
                                    bindMethod(fs_io, &FsIO::posix_mkdir),
@@ -541,11 +541,11 @@ int DirNode::rename(const char *cfromPlaintext, const char *ctoPlaintext) {
   auto fromCName = apiToInternal(cfromPlaintext);
   auto toCName = apiToInternal(ctoPlaintext);
 
-  VLOG(1) << "rename " << fromCName << " -> " << toCName;
+  LOG(INFO) << "rename " << fromCName << " -> " << toCName;
 
   shared_ptr<RenameOp> renameOp;
   if (hasDirectoryNameDependency() && isDirectory(fs_io, fromCName.c_str())) {
-    VLOG(1) << "recursive rename begin";
+    LOG(INFO) << "recursive rename begin";
     renameOp = newRenameOp(fromPlaintext, toPlaintext);
 
     if (!renameOp || !renameOp->apply()) {
@@ -554,7 +554,7 @@ int DirNode::rename(const char *cfromPlaintext, const char *ctoPlaintext) {
       LOG(WARNING) << "rename aborted";
       return -(int)std::errc::permission_denied;
     }
-    VLOG(1) << "recursive rename end";
+    LOG(INFO) << "recursive rename end";
   }
 
   int res = 0;
@@ -599,11 +599,11 @@ int DirNode::posix_link(const char *from, const char *to) {
   auto fromCName = apiToInternal(from);
   auto toCName = apiToInternal(to);
 
-  VLOG(1) << "link " << fromCName << " -> " << toCName;
+  LOG(INFO) << "link " << fromCName << " -> " << toCName;
 
   int res = 0;
   if (fsConfig->config->external_iv()) {
-    VLOG(1) << "hard links not supported with external IV chaining!";
+    LOG(INFO) << "hard links not supported with external IV chaining!";
     res = -(int)std::errc::operation_not_permitted;
   } else {
     res = withExceptionCatcherNoRet((int)std::errc::io_error,
@@ -631,7 +631,7 @@ shared_ptr<FileNode> DirNode::renameNode(const Path &from, const Path &to,
     uint64_t newIV = 0;
     auto cname = cipherPath(to, &newIV);
 
-    VLOG(1) << "renaming internal node " << node->cipherName() << " -> "
+    LOG(INFO) << "renaming internal node " << node->cipherName() << " -> "
             << cname;
 
     if (!node->setName(to, cname, newIV, forwardMode)) {
@@ -658,7 +658,7 @@ shared_ptr<FileNode> DirNode::findOrCreate(const Path &plainName) {
     // add weak reference to node
     ctx->trackNode(plainName.c_str(), node);
 
-    VLOG(1) << "created FileNode for " << node->cipherName();
+    LOG(INFO) << "created FileNode for " << node->cipherName();
   }
 
   return node;
@@ -703,7 +703,7 @@ shared_ptr<FileNode> DirNode::openNode(const char *plainName,
 
 int DirNode::unlink(const char *plaintextName) {
   auto cyName = apiToInternal(plaintextName);
-  VLOG(1) << "unlink " << cyName;
+  LOG(INFO) << "unlink " << cyName;
 
   Lock _lock(mutex);
 
@@ -719,7 +719,7 @@ int DirNode::unlink(const char *plaintextName) {
     res = withExceptionCatcherNoRet((int)std::errc::io_error,
                                     bindMethod(fs_io, &FsIO::unlink), cyName);
     if (res < 0) {
-      VLOG(1) << "unlink error: " <<
+      LOG(INFO) << "unlink error: " <<
         std::make_error_condition(static_cast<std::errc>(-res)).message();
     }
   }
@@ -752,7 +752,7 @@ int DirNode::get_attrs(FsFileAttrs *attrs, const char *plaintextName) const {
   Lock _lock(mutex);
 
   auto cyName = apiToInternal(plaintextName);
-  VLOG(1) << "get_attrs " << cyName;
+  LOG(INFO) << "get_attrs " << cyName;
 
   auto ret = withExceptionCatcher((int)std::errc::io_error,
                                   encfs::get_attrs<decltype(fs_io)>, attrs, fs_io,
@@ -769,7 +769,7 @@ int DirNode::posix_stat(FsFileAttrs *attrs, const char *plaintextName,
   Lock _lock(mutex);
 
   auto cyName = apiToInternal(plaintextName);
-  VLOG(1) << "posix_stat " << cyName;
+  LOG(INFO) << "posix_stat " << cyName;
 
   int ret = withExceptionCatcher((int)std::errc::io_error,
                                  bindMethod(fs_io, &FsIO::posix_stat), attrs,
@@ -814,7 +814,7 @@ int DirNode::posix_symlink(const char *path, const char *data) {
   auto toCName = apiToInternal(path);
   auto fromCName = relativeCipherPathPosix(data);
 
-  VLOG(1) << "symlink " << fromCName << " -> " << toCName;
+  LOG(INFO) << "symlink " << fromCName << " -> " << toCName;
 
   return withExceptionCatcherNoRet(
       (int)std::errc::io_error, bindMethod(fs_io, &FsIO::posix_symlink),

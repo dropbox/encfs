@@ -20,9 +20,9 @@
 
 #include "base/Interface.h"
 
+#include "base/logging.h"
 #include "base/ConfigVar.h"
 
-#include <glog/logging.h>
 #include <ostream>
 
 namespace encfs {
@@ -37,7 +37,7 @@ ostream &operator<<(ostream &out, const Interface &iface) {
 }
 
 bool implements(const Interface &A, const Interface &B) {
-  VLOG(1) << "checking if " << A << " implements " << B;
+  LOG(INFO) << "checking if " << A << " implements " << B;
 
   if (A.name() != B.name()) return false;
 

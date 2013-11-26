@@ -23,10 +23,9 @@
 
 #include "cipher/MemoryPool.h"
 
+#include "base/logging.h"
 #include "base/Mutex.h"
 #include "base/Error.h"
-
-#include <glog/logging.h>
 
 #include <algorithm>
 #include <functional>

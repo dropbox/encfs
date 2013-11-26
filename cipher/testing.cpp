@@ -1,9 +1,10 @@
-
-#include <glog/logging.h>
-#include <gtest/gtest.h>
-
 #include "base/config.h"
+
+#include "base/logging.h"
+
 #include "cipher/testing.h"
+
+#include <gtest/gtest.h>
 
 #ifdef HAVE_VALGRIND_MEMCHECK_H
 #include <valgrind/memcheck.h>

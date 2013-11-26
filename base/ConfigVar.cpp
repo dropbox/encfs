@@ -19,9 +19,10 @@
  */
 
 #include "base/ConfigVar.h"
+
+#include "base/logging.h"
 #include "base/Error.h"
 
-#include <glog/logging.h>
 #include <cstring>
 
 namespace encfs {
@@ -193,8 +194,8 @@ const ConfigVar &operator>>(const ConfigVar &src, std::string &result) {
   }
 
   if (readLen != length) {
-    VLOG(1) << "string encoded as size " << length << " bytes, read "
-            << readLen;
+    LOG(INFO) << "string encoded as size " << length << " bytes, read "
+              << readLen;
   }
 
   rAssert(readLen == length);

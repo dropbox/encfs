@@ -20,8 +20,9 @@
 
 #include "base/base64.h"
 
+#include "base/logging.h"
+
 #include <ctype.h>
-#include <glog/logging.h>
 
 namespace encfs {
 

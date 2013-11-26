@@ -19,16 +19,18 @@
  */
 
 #include "base/base64.h"
-#include "base/Error.h"
 #include "base/i18n.h"
+#include "base/logging.h"
+#include "base/Error.h"
+
 #include "cipher/CipherV1.h"
+
 #include "fs/StreamNameIO.h"
 
-#include <glog/logging.h>
-
-#include <cstring>
 #include <string>
 #include <vector>
+
+#include <cstring>
 
 using std::shared_ptr;
 
@@ -154,7 +156,7 @@ string StreamNameIO::decodeName(const string &encodedName,
       _cipher->MAC_64(&tmpBuf.at(2), decodedStreamLen, iv));
 
   if (mac2 != mac) {
-    VLOG(1) << "checksum mismatch: expected " << mac << ", got " << mac2
+    LOG(INFO) << "checksum mismatch: expected " << mac << ", got " << mac2
             << "on decode of " << decodedStreamLen << " bytes";
     throw Error("checksum mismatch in filename decode");
   }

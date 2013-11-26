@@ -18,11 +18,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define GLOG_NO_ABBREVIATED_SEVERITIES
-
 #include "base/config.h"
 
 #include "cipher/CipherV1.h"
+
+#include "base/base64.h"
+#include "base/i18n.h"
+#include "base/logging.h"
+#include "base/Error.h"
+#include "base/Mutex.h"
+#include "base/Range.h"
 
 #include "cipher/MemoryPool.h"
 #include "cipher/MAC.h"
@@ -37,14 +42,6 @@
 #ifdef WITH_BOTAN
 #include "cipher/botan.h"
 #endif
-
-#include "base/base64.h"
-#include "base/Error.h"
-#include "base/i18n.h"
-#include "base/Mutex.h"
-#include "base/Range.h"
-
-#include <glog/logging.h>
 
 #ifdef HAVE_VALGRIND_MEMCHECK_H
 #include <valgrind/memcheck.h>

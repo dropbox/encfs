@@ -13,6 +13,7 @@ configure_file (${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake
 add_library (encfs-base
     autosprintf.cpp
     base64.cpp
+    logging.cpp
     ConfigReader.cpp
     ConfigVar.cpp
     Error.cpp
