@@ -11,9 +11,12 @@ option (WITH_OPENSSL "WithOpenSSL" OFF)
 option (WITH_BOTAN "WithBotan" ON)
 option (WITH_COMMON_CRYPTO "WithCommonCrypto" OFF)
 
-if (APPLE)
+include (CheckIncludeFileCXX)
+check_include_file_cxx (CommonCrypto/CommonCryptor.h HAVE_COMMON_CRYPTOR_H)
+
+if (HAVE_COMMON_CRYPTOR_H)
    set (WITH_COMMON_CRYPTO ON)
-endif (APPLE)
+endif (HAVE_COMMON_CRYPTOR_H)
 
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
     "${CMAKE_SOURCE_DIR}/CMakeModules/")
@@ -65,7 +68,6 @@ set (CPACK_SOURCE_IGNORE_FILES
 include (CPack)
 
 # Check for external files.
-include (CheckIncludeFileCXX)
 check_include_file_cxx (attr/xattr.h HAVE_ATTR_XATTR_H)
 check_include_file_cxx (sys/xattr.h HAVE_SYS_XATTR_H)
 
