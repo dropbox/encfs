@@ -192,7 +192,7 @@ ConfigType readConfig_load(const shared_ptr<FsIO> &fs_io, ConfigInfo *nm,
 
     if (throw_exception) throw ConfigurationFileIsCorrupted();
 
-    LOG(ERROR) << "Found config file " << path << ", but failed to load";
+    LOG(LERROR) << "Found config file " << path << ", but failed to load";
     return Config_None;
   } else {
     if (throw_exception) throw std::runtime_error("no load function?");
@@ -243,7 +243,7 @@ bool readV6Config(const shared_ptr<FsIO> & /*fs_io*/, const char *configFile,
 
   XmlReader rdr;
   if (!rdr.load(configFile)) {
-    LOG(ERROR) << "Failed to load config file " << configFile;
+    LOG(LERROR) << "Failed to load config file " << configFile;
     return false;
   }
 
@@ -253,14 +253,14 @@ bool readV6Config(const shared_ptr<FsIO> & /*fs_io*/, const char *configFile,
     config = (*serialization)["config"];
   }
   if (!config) {
-    LOG(ERROR) << "Unable to find XML configuration in file " << configFile;
+    LOG(LERROR) << "Unable to find XML configuration in file " << configFile;
     return false;
   }
 
   int version;
   if (!config->read("version", &version) &&
       !config->read("@version", &version)) {
-    LOG(ERROR) << "Unable to find version in config file";
+    LOG(LERROR) << "Unable to find version in config file";
     return false;
   }
 
@@ -275,7 +275,7 @@ bool readV6Config(const shared_ptr<FsIO> & /*fs_io*/, const char *configFile,
     LOG(INFO) << "found 20080813";
     cfg.set_revision(20080813);
   } else if (version < V5Latest) {
-    LOG(ERROR) << "Invalid version " << version << " - please fix config file";
+    LOG(LERROR) << "Invalid version " << version << " - please fix config file";
   } else {
     LOG(INFO) << "Boost <= 1.41 compatibility mode";
     cfg.set_revision(version);
@@ -353,14 +353,14 @@ bool readV5Config(const shared_ptr<FsIO> & /*fs_io*/, const char *configFile,
       if (config.revision() > V5Latest) {
         /* config file specifies a version outside our supported
            range..   */
-        LOG(ERROR)
+        LOG(LERROR)
             << "Config subversion " << config.revision()
             << " found, but this version of encfs only supports up to version "
             << V5Latest;
         return false;
       }
       if (config.revision() < V5Latest) {
-        LOG(ERROR)
+        LOG(LERROR)
             << "This version of EncFS doesn't support "
             << "filesystems created with EncFS releases before 2004-08-13";
         return false;
@@ -449,7 +449,7 @@ static bool writeTextConfig(const shared_ptr<FsIO> &fs_io, const char *fileName,
     f.write(IORequest(0, (byte *)output.c_str(), output.size()));
   }
   catch (const Error &err) {
-    LOG(ERROR) << "Unable to open or create file \"" << fileName
+    LOG(LERROR) << "Unable to open or create file \"" << fileName
                << "\": " << err.what();
     return false;
   }
@@ -498,7 +498,7 @@ bool readProtoConfig(const shared_ptr<FsIO> &fs_io, const char *fileName,
     file = fs_io->openfile(fs_io->pathFromString(fileName));
   }
   catch (const Error &err) {
-    LOG(ERROR) << "Unable to open config (" << fileName << "): " << err.what();
+    LOG(LERROR) << "Unable to open config (" << fileName << "): " << err.what();
     return false;
   }
 
@@ -1280,7 +1280,7 @@ CipherKey decryptKey(const EncfsConfig &config, const char *password,
                        (const byte *)key.salt().data(), key.salt().size());
 
     if (iterations != key.kdf_iterations()) {
-      LOG(ERROR) << "Error in KDF, iteration mismatch";
+      LOG(LERROR) << "Error in KDF, iteration mismatch";
       return userKey;
     }
   } else {
@@ -1382,7 +1382,7 @@ RootPtr initFS(const shared_ptr<EncFS_Context> &ctx,
   shared_ptr<CipherV1> cipher = getCipher(config);
   if (!cipher) {
     Interface iface = config.cipher();
-    LOG(ERROR) << "Unable to find cipher " << iface.name() << ", version "
+    LOG(LERROR) << "Unable to find cipher " << iface.name() << ", version "
                << iface.major() << ":" << iface.minor() << ":" << iface.age();
     // xgroup(diag)
     cout << _("The requested cipher interface is not available\n");
@@ -1419,7 +1419,7 @@ RootPtr initFS(const shared_ptr<EncFS_Context> &ctx,
   shared_ptr<NameIO> nameCoder = NameIO::New(config.naming(), cipher);
   if (!nameCoder) {
     Interface iface = config.naming();
-    LOG(ERROR) << "Unable to find nameio interface " << iface.name()
+    LOG(LERROR) << "Unable to find nameio interface " << iface.name()
                << ", version " << iface.major() << ":" << iface.minor() << ":"
                << iface.age();
     // xgroup(diag)

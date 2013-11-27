@@ -56,7 +56,7 @@ CipherFileIO::CipherFileIO(const shared_ptr<FileIO> &_base,
   int blockBoundary =
       fsConfig->config->block_size() % fsConfig->cipher->cipherBlockSize();
   if (blockBoundary != 0) {
-    LOG(ERROR)
+    LOG(LERROR)
       << "CipherFileIO: blocks should be multiple of cipher block size";
   }
 }
@@ -196,7 +196,7 @@ bool CipherFileIO::writeHeader() {
     return false;
   }
 
-  LOG_IF(ERROR, fileIV == 0) << "Internal error: fileIV == 0 in writeHeader!!!";
+  LOG_IF(LERROR, fileIV == 0) << "Internal error: fileIV == 0 in writeHeader!!!";
   LOG(INFO) << "writing fileIV " << fileIV;
 
   MemBlock mb;

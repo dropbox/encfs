@@ -362,7 +362,7 @@ string DirNode::plainPathPosix(const char *cipherPath_) {
     }
   }
   catch (Error &err) {
-    LOG(ERROR) << "decode err: " << err.what();
+    LOG(LERROR) << "decode err: " << err.what();
     return string();
   }
 }
@@ -379,7 +379,7 @@ string DirNode::relativeCipherPathPosix(const char *plaintextPath) {
     return cipherPathWithoutRootPosix(plaintextPath);
   }
   catch (Error &err) {
-    LOG(ERROR) << "encode err: " << err.what();
+    LOG(LERROR) << "encode err: " << err.what();
     return string();
   }
 }
@@ -392,7 +392,7 @@ DirTraverse DirNode::openDir(const char *plaintextPath) const {
     maybeCyName = apiToInternal(plaintextPath, &iv);
   }
   catch (Error &err) {
-    LOG(ERROR) << "encode err: " << err.what();
+    LOG(LERROR) << "encode err: " << err.what();
     return DirTraverse();
   }
 
@@ -586,7 +586,7 @@ int DirNode::rename(const char *cfromPlaintext, const char *ctoPlaintext) {
   }
   catch (Error &err) {
     // exception from renameNode, just show the error and continue..
-    LOG(ERROR) << "rename err: " << err.what();
+    LOG(LERROR) << "rename err: " << err.what();
     res = -(int)std::errc::io_error;
   }
 
@@ -636,7 +636,7 @@ shared_ptr<FileNode> DirNode::renameNode(const Path &from, const Path &to,
 
     if (!node->setName(to, cname, newIV, forwardMode)) {
       // rename error! - put it back
-      LOG(ERROR) << "renameNode failed";
+      LOG(LERROR) << "renameNode failed";
       throw Error("Internal node name change failed!");
     }
   }

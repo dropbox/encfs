@@ -277,7 +277,7 @@ bool CipherV1::initCiphers(const Interface &iface, const Interface &realIface,
 
   _pbkdf.reset(PBKDF::GetRegistry().CreateForMatch(NAME_PBKDF2_HMAC_SHA1));
   if (!_pbkdf) {
-    LOG(ERROR) << "PBKDF missing";
+    LOG(LERROR) << "PBKDF missing";
     return false;
   }
 
@@ -292,7 +292,7 @@ bool CipherV1::initCiphers(const Interface &iface, const Interface &realIface,
   Lock l(_hmacMutex);
   _hmac.reset(MAC::GetRegistry().CreateForMatch(NAME_SHA1_HMAC));
   if (!_hmac) {
-    LOG(ERROR) << "SHA1_HMAC not available";
+    LOG(LERROR) << "SHA1_HMAC not available";
     return false;
   }
 
@@ -324,7 +324,7 @@ CipherKey CipherV1::newKey(const char *password, int passwdLength,
     int res = TimedPBKDF2(password, passwdLength, salt, saltLen, &key,
                           1000 * desiredDuration);
     if (res <= 0) {
-      LOG(ERROR) << "openssl error, PBKDF2 failed";
+      LOG(LERROR) << "openssl error, PBKDF2 failed";
       return CipherKey();
     } else {
       *iterationCount = res;
@@ -333,7 +333,7 @@ CipherKey CipherV1::newKey(const char *password, int passwdLength,
     // known iteration length
     if (!_pbkdf->makeKey(password, passwdLength, salt, saltLen, *iterationCount,
                          &key)) {
-      LOG(ERROR) << "openssl error, PBKDF2 failed";
+      LOG(LERROR) << "openssl error, PBKDF2 failed";
       return CipherKey();
     }
   }
@@ -351,7 +351,7 @@ CipherKey CipherV1::newKey(const char *password, int passwdLength) {
   CipherKey key(_keySize + _ivLength);
 
   bool ok = BytesToKey((byte *)password, passwdLength, 16, &key);
-  LOG_IF(ERROR, !ok) << "newKey: BytesToKey failed";
+  LOG_IF(LERROR, !ok) << "newKey: BytesToKey failed";
   if (!ok) throw Error("BytesToKey failed");
 
   return key;
@@ -368,7 +368,7 @@ bool CipherV1::pseudoRandomize(byte *buf, int len) {
 bool CipherV1::setKey(const CipherKey &keyIv) {
   Lock l(_hmacMutex);
 
-  LOG_IF(ERROR, (int)(_keySize + _ivLength) != keyIv.size())
+  LOG_IF(LERROR, (int)(_keySize + _ivLength) != keyIv.size())
       << "Mismatched key size: passed " << keyIv.size() << ", expecting "
       << _keySize;
 
@@ -449,7 +449,7 @@ CipherKey CipherV1::readKey(const byte *data, bool checkKey) {
 
   memcpy(key.data(), data + KEY_CHECKSUM_BYTES, key.size());
   if (!streamDecode(key.data(), key.size(), checksum)) {
-    LOG(ERROR) << "stream decode failure";
+    LOG(LERROR) << "stream decode failure";
     return CipherKey();
   }
 

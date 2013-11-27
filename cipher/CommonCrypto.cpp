@@ -55,7 +55,7 @@ class PbkdfPkcs5Hmac : public PBKDF {
                                    saltLength, prf_, numIterations,
                                    outKey->data(), outKey->size());
     if (ret != 0) {
-      LOG(ERROR) << "CCKeyDerivationPBKDF failed";
+      LOG(LERROR) << "CCKeyDerivationPBKDF failed";
       return false;
     }
     return true;
@@ -66,7 +66,7 @@ class PbkdfPkcs5Hmac : public PBKDF {
     if (length == 0) return key;
 #ifdef HAVE_SEC_RANDOM_H
     if (SecRandomCopyBytes(kSecRandomDefault, key.size(), key.data()) < 0) {
-      LOG(ERROR) << "random key generation failure for length " << length;
+      LOG(LERROR) << "random key generation failure for length " << length;
       key.reset();
     }
 #else
@@ -79,7 +79,7 @@ class PbkdfPkcs5Hmac : public PBKDF {
     if (length == 0) return true;
 #ifdef HAVE_SEC_RANDOM_H
     if (SecRandomCopyBytes(kSecRandomDefault, length, out) < 0) {
-      LOG(ERROR) << "random key generation failure for length " << length;
+      LOG(LERROR) << "random key generation failure for length " << length;
       return false;
     }
 #else

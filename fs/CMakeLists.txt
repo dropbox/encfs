@@ -24,7 +24,6 @@ add_library (encfs-fs
 target_link_libraries (encfs-fs
     ${CMAKE_THREAD_LIBS_INIT} #  for protobuf
     ${PROTOBUF_LIBRARY}
-    ${CMAKE_THREAD_LIBS_INIT}
 )
 
 add_executable (checkops

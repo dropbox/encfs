@@ -150,9 +150,9 @@ class BotanBlockCipher : public BlockCipher {
     encryption->set_iv(OctetString(iv, blockSize()));
     encryptor->process_msg(in, size);
     auto written = encryptor->read(out, size, Pipe::LAST_MESSAGE);
-    LOG_IF(ERROR, (int)written != size) << "expected output size " << size
+    LOG_IF(LERROR, (int)written != size) << "expected output size " << size
                                         << ", got " << written;
-    LOG_IF(ERROR, encryptor->remaining() > 0)
+    LOG_IF(LERROR, encryptor->remaining() > 0)
         << "unread bytes in pipe: " << encryptor->remaining();
     return true;
   }
@@ -168,9 +168,9 @@ class BotanBlockCipher : public BlockCipher {
     decryption->set_iv(OctetString(iv, blockSize()));
     decryptor->process_msg(in, size);
     auto written = decryptor->read(out, size, Pipe::LAST_MESSAGE);
-    LOG_IF(ERROR, (int)written != size) << "expected output size " << size
+    LOG_IF(LERROR, (int)written != size) << "expected output size " << size
                                         << ", got " << written;
-    LOG_IF(ERROR, decryptor->remaining() > 0)
+    LOG_IF(LERROR, decryptor->remaining() > 0)
         << "unread bytes in pipe: " << decryptor->remaining();
     return true;
   }

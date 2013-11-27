@@ -68,7 +68,7 @@ bool ConfigReader::loadFromVar(ConfigVar &in) {
     in >> key >> value;
 
     if (key.length() == 0) {
-      LOG(ERROR) << "Invalid key encoding in buffer";
+      LOG(LERROR) << "Invalid key encoding in buffer";
       return false;
     }
     ConfigVar newVar(value);

@@ -319,7 +319,7 @@ static bool processArgs(int argc, char *argv[],
     out->mountPoint = argv[optind++];
   } else {
     // no mount point specified
-    LOG(ERROR) << "Missing one or more arguments, aborting.";
+    LOG(LERROR) << "Missing one or more arguments, aborting.";
     return false;
   }
 
@@ -416,7 +416,7 @@ void *encfs_init(fuse_conn_info *conn) {
       ctx->monitorThread = std::make_shared<std::thread>(idleMonitor, ctx);
     }
     catch (...) {
-      LOG(ERROR) << "error starting idle monitor thread";
+      LOG(LERROR) << "error starting idle monitor thread";
     }
   }
 
@@ -621,11 +621,11 @@ int main(int argc, char *argv[]) {
     }
   }
   catch (std::exception &ex) {
-    LOG(ERROR) << "Internal error: Caught exception from main loop: "
+    LOG(LERROR) << "Internal error: Caught exception from main loop: "
                << ex.what();
   } /* catch(...)
    {
-     LOG(ERROR) << "Internal error: Caught unexpected exception";
+     LOG(LERROR) << "Internal error: Caught unexpected exception";
      }*/
 
   CipherV1::shutdown(encfsArgs->isThreaded);

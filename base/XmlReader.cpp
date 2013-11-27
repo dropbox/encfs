@@ -41,7 +41,7 @@ XmlValue::~XmlValue() {}
 XmlValuePtr XmlValue::operator[](const char *path) const { return find(path); }
 
 XmlValuePtr XmlValue::find(const char *path) const {
-  LOG(ERROR) << "in XmlValue::find( " << path << ")";
+  LOG(LERROR) << "in XmlValue::find( " << path << ")";
   return XmlValuePtr();
 }
 
@@ -95,12 +95,12 @@ bool XmlValue::readB64(const char *path, byte *data, int length) const {
 
   int decodedSize = B64ToB256Bytes(s.size());
   if (decodedSize != length) {
-    LOG(ERROR) << "decoding bytes len " << s.size() << ", expecting output len "
+    LOG(LERROR) << "decoding bytes len " << s.size() << ", expecting output len "
                << length << ", got " << decodedSize;
     return false;
   }
   if (!B64StandardDecode(data, (byte *)s.data(), s.size())) {
-    LOG(ERROR) << "B64 decode failure on " << s;
+    LOG(LERROR) << "B64 decode failure on " << s;
     return false;
   }
 
@@ -178,13 +178,13 @@ bool XmlReader::load(const char *fileName) {
 XmlValuePtr XmlReader::operator[](const char *name) const {
   TiXmlNode *node = pd->doc->FirstChild(name);
   if (node == NULL) {
-    LOG(ERROR) << "Xml node " << name << " not found";
+    LOG(LERROR) << "Xml node " << name << " not found";
     return XmlValuePtr(new XmlValue());
   }
 
   TiXmlElement *element = node->ToElement();
   if (element == NULL) {
-    LOG(ERROR) << "Xml node " << name
+    LOG(LERROR) << "Xml node " << name
                << " not element, type = " << node->Type();
     return XmlValuePtr(new XmlValue());
   }

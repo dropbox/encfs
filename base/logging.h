@@ -28,17 +28,17 @@ extern "C" {
 #endif
 
 typedef enum {
-  NOTHING,
-  DEBUG,
-  INFO,
-  WARNING,
-  ERROR,
+  ENCFS_LOG_NOTHING,
+  ENCFS_LOG_DEBUG,
+  ENCFS_LOG_INFO,
+  ENCFS_LOG_WARNING,
+  ENCFS_LOG_ERROR
 } EncfsLogLevel;
 
 #ifndef _IS_LOGGING_CPP
 extern EncfsLogLevel _CUR_LEVEL;
 #else
-EncfsLogLevel _CUR_LEVEL = DEBUG;
+EncfsLogLevel _CUR_LEVEL = ENCFS_LOG_DEBUG;
 #endif
 
 void
@@ -60,6 +60,11 @@ encfs_set_log_level(EncfsLogLevel level);
 namespace encfs {
 
 typedef EncfsLogLevel LogLevel;
+const LogLevel NOTHING = ENCFS_LOG_NOTHING;
+const LogLevel DEBUG = ENCFS_LOG_DEBUG;
+const LogLevel INFO = ENCFS_LOG_INFO;
+const LogLevel WARNING = ENCFS_LOG_WARNING;
+const LogLevel LERROR = ENCFS_LOG_ERROR;
 
 inline
 void

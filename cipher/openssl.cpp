@@ -102,7 +102,7 @@ class OpenSSLCipher : public BlockCipher {
       unsigned long errVal = 0;
       if ((errVal = ERR_get_error()) != 0)
         char errStr[120];  // specs require string at least 120 bytes long..
-        LOG(ERROR) << "openssl error: " << ERR_error_string(errVal, errStr);
+        LOG(LERROR) << "openssl error: " << ERR_error_string(errVal, errStr);
 
       return false;
     }
@@ -123,7 +123,7 @@ class OpenSSLCipher : public BlockCipher {
       unsigned long errVal = 0;
       if ((errVal = ERR_get_error()) != 0)
         char errStr[120];  // specs require string at least 120 bytes long..
-        LOG(ERROR) << "openssl error: " << ERR_error_string(errVal, errStr);
+        LOG(LERROR) << "openssl error: " << ERR_error_string(errVal, errStr);
 
       return false;
     }
@@ -154,11 +154,11 @@ class OpenSSLCipher : public BlockCipher {
 #ifdef HAVE_VALGRIND_MEMCHECK_H
     int ivLen = EVP_CIPHER_CTX_iv_length(&enc);
     if (VALGRIND_CHECK_MEM_IS_DEFINED(ivec, ivLen) != 0) {
-      LOG(ERROR) << "expected iv of length " << ivLen;
+      LOG(LERROR) << "expected iv of length " << ivLen;
       return false;
     }
     if (VALGRIND_CHECK_MEM_IS_ADDRESSABLE(out, size) != 0) {
-      LOG(ERROR) << "expected output length " << size;
+      LOG(LERROR) << "expected output length " << size;
       return false;
     }
 #endif
@@ -168,7 +168,7 @@ class OpenSSLCipher : public BlockCipher {
     dstLen += tmpLen;
 
     if (dstLen != size) {
-      LOG(ERROR) << "encoding " << size << " bytes, got back " << dstLen << " ("
+      LOG(LERROR) << "encoding " << size << " bytes, got back " << dstLen << " ("
                  << tmpLen << " in final_ex)";
       return false;
     }
@@ -181,11 +181,11 @@ class OpenSSLCipher : public BlockCipher {
 #ifdef HAVE_VALGRIND_MEMCHECK_H
     int ivLen = EVP_CIPHER_CTX_iv_length(&enc);
     if (VALGRIND_CHECK_MEM_IS_DEFINED(ivec, ivLen) != 0) {
-      LOG(ERROR) << "expected iv of length " << ivLen;
+      LOG(LERROR) << "expected iv of length " << ivLen;
       return false;
     }
     if (VALGRIND_CHECK_MEM_IS_ADDRESSABLE(out, size) != 0) {
-      LOG(ERROR) << "expected output length " << size;
+      LOG(LERROR) << "expected output length " << size;
       return false;
     }
 #endif
@@ -195,7 +195,7 @@ class OpenSSLCipher : public BlockCipher {
     dstLen += tmpLen;
 
     if (dstLen != size) {
-      LOG(ERROR) << "decoding " << size << " bytes, got back " << dstLen << " ("
+      LOG(LERROR) << "decoding " << size << " bytes, got back " << dstLen << " ("
                  << tmpLen << " in final_ex)";
       return false;
     }

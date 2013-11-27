@@ -1,1 +1,0 @@
-./configure -DCMAKE_PREFIX_PATH=/Users/rian/encfs-dev-prefix/ -DCMAKE_CXX_FLAGS=-stdlib=libc++

@@ -378,7 +378,7 @@ int BlockFileIO::blockTruncate(fs_off_t size, FileIO *base) {
     bool wrRes = cacheWriteOneBlock(req);
 
     if ((rdSz < 0) || (!wrRes)) {
-      LOG(ERROR) << "truncate failure: read size " << rdSz
+      LOG(LERROR) << "truncate failure: read size " << rdSz
                  << ", partial block of " << partialBlock;
     }
   } else {
