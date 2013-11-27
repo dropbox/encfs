@@ -47,9 +47,9 @@ std::string parentDirectory(const std::shared_ptr<FsIO> &fs_io,
 // ask the user for permission to create the directory.  If they say ok, then
 // do it and return true.
 bool userAllowMkdir(const std::shared_ptr<FsIO> &fs_io, const char *dirPath,
-                    mode_t mode);
+                    fs_posix_mode_t mode);
 bool userAllowMkdir(const std::shared_ptr<FsIO> &fs_io, int promptno,
-                    const char *dirPath, mode_t mode);
+                    const char *dirPath, fs_posix_mode_t mode);
 
 class CipherV1;
 class DirNode;

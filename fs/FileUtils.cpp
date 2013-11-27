@@ -133,12 +133,12 @@ std::string parentDirectory(const shared_ptr<FsIO> &fs_io,
 }
 
 bool userAllowMkdir(const shared_ptr<FsIO> &fs_io, const char *path,
-                    mode_t mode) {
+                    fs_posix_mode_t mode) {
   return userAllowMkdir(fs_io, 0, path, mode);
 }
 
 bool userAllowMkdir(const shared_ptr<FsIO> &fs_io, int promptno,
-                    const char *path, mode_t /*mode*/) {
+                    const char *path, fs_posix_mode_t /*mode*/) {
   // TODO: can we internationalize the y/n names?  Seems strange to prompt in
   // their own language but then have to respond 'y' or 'n'.
   // xgroup(setup)
