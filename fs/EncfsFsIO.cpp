@@ -23,6 +23,7 @@
 #include "fs/EncfsFsIO.h"
 
 #include "base/logging.h"
+#include "base/util.h"
 
 #include "fs/Context.h"
 #include "fs/DirNode.h"
@@ -100,6 +101,7 @@ Interface EncfsFileIO::interface() const { return EncfsFileIO_iface; }
 
 FsFileAttrs EncfsFileIO::get_attrs() const {
   FsFileAttrs attrs;
+  zero_memory(attrs);
   int res = _fnode->getAttr(attrs);
   if (res < 0) throw create_errno_system_error(-res);
   return std::move(attrs);

@@ -21,6 +21,7 @@
 #include "fs/FileNode.h"
 
 #include "base/logging.h"
+#include "base/util.h"
 #include "base/Error.h"
 #include "base/Mutex.h"
 
@@ -185,6 +186,7 @@ int FileNode::getAttr(FsFileAttrs &stbuf) const {
 
 fs_off_t FileNode::getSize() const {
   FsFileAttrs toret;
+  zero_memory(toret);
   int res = getAttr(toret);
   if (res < 0) return res;
   return toret.size;
