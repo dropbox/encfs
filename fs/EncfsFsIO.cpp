@@ -202,6 +202,7 @@ void EncfsFsIO::rmdir(const Path &path) {
 
 FsFileAttrs EncfsFsIO::get_attrs(const encfs::Path & path) const {
   FsFileAttrs attrs;
+  zero_memory(attrs);
   const int res = getRoot()->get_attrs(&attrs, path.c_str());
   if (res < 0) throw create_errno_system_error(-res);
   return std::move(attrs);
@@ -215,14 +216,14 @@ void EncfsFsIO::set_times(const Path &path,
 }
 
 fs_posix_uid_t EncfsFsIO::posix_setfsuid(fs_posix_uid_t uid) {
-  fs_posix_uid_t olduid;
+  fs_posix_uid_t olduid = 0;
   const int res = getRoot()->posix_setfsuid(&olduid, uid);
   if (res < 0) throw create_errno_system_error(-res);
   return olduid;
 }
 
 fs_posix_gid_t EncfsFsIO::posix_setfsgid(fs_posix_gid_t gid) {
-  fs_posix_gid_t oldgid;
+  fs_posix_gid_t oldgid = 0;
   const int res = getRoot()->posix_setfsgid(&oldgid, gid);
   if (res < 0) throw create_errno_system_error(-res);
   return oldgid;
@@ -321,6 +322,7 @@ void EncfsFsIO::posix_removexattr(const Path &path, bool follow,
 
 FsFileAttrs EncfsFsIO::posix_stat(const Path &path, bool follow) const {
   FsFileAttrs posix_attrs;
+  zero_memory(posix_attrs);
   const int res = getRoot()->posix_stat(&posix_attrs, path.c_str(), follow);
   if (res < 0) throw create_errno_system_error(-res);
   return posix_attrs;
