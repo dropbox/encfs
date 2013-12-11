@@ -16,7 +16,7 @@ class Error : public std::runtime_error {
 
 #define rAssert(cond)                               \
   do {                                              \
-    if ((cond) == false) {                          \
+    if (!(cond)) {                                  \
       LOG(LERROR) << "Assert failed: " << STR(cond); \
       throw Error(STR(cond));                       \
     }                                               \
