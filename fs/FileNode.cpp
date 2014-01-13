@@ -154,6 +154,9 @@ int FileNode::_unlocked_open(bool requestWrite, bool create) {
   //     file name of the currently opened file from the kernel's POV.
   //     unfortunately there doesn't seem to exist a method of
   //     converting a file descriptor to a file name
+  // NB2: It seems there are ways to do this:
+  //      Mac OS X: using fsgetpath()/getattrlist(ATTR_CMD_FULLPATH)
+  //      Windows: GetFinalPathNameByHandle()
 
   auto fs_io = fsConfig->opts->fs_io;
   std::unique_ptr<FileIO> rawfile;
