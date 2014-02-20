@@ -139,7 +139,8 @@ EncfsFsIO::EncfsFsIO() {}
 void EncfsFsIO::initFS(const std::shared_ptr<EncFS_Opts> &opts,
                        opt::optional<EncfsConfig> oCfg) {
   ctx = std::make_shared<EncFS_Context>();
-  auto rootInfo = encfs::initFS(ctx, opts, oCfg);
+  bool throw_exception_on_bad_password = true;
+  auto rootInfo = encfs::initFS(ctx, opts, oCfg, throw_exception_on_bad_password);
 
   if (rootInfo) {
     // set the globally visible root directory node

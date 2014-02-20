@@ -1354,7 +1354,8 @@ bool verify_password(const encfs::EncfsConfig &config,
 
 RootPtr initFS(const shared_ptr<EncFS_Context> &ctx,
                const shared_ptr<EncFS_Opts> &opts,
-               opt::optional<EncfsConfig> maybeConfig) {
+               opt::optional<EncfsConfig> maybeConfig,
+               bool throw_exception_on_bad_password) {
   std::shared_ptr<EncFS_Root> rootInfo;
 
   // if no config was passed in, read it from the base file system
@@ -1411,7 +1412,10 @@ RootPtr initFS(const shared_ptr<EncFS_Context> &ctx,
   if (!volumeKey.valid()) {
     // xgroup(diag)
     cout << _("Error decoding volume key, password incorrect\n");
-    return rootInfo;
+    if (throw_exception_on_bad_password) {
+      throw BadPassword();
+    }
+    else return rootInfo;
   }
 
   cipher->setKey(volumeKey);

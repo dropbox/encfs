@@ -114,7 +114,8 @@ bool verify_password(const EncfsConfig &cfg, const SecureMem &password);
 
 RootPtr initFS(const std::shared_ptr<EncFS_Context> &ctx,
                const std::shared_ptr<EncFS_Opts> &opts,
-               opt::optional<EncfsConfig> oCfg = opt::nullopt);
+               opt::optional<EncfsConfig> oCfg = opt::nullopt,
+               bool throw_exception_on_bad_password = false);
 
 EncfsConfig create_config_interactively(
     const std::shared_ptr<PasswordReader> &);
@@ -131,6 +132,12 @@ class ConfigurationFileIsCorrupted : public std::runtime_error {
   ConfigurationFileIsCorrupted()
       : std::runtime_error("Configuration file is corrupted") {}
 };
+class BadPassword : public std::runtime_error {
+ public:
+  BadPassword()
+      : std::runtime_error("Password is incorrect") {}
+};
+
 
 EncfsConfig read_config(std::shared_ptr<encfs::FsIO> fs_io,
                         const Path &encrypted_folder_path);
