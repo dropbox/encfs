@@ -34,19 +34,19 @@ typedef enum {
   ENCFS_LOG_WARNING,
   ENCFS_LOG_ERROR,
   ENCFS_LOG_NOTHING,
-} EncfsLogLevel;
+} encfs_log_level_t;
 
-#ifndef _IS_LOGGING_CPP
-extern EncfsLogLevel _CUR_LEVEL;
-#else
-EncfsLogLevel _CUR_LEVEL = ENCFS_LOG_DEBUG;
-#endif
+typedef void (*encfs_log_printer_t)(const char *, int,
+                                    encfs_log_level_t, const char *);
 
-void
-encfs_log_print(const char *toprint);
+extern encfs_log_level_t _CUR_LEVEL;
+extern encfs_log_printer_t _LOG_PRINTER;
 
 void
-encfs_set_log_level(EncfsLogLevel level);
+encfs_set_log_printer(encfs_log_printer_t printer);
+
+void
+encfs_set_log_level(encfs_log_level_t level);
 
 #ifdef __cplusplus
 }
@@ -60,7 +60,7 @@ encfs_set_log_level(EncfsLogLevel level);
 
 namespace encfs {
 
-typedef EncfsLogLevel LogLevel;
+typedef encfs_log_level_t LogLevel;
 const LogLevel NEVER = ENCFS_LOG_NEVER;
 const LogLevel DEBUG = ENCFS_LOG_DEBUG;
 const LogLevel INFO = ENCFS_LOG_INFO;
@@ -68,57 +68,34 @@ const LogLevel WARNING = ENCFS_LOG_WARNING;
 const LogLevel LERROR = ENCFS_LOG_ERROR;
 const LogLevel NOTHING = ENCFS_LOG_NOTHING;
 
-inline
-void
-_cond_print(LogLevel level, const char *p) {
-  if (level >= _CUR_LEVEL) encfs_log_print(p);
-}
-
 class Logger {
 public:
+  const char *_filename;
+  int _lineno;
   LogLevel _level;
+  std::ostringstream _os;
 
-  Logger(LogLevel level) :
-    _level(level) {}
+  Logger(const char *filename, int lineno, LogLevel level) :
+  _filename(filename) ,
+  _lineno(lineno) ,
+  _level(level) {}
 
   ~Logger() {
-    _cond_print(_level, "\n");
+    if (_level >= _CUR_LEVEL) _LOG_PRINTER(_filename, _lineno, _level, _os.str().c_str());
   }
 
   template<class T>
-  const encfs::Logger &
-  operator<<(const T & dl) const {
-    std::ostringstream os;
-    os << dl;
-    encfs::_cond_print(_level, os.str().c_str());
-    return *this;
-  }
-
-  const encfs::Logger &
-  operator<<(const char *a) const {
-    encfs::_cond_print(_level, a);
+  encfs::Logger &
+  operator<<(T && dl) {
+    _os << std::forward<T>(dl);
     return *this;
   }
 };
 
-// TODO: this potentially should be a macro to save the file and line number
-inline
-Logger
-LOG(LogLevel level) {
-  return Logger(level);
-}
-
-inline
-Logger
-LOG_IF(LogLevel level, bool should_log) {
-  return LOG(should_log ? level : NEVER);
-}
-
-inline
-Logger
-CHECK(bool should_log) {
-  return LOG_IF(WARNING, should_log);
-}
+// TODO: save file/line numbers
+#define LOG(level) Logger(__FILE__, __LINE__, level)
+#define LOG_IF(level, should_log) LOG(should_log ? level : NEVER)
+#define CHECK(should_log) LOG_IF(WARNING, should_log)
 
 }
 
