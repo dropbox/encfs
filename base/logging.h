@@ -2,7 +2,7 @@
  * Author:   Rian Hunter <rian@alum.mit.edu>
  *
  *****************************************************************************
- * Copyright (c) 2013, Rian Hunter
+ * Copyright (c) 2013, Dropbox, Inc.
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the
@@ -92,7 +92,6 @@ public:
   }
 };
 
-// TODO: save file/line numbers
 #define LOG(level) Logger(__FILE__, __LINE__, level)
 #define LOG_IF(level, should_log) LOG(should_log ? level : NEVER)
 #define CHECK(should_log) LOG_IF(WARNING, should_log)

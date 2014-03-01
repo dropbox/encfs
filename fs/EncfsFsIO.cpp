@@ -1,8 +1,8 @@
 /*****************************************************************************
- * Author:   Valient Gough <vgough@pobox.com>
+ * Author:   Rian Hunter <rian@alum.mit.edu>
  *
  *****************************************************************************
- * Copyright (c) 2013, Rian Hunter <rian@alum.mit.edu>
+ * Copyright (c) 2013, Dropbox, Inc.
  *
  * This program is free software; you can distribute it and/or modify it under
  * the terms of the GNU General Public License (GPL), as published by the Free

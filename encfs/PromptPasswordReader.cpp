@@ -1,8 +1,10 @@
 /*****************************************************************************
+ * Author:   Valient Gough <vgough@pobox.com>
  * Author:   Rian Hunter <rian@alum.mit.edu>
  *
  *****************************************************************************
- * Copyright (c) 2013, Rian Hunter
+ * Copyright (c) 2004-2012, Valient Gough
+ * Copyright (c) 2013, Dropbox, Inc.
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by the
