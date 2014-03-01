@@ -450,7 +450,7 @@ static bool writeTextConfig(const shared_ptr<FsIO> &fs_io, const char *fileName,
   }
   catch (const Error &err) {
     LOG(LERROR) << "Unable to open or create file \"" << fileName
-               << "\": " << err.what();
+                << "\": " << err.what();
     return false;
   }
 
@@ -850,7 +850,7 @@ EncfsConfig create_paranoid_config(const SecureMem &secure_password,
   int blockSize = DefaultBlockSize;
   auto alg = findCipherAlgorithm("AES", keySize);
   Interface nameIOIface =
-    BlockNameIO::CurrentInterface(use_case_insensitive_encoding);
+      BlockNameIO::CurrentInterface(use_case_insensitive_encoding);
   int blockMACBytes = 8;
   int blockMACRandBytes = 0;  // using uniqueIV, so this isn't necessary
   bool uniqueIV = true;
@@ -1384,7 +1384,7 @@ RootPtr initFS(const shared_ptr<EncFS_Context> &ctx,
   if (!cipher) {
     Interface iface = config.cipher();
     LOG(LERROR) << "Unable to find cipher " << iface.name() << ", version "
-               << iface.major() << ":" << iface.minor() << ":" << iface.age();
+                << iface.major() << ":" << iface.minor() << ":" << iface.age();
     // xgroup(diag)
     cout << _("The requested cipher interface is not available\n");
     return rootInfo;
@@ -1414,8 +1414,8 @@ RootPtr initFS(const shared_ptr<EncFS_Context> &ctx,
     cout << _("Error decoding volume key, password incorrect\n");
     if (throw_exception_on_bad_password) {
       throw BadPassword();
-    }
-    else return rootInfo;
+    } else
+      return rootInfo;
   }
 
   cipher->setKey(volumeKey);
@@ -1424,8 +1424,8 @@ RootPtr initFS(const shared_ptr<EncFS_Context> &ctx,
   if (!nameCoder) {
     Interface iface = config.naming();
     LOG(LERROR) << "Unable to find nameio interface " << iface.name()
-               << ", version " << iface.major() << ":" << iface.minor() << ":"
-               << iface.age();
+                << ", version " << iface.major() << ":" << iface.minor() << ":"
+                << iface.age();
     // xgroup(diag)
     cout << _("The requested filename coding interface is "
               "not available\n");

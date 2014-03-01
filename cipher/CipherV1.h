@@ -96,7 +96,6 @@ class CipherV1 {
   bool _keySet;
 
  public:
-
   struct CipherAlgorithm {
     std::string name;
     std::string description;

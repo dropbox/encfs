@@ -102,7 +102,7 @@ class OpenSSLCipher : public BlockCipher {
       unsigned long errVal = 0;
       if ((errVal = ERR_get_error()) != 0)
         char errStr[120];  // specs require string at least 120 bytes long..
-        LOG(LERROR) << "openssl error: " << ERR_error_string(errVal, errStr);
+      LOG(LERROR) << "openssl error: " << ERR_error_string(errVal, errStr);
 
       return false;
     }
@@ -123,7 +123,7 @@ class OpenSSLCipher : public BlockCipher {
       unsigned long errVal = 0;
       if ((errVal = ERR_get_error()) != 0)
         char errStr[120];  // specs require string at least 120 bytes long..
-        LOG(LERROR) << "openssl error: " << ERR_error_string(errVal, errStr);
+      LOG(LERROR) << "openssl error: " << ERR_error_string(errVal, errStr);
 
       return false;
     }
@@ -168,8 +168,8 @@ class OpenSSLCipher : public BlockCipher {
     dstLen += tmpLen;
 
     if (dstLen != size) {
-      LOG(LERROR) << "encoding " << size << " bytes, got back " << dstLen << " ("
-                 << tmpLen << " in final_ex)";
+      LOG(LERROR) << "encoding " << size << " bytes, got back " << dstLen
+                  << " (" << tmpLen << " in final_ex)";
       return false;
     }
 
@@ -195,8 +195,8 @@ class OpenSSLCipher : public BlockCipher {
     dstLen += tmpLen;
 
     if (dstLen != size) {
-      LOG(LERROR) << "decoding " << size << " bytes, got back " << dstLen << " ("
-                 << tmpLen << " in final_ex)";
+      LOG(LERROR) << "decoding " << size << " bytes, got back " << dstLen
+                  << " (" << tmpLen << " in final_ex)";
       return false;
     }
 

@@ -90,8 +90,7 @@ class PosixPath final : public StringPath<PosixPath, POSIX_PATH_SEP> {
     return std::unique_ptr<PosixPath>(new PosixPath(std::move(str)));
   }
 
-  virtual bool
-  _filename_valid(const std::string & a) const {
+  virtual bool _filename_valid(const std::string &a) const {
     return !a.empty() && a.find('/') == std::string::npos;
   }
 
@@ -233,7 +232,7 @@ void PosixFsIO::rmdir(const Path &path) {
 }
 
 FsFileAttrs PosixFsIO::get_attrs(const Path &path) const {
-  return posix_stat(path, /* follow =*/ true);
+  return posix_stat(path, /* follow =*/true);
 }
 
 void PosixFsIO::set_times(const Path &path,

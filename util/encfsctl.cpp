@@ -85,46 +85,59 @@ struct CommandOpts {
   int (*func)(int argc, char **argv);
   const char *argStr;
   const char *usageStr;
-} commands[] = {
-      {"info", 1, 1, showInfo, "(root dir)",
-       // xgroup(usage)
-       gettext_noop("  -- show information")},
-      {"showKey", 1, 1, cmd_showKey, "(root dir)",
-       // xgroup(usage)
-       gettext_noop("  -- show key")},
-      {"passwd", 1, 1, chpasswd, "(root dir)",
-       // xgroup(usage)
-       gettext_noop("  -- change password for volume")},
-      {"autopasswd", 1, 1, chpasswdAutomaticly, "(root dir)",
-       // xgroup(usage)
-       gettext_noop(
-           "  -- change password for volume, taking password"
-           " from standard input.\n\tNo prompts are issued.")},
-      {"ls", 1, 2, cmd_ls, 0, 0},
-      {"showcruft", 1, 1, cmd_showcruft, "(root dir)",
-       // xgroup(usage)
-       gettext_noop("  -- show undecodable filenames in the volume")},
-      {"cat", 2, 2, cmd_cat, "(root dir) path",
-       // xgroup(usage)
-       gettext_noop("  -- decodes the file and cats it to standard out")},
-      {"decode", 1, 100, cmd_decode,
-       "[--extpass=prog] (root dir) [encoded-name ...]",
-       // xgroup(usage)
-       gettext_noop("  -- decodes name and prints plaintext version")},
-      {"encode", 1, 100, cmd_encode,
-       "[--extpass=prog] (root dir) [plaintext-name ...]",
-       // xgroup(usage)
-       gettext_noop("  -- encodes a filename and print result")},
-      {"export", 2, 2, cmd_export, "(root dir) path",
-       // xgroup(usage)
-       gettext_noop("  -- decrypts a volume and writes results to path")},
-      {"ciphers", 0, 0, showCiphers, "",
-       // xgroup(usage)
-       gettext_noop("  -- show available ciphers")},
-      {"version", 0, 0, showVersion, "",
-       // xgroup(usage)
-       gettext_noop("  -- print version number and exit")},
-      {0, 0, 0, 0, 0, 0}};
+} commands[] = {{"info",                               1,            1,
+                 showInfo,                             "(root dir)",
+                 // xgroup(usage)
+                 gettext_noop("  -- show information")},
+                {"showKey",                    1, 1, cmd_showKey, "(root dir)",
+                 // xgroup(usage)
+                 gettext_noop("  -- show key")},
+                {"passwd",                                       1, 1, chpasswd,
+                 "(root dir)",
+                 // xgroup(usage)
+                 gettext_noop("  -- change password for volume")},
+                {"autopasswd", 1, 1, chpasswdAutomaticly, "(root dir)",
+                 // xgroup(usage)
+                 gettext_noop(
+                     "  -- change password for volume, taking password"
+                     " from standard input.\n\tNo prompts are issued.")},
+                {"ls", 1, 2, cmd_ls, 0, 0},
+                {"showcruft",
+                 1,
+                 1,
+                 cmd_showcruft,
+                 "(root dir)",
+                 // xgroup(usage)
+                 gettext_noop("  -- show undecodable filenames in the volume")},
+                {"cat", 2, 2, cmd_cat, "(root dir) path",
+                 // xgroup(usage)
+                 gettext_noop(
+                     "  -- decodes the file and cats it to standard out")},
+                {"decode", 1, 100, cmd_decode,
+                 "[--extpass=prog] (root dir) [encoded-name ...]",
+                 // xgroup(usage)
+                 gettext_noop(
+                     "  -- decodes name and prints plaintext version")},
+                {"encode",
+                 1,
+                 100,
+                 cmd_encode,
+                 "[--extpass=prog] (root dir) [plaintext-name ...]",
+                 // xgroup(usage)
+                 gettext_noop("  -- encodes a filename and print result")},
+                {"export", 2, 2, cmd_export, "(root dir) path",
+                 // xgroup(usage)
+                 gettext_noop(
+                     "  -- decrypts a volume and writes results to path")},
+                {"ciphers",                                  0,  0,
+                 showCiphers,                                "",
+                 // xgroup(usage)
+                 gettext_noop("  -- show available ciphers")},
+                {"version",                                         0,  0,
+                 showVersion,                                       "",
+                 // xgroup(usage)
+                 gettext_noop("  -- print version number and exit")},
+                {0, 0, 0, 0, 0, 0}};
 
 static void usage(const char *name) {
   cerr << autosprintf(_("encfsctl version %s"), VERSION) << "\n"

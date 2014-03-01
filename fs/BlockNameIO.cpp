@@ -37,7 +37,6 @@ using std::shared_ptr;
 using std::string;
 using std::vector;
 
-
 static shared_ptr<NameIO> NewBlockNameIO(const Interface &iface,
                                          const shared_ptr<CipherV1> &cipher) {
   return shared_ptr<NameIO>(new BlockNameIO(iface, cipher, false));
@@ -160,7 +159,7 @@ string BlockNameIO::encodeName(const string &plaintextName,
     B64ToAscii(tmpBuf.data(), encLen);
   }
 
-  return string(reinterpret_cast<char*>(tmpBuf.data()), encLen);
+  return string(reinterpret_cast<char *>(tmpBuf.data()), encLen);
 }
 
 string BlockNameIO::decodeName(const string &encodedName, uint64_t *iv) const {
@@ -185,8 +184,7 @@ string BlockNameIO::decodeName(const string &encodedName, uint64_t *iv) const {
   }
 
   // pull out the header information
-  unsigned int mac = ((unsigned int)tmpBuf[0]) << 8 |
-                     ((unsigned int)tmpBuf[1]);
+  unsigned int mac = ((unsigned int)tmpBuf[0]) << 8 | ((unsigned int)tmpBuf[1]);
 
   uint64_t tmpIV = 0;
   if (iv && _interface >= 3) tmpIV = *iv;
@@ -201,7 +199,7 @@ string BlockNameIO::decodeName(const string &encodedName, uint64_t *iv) const {
   // might happen if there is an error decoding..
   if (padding > _bs || finalSize < 0) {
     LOG(INFO) << "padding, _bx, finalSize = " << padding << ", " << _bs << ", "
-            << finalSize;
+              << finalSize;
     throw Error("invalid padding size");
   }
 
@@ -215,7 +213,7 @@ string BlockNameIO::decodeName(const string &encodedName, uint64_t *iv) const {
     throw Error("checksum mismatch in filename decode");
   }
 
-  return string(reinterpret_cast<char*>(&tmpBuf.at(2)), finalSize);
+  return string(reinterpret_cast<char *>(&tmpBuf.at(2)), finalSize);
 }
 
 bool BlockNameIO::Enabled() { return true; }

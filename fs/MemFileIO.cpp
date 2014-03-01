@@ -43,15 +43,14 @@ void MemFileIO::setFileName(const char* name) { this->name = name; }
 const char* MemFileIO::getFileName() const { return name.c_str(); }
 
 FsFileAttrs MemFileIO::get_attrs() const {
-  assert(buf.size() <= std::numeric_limits<decltype(FsFileAttrs().size)>::max());
+  assert(buf.size() <=
+         std::numeric_limits<decltype(FsFileAttrs().size)>::max());
   return {
-    /*.type =*/ FsFileType::REGULAR,
-    /*.mtime =*/ 0,
-    /*.size =*/ (fs_off_t) buf.size(),
-    /*.file_id =*/ 0,
-    /*.posix =*/ opt::nullopt,
-  };
-
+      /*.type =*/FsFileType::REGULAR,
+      /*.mtime =*/0,
+      /*.size =*/(fs_off_t)buf.size(),
+      /*.file_id =*/0,
+      /*.posix =*/opt::nullopt, };
 }
 
 size_t MemFileIO::read(const IORequest& req) const {

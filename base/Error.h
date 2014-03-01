@@ -14,12 +14,12 @@ class Error : public std::runtime_error {
 
 #define STR(X) #X
 
-#define rAssert(cond)                               \
-  do {                                              \
-    if (!(cond)) {                                  \
+#define rAssert(cond)                                \
+  do {                                               \
+    if (!(cond)) {                                   \
       LOG(LERROR) << "Assert failed: " << STR(cond); \
-      throw Error(STR(cond));                       \
-    }                                               \
+      throw Error(STR(cond));                        \
+    }                                                \
   } while (0)
 
 }  // namespace encfs

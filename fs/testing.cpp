@@ -140,7 +140,8 @@ void writeRandom(FSConfigPtr& cfg, FileIO* a, FileIO* b, int offset, int len) {
 
 void compare(FileIO* a, FileIO* b, int offset, int len) {
   SCOPED_TRACE(testing::Message() << "compare " << offset << ", " << len
-                                  << " from file length " << a->get_attrs().size);
+                                  << " from file length "
+                                  << a->get_attrs().size);
   unsigned char* buf1 = new unsigned char[len];
   unsigned char* buf2 = new unsigned char[len];
   memset(buf1, 0, len);
@@ -179,7 +180,9 @@ void comparisonTest(FSConfigPtr& cfg, FileIO* a, FileIO* b) {
   for (int i = 0; i < 10000; i++) {
     SCOPED_TRACE(testing::Message() << "Test Loop " << i);
     int len = 128 + random() % 512;
-    int offset = (len == a->get_attrs().size) ? 0 : random() % (a->get_attrs().size - len);
+    int offset = (len == a->get_attrs().size)
+                     ? 0
+                     : random() % (a->get_attrs().size - len);
     writeRandom(cfg, a, b, offset, len);
     if (testing::Test::HasFatalFailure()) return;
     ASSERT_EQ(a->get_attrs().size, b->get_attrs().size);

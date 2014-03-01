@@ -67,8 +67,8 @@ MACFileIO::MACFileIO(const shared_ptr<FileIO> &_base, const FSConfigPtr &cfg)
   rAssert(macBytes >= 0 && macBytes <= 8);
   rAssert(randBytes >= 0);
   LOG(INFO) << "fs block size = " << cfg->config->block_size()
-          << ", macBytes = " << cfg->config->block_mac_bytes()
-          << ", randBytes = " << cfg->config->block_mac_rand_bytes();
+            << ", macBytes = " << cfg->config->block_mac_bytes()
+            << ", randBytes = " << cfg->config->block_mac_rand_bytes();
 }
 
 MACFileIO::~MACFileIO() {}

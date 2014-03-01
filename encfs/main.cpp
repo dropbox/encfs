@@ -194,10 +194,10 @@ static bool processArgs(int argc, char *argv[],
       {"stdinpass", 0, 0, 'S'},  // read password from stdin
       {"annotate", 0, 0, 513},   // Print annotation lines to stderr
       {"verbose", 0, 0, 'v'},    // verbose mode
-      {"version", 0, 0, 'V'},  // version
-      {"reverse", 0, 0, 'r'},   // reverse encryption
-      {"standard", 0, 0, '1'},  // standard configuration
-      {"paranoia", 0, 0, '2'},  // standard configuration
+      {"version", 0, 0, 'V'},    // version
+      {"reverse", 0, 0, 'r'},    // reverse encryption
+      {"standard", 0, 0, '1'},   // standard configuration
+      {"paranoia", 0, 0, '2'},   // standard configuration
       {0, 0, 0, 0}};
 
   while (1) {
@@ -622,7 +622,7 @@ int main(int argc, char *argv[]) {
   }
   catch (std::exception &ex) {
     LOG(LERROR) << "Internal error: Caught exception from main loop: "
-               << ex.what();
+                << ex.what();
   } /* catch(...)
    {
      LOG(LERROR) << "Internal error: Caught unexpected exception";

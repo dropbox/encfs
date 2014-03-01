@@ -134,10 +134,8 @@ class ConfigurationFileIsCorrupted : public std::runtime_error {
 };
 class BadPassword : public std::runtime_error {
  public:
-  BadPassword()
-      : std::runtime_error("Password is incorrect") {}
+  BadPassword() : std::runtime_error("Password is incorrect") {}
 };
-
 
 EncfsConfig read_config(std::shared_ptr<encfs::FsIO> fs_io,
                         const Path &encrypted_folder_path);

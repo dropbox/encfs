@@ -124,8 +124,7 @@ string StreamNameIO::encodeName(const string &plaintextName,
   return string(encoded.begin(), encoded.end());
 }
 
-string StreamNameIO::decodeName(const string &encodedName,
-                                uint64_t *iv) const {
+string StreamNameIO::decodeName(const string &encodedName, uint64_t *iv) const {
   int length = encodedName.length();
   rAssert(length > 2);
   int decLen256 = B64ToB256Bytes(length);
@@ -157,11 +156,11 @@ string StreamNameIO::decodeName(const string &encodedName,
 
   if (mac2 != mac) {
     LOG(INFO) << "checksum mismatch: expected " << mac << ", got " << mac2
-            << "on decode of " << decodedStreamLen << " bytes";
+              << "on decode of " << decodedStreamLen << " bytes";
     throw Error("checksum mismatch in filename decode");
   }
 
-  return string(reinterpret_cast<char*>(&tmpBuf.at(2)), decodedStreamLen);
+  return string(reinterpret_cast<char *>(&tmpBuf.at(2)), decodedStreamLen);
 }
 
 bool StreamNameIO::Enabled() { return true; }

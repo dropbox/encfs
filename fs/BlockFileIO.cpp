@@ -354,8 +354,7 @@ int BlockFileIO::blockTruncate(fs_off_t size, FileIO *base) {
     padFile(oldSize, size, forceWrite);
   } else if (size == oldSize) {
     // the easiest case, but least likely....
-  }
-      else if (partialBlock) {
+  } else if (partialBlock) {
     // partial block after truncate.  Need to read in the block being
     // truncated before the truncate.  Then write it back out afterwards,
     // since the encoding will change..
@@ -379,7 +378,7 @@ int BlockFileIO::blockTruncate(fs_off_t size, FileIO *base) {
 
     if ((rdSz < 0) || (!wrRes)) {
       LOG(LERROR) << "truncate failure: read size " << rdSz
-                 << ", partial block of " << partialBlock;
+                  << ", partial block of " << partialBlock;
     }
   } else {
     // truncating on a block bounday.  No need to re-encode the last

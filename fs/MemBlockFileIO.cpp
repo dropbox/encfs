@@ -43,9 +43,7 @@ void MemBlockFileIO::setFileName(const char* name) {
 
 const char* MemBlockFileIO::getFileName() const { return impl->getFileName(); }
 
-FsFileAttrs MemBlockFileIO::get_attrs() const {
-  return impl->get_attrs();
-}
+FsFileAttrs MemBlockFileIO::get_attrs() const { return impl->get_attrs(); }
 
 ssize_t MemBlockFileIO::readOneBlock(const IORequest& req) const {
   try {

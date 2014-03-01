@@ -22,12 +22,10 @@
 
 namespace encfs {
 
-template<typename T>
-void
-zero_memory(T & obj) {
+template <typename T>
+void zero_memory(T& obj) {
   memset(&obj, 0, sizeof(obj));
 }
-
 }
 
 #endif

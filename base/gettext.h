@@ -131,7 +131,7 @@
 __inline
 #else
 #ifdef __cplusplus
-    inline
+inline
 #endif
 #endif
     static const char *
@@ -148,7 +148,7 @@ pgettext_aux(const char *domain, const char *msg_ctxt_id, const char *msgid,
 __inline
 #else
 #ifdef __cplusplus
-    inline
+inline
 #endif
 #endif
     static const char *
@@ -185,7 +185,7 @@ npgettext_aux(const char *domain, const char *msg_ctxt_id, const char *msgid,
 __inline
 #else
 #ifdef __cplusplus
-    inline
+inline
 #endif
 #endif
     static const char *
@@ -203,16 +203,16 @@ dcpgettext_expr(const char *domain, const char *msgctxt, const char *msgid,
                            : (char *)malloc(msgctxt_len + msgid_len));
   if (msg_ctxt_id != NULL)
 #endif {
-    memcpy(msg_ctxt_id, msgctxt, msgctxt_len - 1);
-    msg_ctxt_id[msgctxt_len - 1] = '\004';
-    memcpy(msg_ctxt_id + msgctxt_len, msgid, msgid_len);
-    translation = dcgettext(domain, msg_ctxt_id, category);
+  memcpy(msg_ctxt_id, msgctxt, msgctxt_len - 1);
+  msg_ctxt_id[msgctxt_len - 1] = '\004';
+  memcpy(msg_ctxt_id + msgctxt_len, msgid, msgid_len);
+  translation = dcgettext(domain, msg_ctxt_id, category);
 #if !_LIBGETTEXT_HAVE_VARIABLE_SIZE_ARRAYS
-    if (msg_ctxt_id != buf) free(msg_ctxt_id);
+  if (msg_ctxt_id != buf) free(msg_ctxt_id);
 #endif
-    if (translation != msg_ctxt_id) return translation;
-  }
-  return msgid;
+  if (translation != msg_ctxt_id) return translation;
+}
+return msgid;
 }
 
 #define npgettext_expr(Msgctxt, Msgid, MsgidPlural, N) \
@@ -224,7 +224,7 @@ dcpgettext_expr(const char *domain, const char *msgctxt, const char *msgid,
 __inline
 #else
 #ifdef __cplusplus
-    inline
+inline
 #endif
 #endif
     static const char *
@@ -242,17 +242,17 @@ dcnpgettext_expr(const char *domain, const char *msgctxt, const char *msgid,
                            : (char *)malloc(msgctxt_len + msgid_len));
   if (msg_ctxt_id != NULL)
 #endif {
-    memcpy(msg_ctxt_id, msgctxt, msgctxt_len - 1);
-    msg_ctxt_id[msgctxt_len - 1] = '\004';
-    memcpy(msg_ctxt_id + msgctxt_len, msgid, msgid_len);
-    translation = dcngettext(domain, msg_ctxt_id, msgid_plural, n, category);
+  memcpy(msg_ctxt_id, msgctxt, msgctxt_len - 1);
+  msg_ctxt_id[msgctxt_len - 1] = '\004';
+  memcpy(msg_ctxt_id + msgctxt_len, msgid, msgid_len);
+  translation = dcngettext(domain, msg_ctxt_id, msgid_plural, n, category);
 #if !_LIBGETTEXT_HAVE_VARIABLE_SIZE_ARRAYS
-    if (msg_ctxt_id != buf) free(msg_ctxt_id);
+  if (msg_ctxt_id != buf) free(msg_ctxt_id);
 #endif
-    if (!(translation == msg_ctxt_id || translation == msgid_plural))
-      return translation;
-  }
-  return (n == 1 ? msgid : msgid_plural);
+  if (!(translation == msg_ctxt_id || translation == msgid_plural))
+    return translation;
+}
+return (n == 1 ? msgid : msgid_plural);
 }
 
 #endif /* _LIBGETTEXT_H */

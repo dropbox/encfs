@@ -140,7 +140,8 @@ void EncfsFsIO::initFS(const std::shared_ptr<EncFS_Opts> &opts,
                        opt::optional<EncfsConfig> oCfg) {
   ctx = std::make_shared<EncFS_Context>();
   bool throw_exception_on_bad_password = true;
-  auto rootInfo = encfs::initFS(ctx, opts, oCfg, throw_exception_on_bad_password);
+  auto rootInfo =
+      encfs::initFS(ctx, opts, oCfg, throw_exception_on_bad_password);
 
   if (rootInfo) {
     // set the globally visible root directory node
@@ -201,7 +202,7 @@ void EncfsFsIO::rmdir(const Path &path) {
   if (res < 0) throw create_errno_system_error(-res);
 }
 
-FsFileAttrs EncfsFsIO::get_attrs(const encfs::Path & path) const {
+FsFileAttrs EncfsFsIO::get_attrs(const encfs::Path &path) const {
   FsFileAttrs attrs;
   zero_memory(attrs);
   const int res = getRoot()->get_attrs(&attrs, path.c_str());

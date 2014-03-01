@@ -149,8 +149,8 @@ void RawFileIO::write(const IORequest &req) {
   }
 
   if (bytes != 0) {
-    LOG(LERROR) << "Write error: wrote " << (req.dataLen - bytes) << " bytes of "
-               << req.dataLen << ", max retries reached";
+    LOG(LERROR) << "Write error: wrote " << (req.dataLen - bytes)
+                << " bytes of " << req.dataLen << ", max retries reached";
     throw std::system_error(EIO, errno_category());
   }
 }

@@ -56,7 +56,9 @@ class PathPoly {
   virtual ~PathPoly() = 0;
 
   virtual operator const std::string &() const = 0;
-  virtual const char *c_str() const { return ((const std::string &)*this).c_str(); }
+  virtual const char *c_str() const {
+    return ((const std::string &)*this).c_str();
+  }
   virtual std::unique_ptr<PathPoly> join(std::string path) const = 0;
   virtual std::string basename() const = 0;
   virtual std::unique_ptr<PathPoly> dirname() const = 0;
@@ -237,8 +239,7 @@ class StringPathDynamicSep : public PathPoly {
 
   virtual std::unique_ptr<PathPoly> _from_string(std::string str) const = 0;
 
-  virtual bool
-    _filename_valid(const std::string & a) const = 0;
+  virtual bool _filename_valid(const std::string &a) const = 0;
 
  public:
   virtual operator const std::string &() const override { return _path; }
@@ -295,7 +296,6 @@ template <typename T>
 bool is_directory(T fs_io, const Path &p) {
   return get_attrs(fs_io, p).type == FsFileType::DIRECTORY;
 }
-
 
 bool path_is_parent(Path potential_parent, Path potential_child);
 

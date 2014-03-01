@@ -68,8 +68,8 @@ class RootPathPrependFs : public FsIO {
     return _base_fs->pathFromString(path);
   }
 
-  virtual bool filename_equal(const std::string &a,
-                              const std::string &b) const override {
+  virtual bool filename_equal(const std::string &a, const std::string &b) const
+      override {
     return _base_fs->filename_equal(a, b);
   }
 

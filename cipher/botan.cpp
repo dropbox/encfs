@@ -151,7 +151,7 @@ class BotanBlockCipher : public BlockCipher {
     encryptor->process_msg(in, size);
     auto written = encryptor->read(out, size, Pipe::LAST_MESSAGE);
     LOG_IF(LERROR, (int)written != size) << "expected output size " << size
-                                        << ", got " << written;
+                                         << ", got " << written;
     LOG_IF(LERROR, encryptor->remaining() > 0)
         << "unread bytes in pipe: " << encryptor->remaining();
     return true;
@@ -169,7 +169,7 @@ class BotanBlockCipher : public BlockCipher {
     decryptor->process_msg(in, size);
     auto written = decryptor->read(out, size, Pipe::LAST_MESSAGE);
     LOG_IF(LERROR, (int)written != size) << "expected output size " << size
-                                        << ", got " << written;
+                                         << ", got " << written;
     LOG_IF(LERROR, decryptor->remaining() > 0)
         << "unread bytes in pipe: " << decryptor->remaining();
     return true;

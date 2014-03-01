@@ -222,7 +222,7 @@ int encfs_mknod(const char *cpath, mode_t mode, dev_t rdev) {
 }
 
 int encfs_mkdir(const char *cpath, mode_t mode) {
-  auto to_call = [=](FsIO & fs_io, const Path & p,
+  auto to_call = [=](FsIO &fs_io, const Path &p,
                      mode_t mode) { return fs_io.posix_mkdir(p, mode); };
   return _do_mk_preserve(to_call, cpath, mode);
 }
@@ -435,7 +435,7 @@ int encfs_setxattr(const char *cpath, const char *cname, const char *value,
   assert(!(flags_ & XATTR_NOFOLLOW));
 
 #else
-int encfs_setxattr(const char * cpath, const char * cname, const char * value,
+int encfs_setxattr(const char *cpath, const char *cname, const char *value,
                    size_t size, int flags_) {
   uint32_t position = 0;
 
@@ -456,10 +456,10 @@ int encfs_setxattr(const char * cpath, const char * cname, const char * value,
 
 // the same define used in fuse.h
 #ifdef __APPLE__
-int encfs_getxattr(const char * cpath, const char * cname, char * value,
+int encfs_getxattr(const char *cpath, const char *cname, char *value,
                    size_t size, uint32_t position) {
 #else
-int encfs_getxattr(const char * cpath, const char * cname, char * value,
+int encfs_getxattr(const char *cpath, const char *cname, char *value,
                    size_t size) {
   uint32_t position = 0;
 #endif
@@ -482,7 +482,7 @@ int encfs_getxattr(const char * cpath, const char * cname, char * value,
   return buf->size();
 }
 
-int encfs_listxattr(const char * cpath, char * list, size_t size) {
+int encfs_listxattr(const char *cpath, char *list, size_t size) {
   auto &fs_io = gGetFS();
   auto path = fs_io.pathFromString(cpath);
 
@@ -505,7 +505,7 @@ int encfs_listxattr(const char * cpath, char * list, size_t size) {
   return list_bytes_consumed;
 }
 
-int encfs_removexattr(const char * cpath, const char * name) {
+int encfs_removexattr(const char *cpath, const char *name) {
   return _do_one_path(&FsIO::posix_removexattr, cpath, NO_FOLLOW, string(name));
 }
 

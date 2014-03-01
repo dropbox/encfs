@@ -102,7 +102,8 @@ bool FileNode::_setIV(uint64_t iv) {
     // we can't set an internal iv on a directory
     if (ret == -(int)std::errc::is_a_directory) return true;
     if (ret != -(int)std::errc::no_such_file_or_directory) {
-      LOG(WARNING) << "unlocked open failed: " << std::generic_category().message(-ret);
+      LOG(WARNING) << "unlocked open failed: "
+                   << std::generic_category().message(-ret);
     }
   }
 

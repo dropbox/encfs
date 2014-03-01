@@ -95,8 +95,9 @@ bool XmlValue::readB64(const char *path, byte *data, int length) const {
 
   int decodedSize = B64ToB256Bytes(s.size());
   if (decodedSize != length) {
-    LOG(LERROR) << "decoding bytes len " << s.size() << ", expecting output len "
-               << length << ", got " << decodedSize;
+    LOG(LERROR) << "decoding bytes len " << s.size()
+                << ", expecting output len " << length << ", got "
+                << decodedSize;
     return false;
   }
   if (!B64StandardDecode(data, (byte *)s.data(), s.size())) {
@@ -185,7 +186,7 @@ XmlValuePtr XmlReader::operator[](const char *name) const {
   TiXmlElement *element = node->ToElement();
   if (element == NULL) {
     LOG(LERROR) << "Xml node " << name
-               << " not element, type = " << node->Type();
+                << " not element, type = " << node->Type();
     return XmlValuePtr(new XmlValue());
   }
 

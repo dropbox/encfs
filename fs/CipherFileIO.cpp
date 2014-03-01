@@ -57,7 +57,7 @@ CipherFileIO::CipherFileIO(const shared_ptr<FileIO> &_base,
       fsConfig->config->block_size() % fsConfig->cipher->cipherBlockSize();
   if (blockBoundary != 0) {
     LOG(LERROR)
-      << "CipherFileIO: blocks should be multiple of cipher block size";
+        << "CipherFileIO: blocks should be multiple of cipher block size";
   }
 }
 
@@ -67,7 +67,7 @@ Interface CipherFileIO::interface() const { return CipherFileIO_iface; }
 
 bool CipherFileIO::setIV(uint64_t iv) {
   LOG(INFO) << "in setIV, current IV = " << externalIV << ", new IV = " << iv
-          << ", fileIV = " << fileIV;
+            << ", fileIV = " << fileIV;
   if (externalIV == 0) {
     // we're just being told about which IV to use.  since we haven't
     // initialized the fileIV, there is no need to just yet..
@@ -196,7 +196,8 @@ bool CipherFileIO::writeHeader() {
     return false;
   }
 
-  LOG_IF(LERROR, fileIV == 0) << "Internal error: fileIV == 0 in writeHeader!!!";
+  LOG_IF(LERROR, fileIV == 0)
+      << "Internal error: fileIV == 0 in writeHeader!!!";
   LOG(INFO) << "writing fileIV " << fileIV;
 
   MemBlock mb;
@@ -259,7 +260,7 @@ ssize_t CipherFileIO::readOneBlock(const IORequest &req) const {
 
     if (!ok) {
       LOG(INFO) << "decodeBlock failed for block " << blockNum << ", size "
-              << readSize;
+                << readSize;
       readSize = -1;
     } else if (tmpReq.data != req.data) {
       if (readSize > maxReadSize) readSize = maxReadSize;
@@ -312,7 +313,7 @@ bool CipherFileIO::writeOneBlock(const IORequest &req) {
     }
   } else {
     LOG(INFO) << "encodeBlock failed for block " << blockNum << ", size "
-            << req.dataLen;
+              << req.dataLen;
   }
 
   return ok;

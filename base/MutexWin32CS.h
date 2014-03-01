@@ -37,7 +37,6 @@ class MutexWin32CS {
   CRITICAL_SECTION _cs;
 
  public:
-
   MutexWin32CS() { InitializeCriticalSection(&_cs); }
 
   ~MutexWin32CS() { DeleteCriticalSection(&_cs); }

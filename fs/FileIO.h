@@ -54,10 +54,10 @@ template <typename T, typename U, typename R, typename... Args,
                                   !std::is_const<T>::value>::type * = nullptr>
 std::function<R(Args...)> bindMethod(const std::shared_ptr<T> &obj,
                                      R (U::*fn)(Args...)) {
-   struct {
-     R (U::*fn)(Args...);
-   } a = {fn};
-  return [=](Args && ... args) {
+  struct {
+    R (U::*fn)(Args...);
+  } a = {fn};
+  return [=](Args &&... args) {
     return (((U *)obj.get())->*a.fn)(std::forward<Args>(args)...);
   };
 }
@@ -70,10 +70,10 @@ template <typename T, typename U, typename R, typename... Args,
               std::is_convertible<T *, U *>::value>::type * = nullptr>
 std::function<R(Args...)> bindMethod(const std::shared_ptr<T> &obj,
                                      R (U::*fn)(Args...) const) {
-   struct {
-     R (U::*fn)(Args...) const;
-   } a = {fn};
-  return [=](Args && ... args) {
+  struct {
+    R (U::*fn)(Args...) const;
+  } a = {fn};
+  return [=](Args &&... args) {
     return (((U *)obj.get())->*a.fn)(std::forward<Args>(args)...);
   };
 }
@@ -83,25 +83,25 @@ template <typename T, typename U, typename R, typename... Args,
               std::is_convertible<T *, U *>::value>::type * = nullptr>
 std::function<R(Args...)> bindMethod(const std::shared_ptr<const T> &obj,
                                      R (U::*fn)(Args...) const) {
-   struct {
-     R (U::*fn)(Args...) const;
-   } a = {fn};
-  return [=](Args && ... args) {
+  struct {
+    R (U::*fn)(Args...) const;
+  } a = {fn};
+  return [=](Args &&... args) {
     return (((U *)obj.get())->*a.fn)(std::forward<Args>(args)...);
   };
 }
 
- template <typename T, typename U, typename R, typename... Args,
-   typename std::enable_if<
-   std::is_convertible<T *, U *>::value>::type * = nullptr>
+template <typename T, typename U, typename R, typename... Args,
+          typename std::enable_if<
+              std::is_convertible<T *, U *>::value>::type * = nullptr>
 std::function<R(Args...)> bindMethod(T *obj, R (U::*fn)(Args...)) {
-   // NB: workaround for bug in GCC 4.9, it can't
-   //     close over bare PMF variables, so wrap it in a struct
-   struct {
-     R (U::*fn)(Args...);
-   } a = {fn};
-   return [=](Args && ... args) {
-     return (((U *)obj)->*a.fn)(std::forward<Args>(args)...);
+  // NB: workaround for bug in GCC 4.9, it can't
+  //     close over bare PMF variables, so wrap it in a struct
+  struct {
+    R (U::*fn)(Args...);
+  } a = {fn};
+  return [=](Args &&... args) {
+    return (((U *)obj)->*a.fn)(std::forward<Args>(args)...);
   };
 }
 
@@ -109,10 +109,10 @@ template <typename T, typename U, typename R, typename... Args,
           typename std::enable_if<
               std::is_convertible<T *, U *>::value>::type * = nullptr>
 std::function<R(Args...)> bindMethod(const T *obj, R (U::*fn)(Args...) const) {
-   struct {
-     R (U::*fn)(Args...) const;
-   } a = {fn};
-  return [=](Args && ... args) {
+  struct {
+    R (U::*fn)(Args...) const;
+  } a = {fn};
+  return [=](Args &&... args) {
     return (((U *)obj)->*a.fn)(std::forward<Args>(args)...);
   };
 }
@@ -121,10 +121,10 @@ template <typename T, typename U, typename R, typename... Args,
           typename std::enable_if<
               std::is_convertible<T *, U *>::value>::type * = nullptr>
 std::function<R(Args...)> bindMethod(T &obj, R (U::*fn)(Args...)) {
-   struct {
-     R (U::*fn)(Args...);
-   } a = {fn};
-  return [=, &obj](Args && ... args) {
+  struct {
+    R (U::*fn)(Args...);
+  } a = {fn};
+  return [=, &obj](Args &&... args) {
     return (((U *)&obj)->*a.fn)(std::forward<Args>(args)...);
   };
 }
@@ -135,10 +135,10 @@ template <typename T, typename U, typename R, typename... Args,
 std::function<R(Args...)> bindMethod(const T &obj, R (U::*fn)(Args...) const) {
   // reference is only guaranteed to survive for the function invocation
   const U *p = &obj;
-   struct {
-     R (U::*fn)(Args...) const;
-   } a = {fn};
-  return [=](Args && ... args) {
+  struct {
+    R (U::*fn)(Args...) const;
+  } a = {fn};
+  return [=](Args &&... args) {
     return (p->*a.fn)(std::forward<Args>(args)...);
   };
 }
@@ -182,7 +182,7 @@ template <typename R, typename... Args,
           typename std::enable_if<!std::is_void<R>::value, int>::type = 0>
 std::function<int(R *, Args...)> wrapWithExceptionCatcher(
     int defaultRes, std::function<R(Args...)> fn) {
-  return [=](R * res, Args && ... args) {
+  return [=](R *res, Args &&... args) {
     return withExceptionCatcher(defaultRes, fn, res,
                                 std::forward<Args>(args)...);
   };
@@ -191,7 +191,7 @@ std::function<int(R *, Args...)> wrapWithExceptionCatcher(
 template <typename... Args>
 std::function<int(Args...)> wrapWithExceptionCatcher(
     int defaultRes, std::function<void(Args...)> fn) {
-  return [=](Args && ... args) {
+  return [=](Args &&... args) {
     return withExceptionCatcherNoRet(defaultRes, fn,
                                      std::forward<Args>(args)...);
   };

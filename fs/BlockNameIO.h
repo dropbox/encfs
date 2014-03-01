@@ -36,8 +36,8 @@ class CipherV1;
 */
 class BlockNameIO : public NameIO {
  public:
-  static Interface
-    CurrentInterface(bool useEncodingForCaseInsensitiveFS = false);
+  static Interface CurrentInterface(bool useEncodingForCaseInsensitiveFS =
+                                        false);
 
   BlockNameIO(const Interface &iface, const std::shared_ptr<CipherV1> &cipher,
               bool caseSensitiveEncoding = false);

@@ -36,17 +36,15 @@ typedef enum {
   ENCFS_LOG_NOTHING,
 } encfs_log_level_t;
 
-typedef void (*encfs_log_printer_t)(const char *, int,
-                                    encfs_log_level_t, const char *);
+typedef void (*encfs_log_printer_t)(const char *, int, encfs_log_level_t,
+                                    const char *);
 
 extern encfs_log_level_t _CUR_LEVEL;
 extern encfs_log_printer_t _LOG_PRINTER;
 
-void
-encfs_set_log_printer(encfs_log_printer_t printer);
+void encfs_set_log_printer(encfs_log_printer_t printer);
 
-void
-encfs_set_log_level(encfs_log_level_t level);
+void encfs_set_log_level(encfs_log_level_t level);
 
 #ifdef __cplusplus
 }
@@ -69,24 +67,22 @@ const LogLevel LERROR = ENCFS_LOG_ERROR;
 const LogLevel NOTHING = ENCFS_LOG_NOTHING;
 
 class Logger {
-public:
+ public:
   const char *_filename;
   int _lineno;
   LogLevel _level;
   std::ostringstream _os;
 
-  Logger(const char *filename, int lineno, LogLevel level) :
-  _filename(filename) ,
-  _lineno(lineno) ,
-  _level(level) {}
+  Logger(const char *filename, int lineno, LogLevel level)
+      : _filename(filename), _lineno(lineno), _level(level) {}
 
   ~Logger() {
-    if (_level >= _CUR_LEVEL) _LOG_PRINTER(_filename, _lineno, _level, _os.str().c_str());
+    if (_level >= _CUR_LEVEL)
+      _LOG_PRINTER(_filename, _lineno, _level, _os.str().c_str());
   }
 
-  template<class T>
-  encfs::Logger &
-  operator<<(T && dl) {
+  template <class T>
+  encfs::Logger &operator<<(T &&dl) {
     _os << std::forward<T>(dl);
     return *this;
   }
@@ -95,9 +91,7 @@ public:
 #define LOG(level) Logger(__FILE__, __LINE__, level)
 #define LOG_IF(level, should_log) LOG(should_log ? level : NEVER)
 #define CHECK(should_log) LOG_IF(WARNING, should_log)
-
 }
-
 
 #endif
 

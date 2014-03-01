@@ -377,7 +377,7 @@ bool runTests(const shared_ptr<CipherV1> &cipher, bool verbose) {
 
 }  // namespace encfs
 
-int main(int /*argc*/, char */*argv*/[]) {
+int main(int /*argc*/, char * /*argv*/ []) {
   using namespace encfs;
 
   bool isThreaded = false;

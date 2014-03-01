@@ -66,7 +66,7 @@ std::string DirTraverse::nextPlaintextName(FsFileType *fileType,
     catch (Error &ex) {
       // .. .problem decoding, ignore it and continue on to next name..
       LOG(INFO) << "error decoding filename " << dirent->name << " : "
-              << ex.what();
+                << ex.what();
     }
   }
 
@@ -216,8 +216,7 @@ void RenameOp::undo() {
       // continue on anyway...
     }
     ++undoCount;
-  }
-  ;
+  };
 
   LOG(WARNING) << "Undo rename count: " << undoCount;
 }
@@ -294,7 +293,7 @@ Path DirNode::cipherPath(const Path &plaintextPath, uint64_t *iv) const {
   auto pp = pathToRelativeNameIOPath(plaintextPath);
 
   auto parent_encrypted_path = rootDir;
-  for (const auto & p : naming->encodePath(pp, iv)) {
+  for (const auto &p : naming->encodePath(pp, iv)) {
     parent_encrypted_path = parent_encrypted_path.join(p);
   }
 
@@ -309,7 +308,7 @@ Path DirNode::apiToInternal(const char *plaintextPath, uint64_t *iv) const {
 
 static string nameIOPathToRelativePosixPath(const NameIOPath &p) {
   return std::accumulate(p.begin(), p.end(), string(),
-                         [](const std::string & acc, const std::string & elt) {
+                         [](const std::string &acc, const std::string &elt) {
     return acc + "/" + elt;
   });
 }
@@ -331,10 +330,10 @@ static NameIOPath posixPathToNameIOPath(const string &p) {
   return std::move(toret);
 }
 
-std::string DirNode::cipherPathWithoutRootPosix(
-    std::string plaintextPath) const {
-  return "+" + nameIOPathToRelativePosixPath(
-      naming->encodePath(posixPathToNameIOPath(std::move(plaintextPath))));
+std::string DirNode::cipherPathWithoutRootPosix(std::string plaintextPath)
+    const {
+  return "+" + nameIOPathToRelativePosixPath(naming->encodePath(
+                   posixPathToNameIOPath(std::move(plaintextPath))));
 }
 
 string DirNode::plainPathPosix(const char *cipherPath_) {
@@ -358,7 +357,7 @@ string DirNode::plainPathPosix(const char *cipherPath_) {
 
       auto niopath = posixPathToNameIOPath(start);
       return to_prepend +
-        nameIOPathToRelativePosixPath(naming->decodePath(niopath));
+             nameIOPathToRelativePosixPath(naming->decodePath(niopath));
     }
   }
   catch (Error &err) {
@@ -632,7 +631,7 @@ shared_ptr<FileNode> DirNode::renameNode(const Path &from, const Path &to,
     auto cname = cipherPath(to, &newIV);
 
     LOG(INFO) << "renaming internal node " << node->cipherName() << " -> "
-            << cname;
+              << cname;
 
     if (!node->setName(to, cname, newIV, forwardMode)) {
       // rename error! - put it back
@@ -719,8 +718,9 @@ int DirNode::unlink(const char *plaintextName) {
     res = withExceptionCatcherNoRet((int)std::errc::io_error,
                                     bindMethod(fs_io, &FsIO::unlink), cyName);
     if (res < 0) {
-      LOG(INFO) << "unlink error: " <<
-        std::make_error_condition(static_cast<std::errc>(-res)).message();
+      LOG(INFO) << "unlink error: "
+                << std::make_error_condition(static_cast<std::errc>(-res))
+                       .message();
     }
   }
 
@@ -734,8 +734,7 @@ int DirNode::mkdir(const char *plaintextName) {
                                    bindMethod(fs_io, &FsIO::mkdir), fullName);
 }
 
-FsFileAttrs
-DirNode::correct_attrs(FsFileAttrs attrs) const {
+FsFileAttrs DirNode::correct_attrs(FsFileAttrs attrs) const {
   // TODO: make sure this wrap code is similar to how FileIO is created
   // in FileNode
   attrs = CipherFileIO::wrapAttrs(fsConfig, std::move(attrs));
@@ -755,8 +754,8 @@ int DirNode::get_attrs(FsFileAttrs *attrs, const char *plaintextName) const {
   LOG(INFO) << "get_attrs " << cyName;
 
   auto ret = withExceptionCatcher((int)std::errc::io_error,
-                                  encfs::get_attrs<decltype(fs_io)>, attrs, fs_io,
-                                  cyName);
+                                  encfs::get_attrs<decltype(fs_io)>, attrs,
+                                  fs_io, cyName);
   if (ret < 0) return ret;
 
   *attrs = correct_attrs(*attrs);

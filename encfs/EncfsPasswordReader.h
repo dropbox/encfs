@@ -44,11 +44,11 @@ class EncfsPasswordReader : public PasswordReader {
   EncfsPasswordReader(bool useStdin_, std::string passProg_,
                       std::string rootDir_)
       : useStdin(std::move(useStdin_)),
-        optProgramPasswordReader(passProg_.empty()
-                                     ? opt::nullopt
-                                     : opt::make_optional(ProgramPasswordReader(
-                                           std::move(passProg_),
-                                           std::move(rootDir_)))) {}
+        optProgramPasswordReader(
+            passProg_.empty()
+                ? opt::nullopt
+                : opt::make_optional(ProgramPasswordReader(
+                      std::move(passProg_), std::move(rootDir_)))) {}
 
   EncfsPasswordReader(bool useStdin_) : useStdin(std::move(useStdin_)) {}
 
