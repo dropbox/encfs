@@ -151,7 +151,7 @@ void EncfsFsIO::initFS(const std::shared_ptr<EncFS_Opts> &opts,
     //    in FileUtils.cpp::remountFS() and in ~EncfsFsIO
     ctx->setRoot(rootInfo->root);
   } else {
-    throw new std::runtime_error("couldn't create rootInfo");
+    throw std::runtime_error("couldn't create rootInfo");
   }
 }
 
